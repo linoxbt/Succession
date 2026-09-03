@@ -159,8 +159,20 @@ def value_tenant(
     base_price: Decimal | str | int = DEFAULT_BASE_PRICE,
     now: datetime | None = None,
     counterparty_category: str = "relationship",
+    acp_history: Any = None,
 ) -> Valuation:
-    """Compute the reference valuation for a tenant."""
+    """Compute the reference valuation for a tenant.
+
+    When ``acp_history`` carries enough settled jobs, ``task_performance`` is
+    computed from the real completed-versus-cancelled ratio on Virtuals ACP
+    instead of from the journal-text heuristic. That is a strict improvement in
+    the thing the factor is trying to measure: ACP outcomes are settled facts a
+    buyer can re-derive from on-chain job ids, while the heuristic is reading
+    English out of the seller's own journal and hoping it means what it says.
+
+    The factor's explanation names which source was used, so the figure stays
+    auditable either way.
+    """
     base = _D(str(base_price))
     now = now or datetime.now(timezone.utc)
 
@@ -202,7 +214,25 @@ def value_tenant(
     )
 
     # -- task performance ----------------------------------------------
-    score, outcome_counts = trust_score(events)
+    acp_rate = acp_history.success_rate() if acp_history is not None else None
+    if acp_rate is not None:
+        score = acp_rate
+        outcome_counts = {
+            "wins": len(acp_history.completed),
+            "losses": len(acp_history.failed),
+            "resolved": len(acp_history.completed) + len(acp_history.failed),
+        }
+        performance_basis = (
+            "Completed-versus-cancelled ratio over "
+            f"{outcome_counts['resolved']} settled Virtuals ACP jobs, each "
+            "verifiable by its on-chain job id."
+        )
+    else:
+        score, outcome_counts = trust_score(events)
+        performance_basis = (
+            f"Win rate over {outcome_counts['resolved']} resolved journal "
+            "outcomes (no ACP job history available)."
+        )
     performance_factor = PERFORMANCE_MIN + (PERFORMANCE_MAX - PERFORMANCE_MIN) * score
 
     # -- recency --------------------------------------------------------
@@ -243,10 +273,14 @@ def value_tenant(
         Factor(
             "task_performance",
             performance_factor,
-            {"trust_score": str(_q(score)), **outcome_counts},
-            f"Win rate over {outcome_counts['resolved']} resolved journal "
-            f"outcomes, mapped onto [{PERFORMANCE_MIN}, {PERFORMANCE_MAX}]. "
-            "Fewer than 5 resolved outcomes scores a neutral 0.5.",
+            {
+                "trust_score": str(_q(score)),
+                "basis": "virtuals-acp" if acp_rate is not None else "journal",
+                **outcome_counts,
+            },
+            f"{performance_basis} Mapped onto "
+            f"[{PERFORMANCE_MIN}, {PERFORMANCE_MAX}]; fewer than 5 resolved "
+            "outcomes scores a neutral 0.5.",
         ),
         Factor(
             "recency_weight",

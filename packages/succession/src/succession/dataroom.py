@@ -18,6 +18,13 @@ That second point is the one real disclosure decision in here. A buyer with
 nothing but numbers cannot tell a brokerage from a barber shop, so the preview
 shows the handful of counterparties the seller explicitly marked ``public`` —
 their own choice, made per record, in their listing flow.
+
+Everything above is computed from the seller's own memory, which makes it
+**self-reported**. The ACP job history carried alongside it is not: each entry
+resolves to an on-chain job id against the ACP contract on Base, so a buyer can
+re-derive those counts without trusting the seller at all. The preview keeps the
+two clearly separated and labelled rather than blending them into one number,
+because a buyer's confidence in each should be different.
 """
 
 from __future__ import annotations
@@ -46,6 +53,7 @@ class DataRoomPreview:
     withheld_non_transferable: int
     valuation: Valuation | None = None
     committed_root: str | None = None
+    acp: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {
@@ -65,6 +73,18 @@ class DataRoomPreview:
             out["valuation"] = self.valuation.to_dict()
         if self.committed_root is not None:
             out["committed_root"] = self.committed_root
+        out["acp"] = self.acp
+        out["provenance_of_figures"] = {
+            "self_reported": [
+                "counts",
+                "memory_size_bytes",
+                "category_breakdown",
+                "tenure_days",
+            ],
+            "independently_verifiable": (
+                ["acp"] if self.acp and self.acp.get("registered") else []
+            ),
+        }
         return out
 
 
@@ -76,9 +96,22 @@ def build_preview(
     base_price: Decimal | str | int | None = None,
     now: datetime | None = None,
     sample_limit: int = 5,
+    acp_history: Any = None,
 ) -> DataRoomPreview:
-    """Compute the pre-purchase preview. Counts in, counts out."""
+    """Compute the pre-purchase preview. Counts in, counts out.
+
+    ``acp_history`` defaults to whatever the tenant itself carries, because a
+    synced agent's job history is part of its memory. Passing one explicitly
+    overrides that — the listing flow does so with freshly fetched history.
+    """
     now = now or datetime.now(timezone.utc)
+
+    if acp_history is None:
+        from .acp import job_history_from_memory
+
+        acp_history = job_history_from_memory(source)
+        if not acp_history.jobs and not acp_history.registered:
+            acp_history = None
 
     entities = [
         e for e in source.entities() if read_disclosure(e["body"]).transferable
@@ -125,10 +158,11 @@ def build_preview(
         )
     )[:sample_limit]
 
-    valuation = (
-        value_tenant(source, base_price=base_price, now=now)
-        if base_price is not None
-        else value_tenant(source, now=now)
+    valuation = value_tenant(
+        source,
+        now=now,
+        acp_history=acp_history,
+        **({"base_price": base_price} if base_price is not None else {}),
     )
 
     return DataRoomPreview(
@@ -154,4 +188,5 @@ def build_preview(
         withheld_non_transferable=withheld,
         valuation=valuation,
         committed_root=committed_root,
+        acp=acp_history.to_dict() if acp_history is not None else None,
     )

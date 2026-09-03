@@ -123,6 +123,11 @@ DEFAULT_CATEGORY_MAP: dict[str, str] = {
     "entity:preference": "preferences",
     "entity:commitment": "commitments",
     "entity:learned-behavior": "learned-behaviors",
+    # Verifiable ACP job history is settled fact about what this agent did, so
+    # it belongs with the journal. Named explicitly rather than left to the
+    # catch-all: it is load-bearing for the valuation, and a silent change to
+    # the fallback must not be able to move it.
+    "entity:acp-job": "history",
     # whole tiers
     "relation": "relationships",
     "event": "history",
