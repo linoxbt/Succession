@@ -6,8 +6,9 @@
  * has got to, so a reload lands in the right place rather than in whatever the
  * UI last believed.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type Listing as ListingType, type Outcome, type Preview } from "./api";
+import { loadRecordedRun, probeLiveApi, recordedApi, type RecordedRun } from "./recorded";
 import { CategorySelector } from "./components/CategorySelector";
 import { Confirmation } from "./components/Confirmation";
 import { Cutover } from "./components/Cutover";
@@ -27,12 +28,21 @@ const STEPS: { id: Screen; label: string }[] = [
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("scope");
+  const [recorded, setRecorded] = useState<RecordedRun | null>(null);
+  const [ready, setReady] = useState(false);
   const [listing, setListing] = useState<ListingType | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [sealed, setSealed] = useState<{ sealed: boolean; at: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // One backend, chosen once. Everything below calls `backend`, so no screen
+  // needs to know whether it is driving the live service or the recording.
+  const backend = useMemo(
+    () => (recorded ? recordedApi(recorded) : api),
+    [recorded],
+  );
 
   const guard = useCallback(async (work: () => Promise<void>) => {
     setBusy(true);
@@ -46,13 +56,21 @@ export default function App() {
     }
   }, []);
 
-  // Recover the transaction's real position on load, rather than assuming one.
+  // Pick a backend, then recover the transaction's real position rather than
+  // assuming one — a reload lands where the transaction actually is.
   useEffect(() => {
     void (async () => {
+      let source: RecordedRun | null = null;
+      if (!(await probeLiveApi())) {
+        source = await loadRecordedRun().catch(() => null);
+        setRecorded(source);
+      }
+      const client = source ? recordedApi(source) : api;
+
       try {
-        const current = await api.listing();
+        const current = await client.listing();
         setListing(current);
-        setPreview(await api.preview().catch(() => null));
+        setPreview(await client.preview().catch(() => null));
         setScreen(
           current.state === "open"
             ? "listing"
@@ -61,22 +79,24 @@ export default function App() {
               : "cutover",
         );
         setSealed(
-          await api
+          await client
             .seal("tenant-seller")
             .then((s) => ({ sealed: s.sealed, at: s.record?.sealed_at ?? "" }))
             .catch(() => null),
         );
       } catch {
         setScreen("scope");
+      } finally {
+        setReady(true);
       }
     })();
   }, []);
 
   const start = (categories: string[] | null) =>
     guard(async () => {
-      await api.reset(categories ?? undefined);
-      setListing(await api.listing());
-      setPreview(await api.preview());
+      await backend.reset(categories ?? undefined);
+      setListing(await backend.listing());
+      setPreview(await backend.preview());
       setOutcome(null);
       setSealed(null);
       setScreen("listing");
@@ -84,16 +104,15 @@ export default function App() {
 
   const requestTransfer = () =>
     guard(async () => {
-      setListing(await api.buy());
+      setListing(await backend.buy());
       setScreen("escrow");
     });
 
   const execute = () =>
     guard(async () => {
-      const result = await api.transfer();
+      const result = await backend.transfer();
       setOutcome(result);
-      setListing(await api.listing());
-      const seal = await api.seal("tenant-seller");
+      const seal = await backend.seal("tenant-seller");
       setSealed({ sealed: seal.sealed, at: seal.record?.sealed_at ?? "" });
       setScreen("confirmation");
     });
@@ -118,6 +137,8 @@ export default function App() {
           </nav>
         </div>
       </header>
+
+      {recorded ? <RecordedBanner run={recorded} /> : null}
 
       <main className="mx-auto max-w-3xl px-6 py-12">
         {error ? (
@@ -145,9 +166,11 @@ export default function App() {
             }
           />
         ) : screen === "cutover" ? (
-          <Cutover sealed={sealed} />
+          <Cutover sealed={sealed} backend={backend} />
         ) : (
-          <p className="font-sans text-sm text-ink/50">Loading…</p>
+          <p className="font-sans text-sm text-ink/50">
+            {ready ? "Loading…" : "Checking for a running service…"}
+          </p>
         )}
       </main>
 
@@ -158,6 +181,33 @@ export default function App() {
           seeded memory are invented.
         </p>
       </footer>
+    </div>
+  );
+}
+
+
+/**
+ * Named on every screen, not dismissible.
+ *
+ * A recorded run presented as a live one is precisely the pattern this project
+ * exists to argue against, so the mode is stated permanently and the banner
+ * says how to reproduce the numbers rather than asking to be trusted.
+ */
+function RecordedBanner({ run }: { run: RecordedRun }) {
+  return (
+    <div className="border-b border-escrow/40 bg-escrow/[0.06]">
+      <div className="mx-auto max-w-3xl px-6 py-3">
+        <p className="font-sans text-xs leading-relaxed text-escrow">
+          <span className="font-semibold uppercase tracking-[0.08em]">
+            Recorded run
+          </span>{" "}
+          — no service is running, so this replays one real end-to-end transfer
+          captured on {run.recorded_at}. Every hash, signature and agent reply
+          below is genuine output, not a mock-up. Reproduce it with{" "}
+          <code className="font-mono">python -m succession.demo</code>: the
+          export is deterministic, so it prints the same root.
+        </p>
+      </div>
     </div>
   );
 }

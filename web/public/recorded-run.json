@@ -1,0 +1,245 @@
+{
+  "recorded_at": "2026-09-03T20:31:37Z",
+  "source": "python -m succession.demo",
+  "listing_open": {
+    "listing_id": "listing-0417",
+    "agent_id": "erc8004:84532:0417",
+    "seller": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+    "seller_signature": "0x7bcbfb7a6059998b5b33f17ade34165cf7526b8a5434ce912b9d3366f0e363621d5c7bdb2a3bf8f581019fb9f53a60fe1aa6cb9f49e922c3508b2b0812573acb1c",
+    "hash_commitment": "0x8a87d0a602d19b8685208b9896d1195c3a83986a694033f0c70b0ded8242aa9c",
+    "price": 420000000,
+    "currency": "USDC",
+    "categories": [
+      "commitments",
+      "history",
+      "identity",
+      "learned-behaviors",
+      "preferences",
+      "relationships"
+    ],
+    "valuation_reference": "211.47",
+    "state": "open",
+    "buyer": "",
+    "escrow_balance": 0,
+    "delivered_hash": "",
+    "sealed": false,
+    "created_at": "2026-09-03T20:31:37Z",
+    "settled_at": ""
+  },
+  "listing_escrowed": {
+    "listing_id": "listing-0417",
+    "agent_id": "erc8004:84532:0417",
+    "seller": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+    "seller_signature": "0x7bcbfb7a6059998b5b33f17ade34165cf7526b8a5434ce912b9d3366f0e363621d5c7bdb2a3bf8f581019fb9f53a60fe1aa6cb9f49e922c3508b2b0812573acb1c",
+    "hash_commitment": "0x8a87d0a602d19b8685208b9896d1195c3a83986a694033f0c70b0ded8242aa9c",
+    "price": 420000000,
+    "currency": "USDC",
+    "categories": [
+      "commitments",
+      "history",
+      "identity",
+      "learned-behaviors",
+      "preferences",
+      "relationships"
+    ],
+    "valuation_reference": "211.47",
+    "state": "escrowed",
+    "buyer": "0x1563915e194D8CfBA1943570603F7606A3115508",
+    "escrow_balance": 420000000,
+    "delivered_hash": "",
+    "sealed": false,
+    "created_at": "2026-09-03T20:31:37Z",
+    "settled_at": ""
+  },
+  "preview": {
+    "agent_identity": "erc8004:84532:0417",
+    "tenure_days": 93,
+    "counts": {
+      "entities": 17,
+      "journal_events": 23,
+      "state_documents": 1,
+      "reference_documents": 1,
+      "archived_entities": 1,
+      "relations": 6,
+      "total_records": 49
+    },
+    "memory_size_bytes": 8740,
+    "category_breakdown": {
+      "commitment": 2,
+      "identity": 1,
+      "learned-behavior": 4,
+      "preference": 4,
+      "relationship": 6
+    },
+    "public_counterparties": [
+      "northwind-mills",
+      "selkirk-timber"
+    ],
+    "withheld_non_transferable": 1,
+    "disclosure": "Aggregate statistics only. Record contents are released after purchase and hash verification.",
+    "valuation": {
+      "currency": "USD",
+      "base_price": "200.00",
+      "amount": "211.47",
+      "factors": [
+        {
+          "name": "tenure_factor",
+          "value": "0.9944",
+          "inputs": {
+            "tenure_days": "89.00"
+          },
+          "explanation": "Journal spans 89.00 days; reaches 1.5 at 180 days, clamped to [0.5, 2.0]."
+        },
+        {
+          "name": "interaction_density",
+          "value": "1.0337",
+          "inputs": {
+            "events": 23,
+            "events_per_day": "0.2584"
+          },
+          "explanation": "23 journal events over 89.00 days; 0.25/day scores 1.0."
+        },
+        {
+          "name": "relationship_breadth",
+          "value": "0.7200",
+          "inputs": {
+            "distinct_counterparties": 6
+          },
+          "explanation": "6 distinct counterparties at 0.12 each, clamped to [0.6, 2.0]."
+        },
+        {
+          "name": "task_performance",
+          "value": "1.4286",
+          "inputs": {
+            "trust_score": "0.9286",
+            "wins": 13,
+            "losses": 1,
+            "resolved": 14
+          },
+          "explanation": "Win rate over 14 resolved journal outcomes, mapped onto [0.5, 1.5]. Fewer than 5 resolved outcomes scores a neutral 0.5."
+        },
+        {
+          "name": "recency_weight",
+          "value": "1.0000",
+          "inputs": {
+            "days_since_last_write": "4.48"
+          },
+          "explanation": "No penalty within 7 days, full penalty at 90, linear between."
+        }
+      ],
+      "formula": "base_price \u00d7 tenure_factor \u00d7 interaction_density \u00d7 relationship_breadth \u00d7 task_performance \u00d7 recency_weight",
+      "excluded": {
+        "buyer_demand": "v2 \u2014 needs real marketplace volume",
+        "origin_reputation": "v2 \u2014 needs a lineage history to draw on",
+        "buyer_satisfaction": "v2 \u2014 measurable only after transfers complete"
+      }
+    },
+    "committed_root": "0x8a87d0a602d19b8685208b9896d1195c3a83986a694033f0c70b0ded8242aa9c"
+  },
+  "outcome": {
+    "listing_id": "listing-0417",
+    "outcome": "verified",
+    "committed_root": "0x8a87d0a602d19b8685208b9896d1195c3a83986a694033f0c70b0ded8242aa9c",
+    "delivered_root": "0x8a87d0a602d19b8685208b9896d1195c3a83986a694033f0c70b0ded8242aa9c",
+    "failure_reason": "",
+    "receipt": {
+      "listing_id": "listing-0417",
+      "outcome": "released",
+      "amount": 420000000,
+      "paid_to": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+      "identity_transferred_to": "0x1563915e194D8CfBA1943570603F7606A3115508",
+      "sealed_agent": "erc8004:84532:0417",
+      "reference": "local:541244d32c473ff31023b74605a67428",
+      "settled_at": "2026-09-03T20:31:37Z"
+    },
+    "certificate": {
+      "memory_asset": "#0417",
+      "origin_agent": "erc8004:84532:0417",
+      "successor_agent": "erc8004:84532:1183",
+      "memory_version": 23,
+      "records_transferred": 49,
+      "integrity_hash": "0x8a87d0a602d19b8685208b9896d1195c3a83986a694033f0c70b0ded8242aa9c",
+      "categories_transferred": [
+        "commitments",
+        "history",
+        "identity",
+        "learned-behaviors",
+        "preferences",
+        "relationships"
+      ],
+      "seller_signature": "0x7bcbfb7a6059998b5b33f17ade34165cf7526b8a5434ce912b9d3366f0e363621d5c7bdb2a3bf8f581019fb9f53a60fe1aa6cb9f49e922c3508b2b0812573acb1c",
+      "seller_tenant_sealed_at": "2026-09-03T20:31:37Z",
+      "settlement_reference": "local:541244d32c473ff31023b74605a67428",
+      "transfer_date": "2026-09-03T20:31:37Z",
+      "transfer_status": "VERIFIED"
+    },
+    "seal": {
+      "tenant_id": "tenant-seller",
+      "agent_identity": "erc8004:84532:0417",
+      "transfer_id": "local:541244d32c473ff31023b74605a67428",
+      "reason": "memory asset sold under listing listing-0417",
+      "sealed_at": "2026-09-03T20:31:37Z",
+      "credential_revoked": true
+    },
+    "certificate_text": "SUCCESSION CERTIFICATE\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nMemory asset           #0417\nOrigin agent           erc8004:84532:0417\nSuccessor agent        erc8004:84532:1183\nMemory version         23\nRecords transferred    49\nCategories             commitments, history, identity, learned-behaviors, preferences, relationships\nIntegrity hash         0x8a87d0a6\u20268242aa9c\nSeller signature       0x7bcbfb7a\u2026573acb1c\nOrigin tenant sealed   2026-09-03T20:31:37Z\nSettlement             local:5412\u202605a67428\nTransfer date          2026-09-03T20:31:37Z\nTransfer status        VERIFIED\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
+  },
+  "replies": {
+    "Hi, Northwind Mills again \u2014 are we still good on that Duluth run?": {
+      "text": "Yes \u2014 Northwind Mills. We have Duluth \u2192 Kansas City open at $2,380, quoted as quote-NW-4471 and still open. Hold is fine through Monday 17:00. Below 2300 the lane drops under the margin floor. Northwind Mills books Thursday mornings without exception. That's 5 prior interactions on record.",
+      "recalled": true,
+      "citations": [
+        {
+          "tier": "relationship",
+          "key": "northwind-mills"
+        },
+        {
+          "tier": "commitment",
+          "key": "quote-NW-4471"
+        },
+        {
+          "tier": "state",
+          "key": "current-negotiation"
+        },
+        {
+          "tier": "learned-behavior",
+          "key": "thursday-booking-pattern"
+        },
+        {
+          "tier": "history",
+          "key": "5 journal events"
+        }
+      ]
+    },
+    "Selkirk Timber here, about the standing rate.": {
+      "text": "Yes \u2014 Selkirk Timber. We have Coeur d'Alene \u2192 Spokane open at $890, quoted as standing-rate-ST-0092 and still awaiting-countersignature. That's 4 prior interactions on record.",
+      "recalled": true,
+      "citations": [
+        {
+          "tier": "relationship",
+          "key": "selkirk-timber"
+        },
+        {
+          "tier": "commitment",
+          "key": "standing-rate-ST-0092"
+        },
+        {
+          "tier": "history",
+          "key": "4 journal events"
+        }
+      ]
+    },
+    "This is Acme Widgets, we've never worked together before.": {
+      "text": "I don't have a record of this counterparty. Could you tell me the company and the lane, and I'll quote it fresh?",
+      "recalled": false,
+      "citations": []
+    }
+  },
+  "write_attempt": {
+    "accepted": false,
+    "reason": "tenant 'tenant-seller' was sealed at 2026-09-03T20:31:37Z (memory asset sold under listing listing-0417); this copy can no longer be represented as the live agent"
+  },
+  "seal": {
+    "sealed": true,
+    "at": "2026-09-03T20:31:37Z"
+  }
+}

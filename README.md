@@ -287,6 +287,26 @@ merge, it is data loss with a friendly error message.
   Writes always return through the public API so the cap gate and FTS triggers
   still run.
 
+## Deployment
+
+The UI deploys to Netlify from `netlify.toml` (base `web/`, publish `web/dist`).
+
+The pipeline is Python and does **not** deploy there — Netlify's function
+runtimes will not run FastAPI. Deploy `service/` to any always-on host
+(Railway, Render, Fly.io) and uncomment the `/api/*` proxy in `netlify.toml` to
+point the UI at it. Proxying through the same origin also means the service
+needs no CORS grant for the Netlify domain.
+
+With no service reachable, the hosted build runs in **recorded mode**: it
+replays `web/public/recorded-run.json`, the captured output of one real
+end-to-end run. Every hash, signature, agent reply, and the rejected write
+against the sealed tenant in that file is genuine output, and the root is
+reproducible — `python -m succession.demo` prints the same one, because the
+export is deterministic. A banner names the mode and the recording date on
+every screen; a recorded run presented as a live one is exactly the pattern
+this project argues against. Regenerate the artifact whenever the pipeline
+changes.
+
 ## Prior work
 
 Everything in this repository was written for this hackathon. Third-party

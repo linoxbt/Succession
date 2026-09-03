@@ -1,0 +1,57 @@
+# Netlify hosts the marketplace UI. The pipeline itself is Python, so it is not
+# deployed here — see [context.production.environment] below for pointing this
+# build at a running service.
+
+[build]
+  base    = "web"
+  publish = "dist"
+  command = "npm ci && npm run build"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # Vite is a devDependency, so a production-only install would not build.
+  NPM_FLAGS    = "--include=dev"
+
+# Single-page app: every path resolves to the shell, which then recovers the
+# transaction's real position from the service (or from the recorded run).
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
+
+# The service is a FastAPI process and cannot run on Netlify's function
+# runtimes. Deploy it to any always-on host (Railway, Render, Fly.io) and
+# uncomment this to proxy the API through the same origin — which also keeps
+# the browser off cross-origin requests, so the service needs no CORS grant for
+# this domain.
+#
+# [[redirects]]
+#   from   = "/api/*"
+#   to     = "https://YOUR-SERVICE-HOST/api/:splat"
+#   status = 200
+#   force  = true
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options        = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy        = "strict-origin-when-cross-origin"
+    Permissions-Policy     = "camera=(), microphone=(), geolocation=(), payment=()"
+    # The app loads its own bundle, Google Fonts, and its own JSON. Nothing
+    # else, and no inline script — so a supply-chain injection has nowhere to
+    # call home. connect-src keeps 'self' for the /api proxy above.
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
+
+# Hashed bundle filenames are content-addressed, so they can be cached forever.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# The recorded run is regenerated whenever the pipeline changes, so it must not
+# be served stale from a previous deploy.
+[[headers]]
+  for = "/recorded-run.json"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

@@ -10,7 +10,7 @@
  * remembered" from "the agent said something plausible".
  */
 import { useState } from "react";
-import { api, type Reply } from "../api";
+import type { Reply } from "../api";
 import { Button, Notice, Rule, Section, StateBadge } from "./primitives";
 
 interface Turn {
@@ -25,7 +25,18 @@ const OPENERS = [
   "This is Acme Widgets, we've never worked together before.",
 ];
 
-export function Cutover({ sealed }: { sealed: { sealed: boolean; at: string } | null }) {
+interface Backend {
+  message(side: "seller" | "buyer", message: string): Promise<Reply>;
+  writeAttempt(): Promise<{ accepted: boolean; reason: string }>;
+}
+
+export function Cutover({
+  sealed,
+  backend,
+}: {
+  sealed: { sealed: boolean; at: string } | null;
+  backend: Backend;
+}) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState(OPENERS[0]!);
   const [busy, setBusy] = useState(false);
@@ -39,7 +50,7 @@ export function Cutover({ sealed }: { sealed: { sealed: boolean; at: string } | 
     setTurns((t) => [...t, { from: "customer", text: message }]);
     setDraft("");
     try {
-      const reply: Reply = await api.message("buyer", message);
+      const reply: Reply = await backend.message("buyer", message);
       setTurns((t) => [
         ...t,
         { from: "agent", text: reply.text, citations: reply.citations },
@@ -142,7 +153,7 @@ export function Cutover({ sealed }: { sealed: { sealed: boolean; at: string } | 
           </p>
           <Button
             tone="quiet"
-            onClick={async () => setWriteAttempt(await api.writeAttempt())}
+            onClick={async () => setWriteAttempt(await backend.writeAttempt())}
           >
             Attempt a write as the origin agent
           </Button>
