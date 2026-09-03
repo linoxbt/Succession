@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # The Python suite executes the compiled contract bytecode through py-evm,
+      # so the contracts have to be built before pytest runs.
+      - name: Build contracts
+        working-directory: contracts
+        run: |
+          npm install
+          npm run build
+
+      - name: Install the package
+        run: pip install -e "packages/succession[dev,service]" web3 py-evm==0.12.1b1 eth-tester
+
+      - name: Test
+        run: pytest packages/succession/tests -p no:warnings
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+  forge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Install forge-std
+        run: forge install foundry-rs/forge-std --no-git --no-commit || true
+        working-directory: contracts
+      - name: Build and test
+        working-directory: contracts
+        run: |
+          forge build
+          forge test -vv
