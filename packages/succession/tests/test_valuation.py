@@ -130,3 +130,33 @@ def test_performance_factor_stays_inside_its_band(seller):
         f for f in value_tenant(seller, now=NOW).factors if f.name == "task_performance"
     )
     assert PERFORMANCE_MIN <= factor.value <= PERFORMANCE_MAX
+
+
+# -- the valuation prices what is actually for sale ------------------------
+
+
+def test_non_transferable_records_do_not_lift_the_valuation(seller):
+    """A record the buyer will never receive must not raise the price."""
+    breadth = next(
+        f
+        for f in value_tenant(seller, now=NOW).factors
+        if f.name == "relationship_breadth"
+    )
+    all_relationships = len(
+        [e for e in seller.entities() if e["category"] == "relationship"]
+    )
+    assert breadth.inputs["distinct_counterparties"] == all_relationships - 1
+
+
+def test_the_valuation_and_the_preview_agree_on_the_counterparty_count(seller):
+    """Two numbers on the same screen describing the same thing must match."""
+    from succession.dataroom import build_preview
+
+    preview = build_preview(seller, agent_identity="erc8004:84532:0417", now=NOW)
+    breadth = next(
+        f for f in preview.valuation.factors if f.name == "relationship_breadth"
+    )
+    assert (
+        breadth.inputs["distinct_counterparties"]
+        == preview.category_breakdown["relationship"]
+    )
