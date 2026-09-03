@@ -1,0 +1,22 @@
+# Foundry is the project's contract toolchain. Layer it under Base's own
+# `base-anvil` build so local tests see Base's native precompiles, including B20:
+#   https://docs.base.org/sdks/base-anvil
+#
+# `forge test` runs contracts/test/*.t.sol. Where forge cannot be installed, the
+# Python EVM suite (packages/succession/tests/test_contract.py) executes the same
+# compiled bytecode via py-evm against the same scenarios.
+[profile.default]
+src = "src"
+test = "test"
+out = "out/forge"
+libs = ["lib"]
+solc_version = "0.8.28"
+optimizer = true
+optimizer_runs = 200
+evm_version = "cancun"
+
+[rpc_endpoints]
+base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
+
+[etherscan]
+base_sepolia = { key = "${BASESCAN_API_KEY}", chain = 84532 }

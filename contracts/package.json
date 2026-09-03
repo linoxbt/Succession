@@ -1,0 +1,12 @@
+{
+  "name": "succession-contracts",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Base contracts for the Succession memory marketplace.",
+  "scripts": {
+    "build": "node compile.js"
+  },
+  "dependencies": {
+    "solc": "0.8.28"
+  }
+}
