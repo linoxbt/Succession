@@ -32,3 +32,8 @@ demo-state/
 
 # Netlify CLI link state (machine-local)
 .netlify/
+
+# Local run artifacts
+transfer-runs/
+deployments/local.json
+deployments/transfers-local.json
