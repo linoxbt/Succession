@@ -29,3 +29,6 @@ contracts/lib/
 !.env.example
 .succession/
 demo-state/
+
+# Netlify CLI link state (machine-local)
+.netlify/

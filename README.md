@@ -291,6 +291,13 @@ merge, it is data loss with a friendly error message.
 
 The UI deploys to Netlify from `netlify.toml` (base `web/`, publish `web/dist`).
 
+The Netlify project is **`succession-memory`**
+(`app.netlify.com/projects/succession-memory`, site id
+`8518ba9f-c4cd-464a-b415-eb7ef6d2284a`). Link this repository to it under
+**Site configuration → Build & deploy → Continuous deployment**, branch
+`claude/session-3993th`; `netlify.toml` supplies the build settings, so nothing
+needs configuring in the UI.
+
 The pipeline is Python and does **not** deploy there — Netlify's function
 runtimes will not run FastAPI. Deploy `service/` to any always-on host
 (Railway, Render, Fly.io) and uncomment the `/api/*` proxy in `netlify.toml` to
