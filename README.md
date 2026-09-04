@@ -135,6 +135,18 @@ export SELLER_PRIVATE_KEY=0x... BUYER_PRIVATE_KEY=0x...
 python scripts/run_transfers.py --count 5
 ```
 
+Or run the whole sequence with preflight checks, which fails in the first ten
+seconds on a missing key or an unfunded wallet rather than halfway through a
+deployment:
+
+```bash
+./scripts/finish_integrations.sh
+```
+
+Afterwards, `python scripts/record_run.py` folds the real settlement ledger
+into the hosted UI, so the console's Transfers view shows the actual Base
+Sepolia transactions.
+
 `run_transfers.py` gives each sale its own agent identity, seeded tenant and
 listing — five sales of one asset would only prove the contract can be called
 five times. One is corrupted on purpose, because five successes say nothing

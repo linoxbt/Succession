@@ -1,11 +1,11 @@
 {
-  "recorded_at": "2026-09-04T00:33:54Z",
-  "source": "python -m succession.demo",
+  "recorded_at": "2026-09-04T00:50:18Z",
+  "source": "scripts/record_run.py",
   "listing_open": {
     "listing_id": "listing-0417",
     "agent_id": "erc8004:84532:0417",
     "seller": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
-    "seller_signature": "0xad7bf1254f08c0b6aec8a559631ea8579d79602e42758086d91ac9e1370ec5550540ac7f40b5b5c5955b8d29feb9c44686f785fe27fa3043b8bf66a0e6dcf6171c",
+    "seller_signature": "0x01d02990f5c6c7a7bc5db1c6aee51ea6b3394b250540b520a9f1f34ca00844a974591a2f7064f6cc74fcb940bc526737fbd4b5e55147b364c1554d02d966e76c1b",
     "hash_commitment": "0x8a87d0a602d19b8685208b9896d1195c3a83986a694033f0c70b0ded8242aa9c",
     "price": 420000000,
     "currency": "USDC",
@@ -23,14 +23,14 @@
     "escrow_balance": 0,
     "delivered_hash": "",
     "sealed": false,
-    "created_at": "2026-09-04T00:33:54Z",
+    "created_at": "2026-09-04T00:50:18Z",
     "settled_at": ""
   },
   "listing_escrowed": {
     "listing_id": "listing-0417",
     "agent_id": "erc8004:84532:0417",
     "seller": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
-    "seller_signature": "0xad7bf1254f08c0b6aec8a559631ea8579d79602e42758086d91ac9e1370ec5550540ac7f40b5b5c5955b8d29feb9c44686f785fe27fa3043b8bf66a0e6dcf6171c",
+    "seller_signature": "0x01d02990f5c6c7a7bc5db1c6aee51ea6b3394b250540b520a9f1f34ca00844a974591a2f7064f6cc74fcb940bc526737fbd4b5e55147b364c1554d02d966e76c1b",
     "hash_commitment": "0x8a87d0a602d19b8685208b9896d1195c3a83986a694033f0c70b0ded8242aa9c",
     "price": 420000000,
     "currency": "USDC",
@@ -48,7 +48,7 @@
     "escrow_balance": 420000000,
     "delivered_hash": "",
     "sealed": false,
-    "created_at": "2026-09-04T00:33:54Z",
+    "created_at": "2026-09-04T00:50:18Z",
     "settled_at": ""
   },
   "preview": {
@@ -123,7 +123,7 @@
           "name": "recency_weight",
           "value": "1.0000",
           "inputs": {
-            "days_since_last_write": "4.65"
+            "days_since_last_write": "4.66"
           },
           "explanation": "No penalty within 7 days, full penalty at 90, linear between."
         }
@@ -161,7 +161,7 @@
       "identity_transferred_to": "0x1563915e194D8CfBA1943570603F7606A3115508",
       "sealed_agent": "erc8004:84532:0417",
       "reference": "local:541244d32c473ff31023b74605a67428",
-      "settled_at": "2026-09-04T00:33:54Z"
+      "settled_at": "2026-09-04T00:50:18Z"
     },
     "certificate": {
       "memory_asset": "#0417",
@@ -178,10 +178,10 @@
         "preferences",
         "relationships"
       ],
-      "seller_signature": "0xad7bf1254f08c0b6aec8a559631ea8579d79602e42758086d91ac9e1370ec5550540ac7f40b5b5c5955b8d29feb9c44686f785fe27fa3043b8bf66a0e6dcf6171c",
-      "seller_tenant_sealed_at": "2026-09-04T00:33:54Z",
+      "seller_signature": "0x01d02990f5c6c7a7bc5db1c6aee51ea6b3394b250540b520a9f1f34ca00844a974591a2f7064f6cc74fcb940bc526737fbd4b5e55147b364c1554d02d966e76c1b",
+      "seller_tenant_sealed_at": "2026-09-04T00:50:18Z",
       "settlement_reference": "local:541244d32c473ff31023b74605a67428",
-      "transfer_date": "2026-09-04T00:33:54Z",
+      "transfer_date": "2026-09-04T00:50:18Z",
       "transfer_status": "VERIFIED"
     },
     "seal": {
@@ -189,10 +189,10 @@
       "agent_identity": "erc8004:84532:0417",
       "transfer_id": "local:541244d32c473ff31023b74605a67428",
       "reason": "memory asset sold under listing listing-0417",
-      "sealed_at": "2026-09-04T00:33:54Z",
+      "sealed_at": "2026-09-04T00:50:18Z",
       "credential_revoked": true
     },
-    "certificate_text": "SUCCESSION CERTIFICATE\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nMemory asset           #0417\nOrigin agent           erc8004:84532:0417\nSuccessor agent        erc8004:84532:1183\nMemory version         23\nRecords transferred    49\nCategories             commitments, history, identity, learned-behaviors, preferences, relationships\nIntegrity hash         0x8a87d0a6\u20268242aa9c\nSeller signature       0xad7bf125\u2026dcf6171c\nOrigin tenant sealed   2026-09-04T00:33:54Z\nSettlement             local:5412\u202605a67428\nTransfer date          2026-09-04T00:33:54Z\nTransfer status        VERIFIED\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
+    "certificate_text": "SUCCESSION CERTIFICATE\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nMemory asset           #0417\nOrigin agent           erc8004:84532:0417\nSuccessor agent        erc8004:84532:1183\nMemory version         23\nRecords transferred    49\nCategories             commitments, history, identity, learned-behaviors, preferences, relationships\nIntegrity hash         0x8a87d0a6\u20268242aa9c\nSeller signature       0x01d02990\u202666e76c1b\nOrigin tenant sealed   2026-09-04T00:50:18Z\nSettlement             local:5412\u202605a67428\nTransfer date          2026-09-04T00:50:18Z\nTransfer status        VERIFIED\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
   },
   "replies": {
     "Hi, Northwind Mills again \u2014 are we still good on that Duluth run?": {
@@ -239,18 +239,72 @@
         }
       ]
     },
+    "We need a reefer from Yakima to Denver again": {
+      "text": "Yes \u2014 Cascade Orchards. Cascade Orchards accepts up to a 14% premium during harvest, and roughly 3% outside it. That's 3 prior interactions on record.",
+      "recalled": true,
+      "citations": [
+        {
+          "tier": "relationship",
+          "key": "cascade-orchards"
+        },
+        {
+          "tier": "learned-behavior",
+          "key": "reefer-premium-elasticity"
+        },
+        {
+          "tier": "history",
+          "key": "3 journal events"
+        }
+      ]
+    },
     "This is Acme Widgets, we've never worked together before.": {
-      "text": "I don't have a record of this counterparty. Could you tell me the company and the lane, and I'll quote it fresh?",
-      "recalled": false,
-      "citations": []
+      "text": "Yes \u2014 Northwind Mills. We have Duluth \u2192 Kansas City open at $2,380, quoted as quote-NW-4471 and still open. Hold is fine through Monday 17:00. Below 2300 the lane drops under the margin floor. Northwind Mills books Thursday mornings without exception. That's 5 prior interactions on record.",
+      "recalled": true,
+      "citations": [
+        {
+          "tier": "relationship",
+          "key": "northwind-mills"
+        },
+        {
+          "tier": "commitment",
+          "key": "quote-NW-4471"
+        },
+        {
+          "tier": "state",
+          "key": "current-negotiation"
+        },
+        {
+          "tier": "learned-behavior",
+          "key": "thursday-booking-pattern"
+        },
+        {
+          "tier": "history",
+          "key": "5 journal events"
+        }
+      ]
     }
   },
   "write_attempt": {
     "accepted": false,
-    "reason": "tenant 'tenant-seller' was sealed at 2026-09-04T00:33:54Z (memory asset sold under listing listing-0417); this copy can no longer be represented as the live agent"
+    "reason": "tenant 'tenant-seller' was sealed at 2026-09-04T00:50:18Z (memory asset sold under listing listing-0417); this copy can no longer be represented as the live agent"
   },
   "seal": {
     "sealed": true,
-    "at": "2026-09-04T00:33:54Z"
+    "at": "2026-09-04T00:50:18Z"
+  },
+  "acp": {
+    "agent_address": "",
+    "agent_id": null,
+    "agent_name": "",
+    "registered": false,
+    "source": "memory",
+    "fetched_at": "",
+    "completed_jobs": 0,
+    "failed_jobs": 0,
+    "gross_volume": "0",
+    "distinct_counterparties": 0,
+    "success_rate": null,
+    "verifiable_job_ids": [],
+    "verification": "Each job id resolves against the ACP contract on Base Sepolia; these counts can be re-derived without trusting the seller."
   }
 }

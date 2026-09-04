@@ -37,3 +37,6 @@ demo-state/
 transfer-runs/
 deployments/local.json
 deployments/transfers-local.json
+
+# Recording scratch
+.record-state/
