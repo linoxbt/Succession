@@ -10,9 +10,10 @@
  * transaction actually is rather than where the UI last believed it was.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, type Listing, type Outcome, type Preview } from "./api";
+import { api, type Listing, type MarketRow, type Outcome, type Preview } from "./api";
 import { Agents } from "./dash/Agents";
 import { Docs } from "./dash/Docs";
+import { Marketplace } from "./dash/Marketplace";
 import { ListingView } from "./dash/ListingView";
 import { Memory } from "./dash/Memory";
 import { Overview } from "./dash/Overview";
@@ -26,7 +27,8 @@ export default function App() {
   const [route, setRoute] = useState<"landing" | "console">(
     window.location.pathname.startsWith("/app") ? "console" : "landing",
   );
-  const [view, setView] = useState<View>("overview");
+  const [view, setView] = useState<View>("market");
+  const [market, setMarket] = useState<MarketRow[]>([]);
   const [recorded, setRecorded] = useState<RecordedRun | null>(null);
   const [listing, setListing] = useState<Listing | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -77,6 +79,7 @@ export default function App() {
         const current = await client.listing();
         setListing(current);
         setPreview(await client.preview().catch(() => null));
+        setMarket(await client.marketplace().then((m) => m.listings).catch(() => []));
         setSealed(
           await client
             .seal("tenant-seller")
@@ -101,6 +104,7 @@ export default function App() {
     guard(async () => {
       await backend.reset(categories ?? undefined);
       await refresh(backend as typeof api);
+      setMarket(await backend.marketplace().then((m) => m.listings).catch(() => []));
       setOutcome(null);
       setSealed(null);
     });
@@ -144,6 +148,9 @@ export default function App() {
         </div>
       ) : null}
 
+      {view === "market" ? (
+        <Marketplace rows={market} onOpenListing={() => setView("listing")} />
+      ) : null}
       {view === "overview" ? (
         <Overview listing={listing} preview={preview} outcome={outcome} sealed={sealed} />
       ) : null}

@@ -135,6 +135,7 @@ packages/succession/src/succession/
 ├── certificate.py   the Succession Certificate
 ├── transfer.py      the orchestrator
 ├── agent.py         retrieval over Sibyl's FTS index
+├── catalog.py       the marketplace population — several distinct agents
 └── memory/          the engine adapter — Sibyl is the reference implementation
 
 contracts/src/ListingContract.sol    escrow, atomic settlement, the sealed flag
@@ -182,6 +183,23 @@ Two-level Merkle tree over keccak256 with RFC 6962 domain separation.
 
 The two-level shape is what makes partial succession verifiable without a
 redesign. A flat hash would have needed one.
+
+### The marketplace
+
+Six listings, each a real export of a real store. The committed root, record
+count, memory size and valuation are computed by the pipeline — nothing on that
+screen is written down. A marketplace of hardcoded rows would look identical and
+mean nothing, which is exactly the pattern this project argues against.
+
+The archetypes differ along the axes the valuation reads — tenure, journal
+density, counterparty breadth, win rate, recency — so the spread of prices comes
+out of the data rather than out of a designer's sense of what looks good. One is
+deliberately stale and one deliberately has too few resolved outcomes to score,
+because a market where every listing looks healthy teaches a buyer nothing.
+
+Asking prices are derived as a ratio of each agent's own valuation, so the two
+can never contradict each other, and the resulting spread (−12% to +18%) is a
+real signal a buyer can sort on.
 
 ### Valuation
 

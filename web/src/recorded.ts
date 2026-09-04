@@ -23,7 +23,7 @@
  * Selecting a subset switches you to a notice explaining that, rather than
  * quietly replaying the full-succession numbers under a partial-sale heading.
  */
-import type { Listing, Outcome, Preview, Reply } from "./api";
+import type { Listing, MarketRow, Outcome, Preview, Reply } from "./api";
 
 /** One row of the settlement ledger, as `scripts/run_transfers.py` writes it. */
 export interface RecordedTransfer {
@@ -50,6 +50,8 @@ export interface RecordedRun {
   seal: { sealed: boolean; at: string };
   /** Present once a real run has been recorded against a deployment. */
   transfers?: RecordedTransfer[];
+  /** Every listing captured at record time, with its computed preview. */
+  marketplace?: MarketRow[];
 }
 
 let cached: Promise<RecordedRun> | null = null;
@@ -127,6 +129,10 @@ export function recordedApi(run: RecordedRun) {
       return { listing_id: run.listing_open.listing_id, committed_root: run.outcome.committed_root };
     },
     listing: async () => listingFor(),
+    marketplace: async () => ({
+      listings: run.marketplace ?? [],
+      count: run.marketplace?.length ?? 0,
+    }),
     preview: async () => run.preview,
     buy: async () => {
       phase = "escrowed";

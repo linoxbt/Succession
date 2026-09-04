@@ -4,9 +4,10 @@
 import type { ReactNode } from "react";
 import { Wordmark } from "../brand/Logo";
 
-export type View = "overview" | "listing" | "transfers" | "agents" | "memory" | "docs";
+export type View = "market" | "overview" | "listing" | "transfers" | "agents" | "memory" | "docs";
 
 const NAV: { id: View; label: string }[] = [
+  { id: "market", label: "Marketplace" },
   { id: "overview", label: "Overview" },
   { id: "listing", label: "Listing" },
   { id: "transfers", label: "Transfers" },
@@ -63,7 +64,7 @@ export function Shell({
           <header className="sticky top-0 z-10 border-b border-line bg-base/85 backdrop-blur">
             <div className="flex items-center justify-between gap-4 px-5 py-3.5">
               <h1 className="text-[0.9375rem] font-semibold capitalize tracking-tight">
-                {view}
+                {view === "market" ? "Marketplace" : view}
               </h1>
               <button
                 onClick={onHome}

@@ -21,16 +21,28 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from succession.agent import Agent
+from succession.catalog import CATALOG, NOW, seed_archetype
 from succession.demokeys import BUYER, SELLER
 from succession.memory.sibyl import open_tenant
 from succession.seal import SealRegistry, TenantSealed, guard
 from succession.seed import seed_seller
 from succession.settlement import LocalSettlement, SettlementError
 from succession.transfer import execute_transfer, list_asset
+from succession.valuation import value_tenant
 
 WORKDIR = Path(os.environ.get("SUCCESSION_WORKDIR", "demo-state"))
 LISTING_ID = os.environ.get("SUCCESSION_LISTING_ID", "listing-0417")
-PRICE = int(os.environ.get("SUCCESSION_PRICE", 420_000_000))
+
+#: What the featured seller asks against their own reference valuation.
+FEATURED_ASK_RATIO = os.environ.get("SUCCESSION_ASK_RATIO", "1.12")
+
+
+def _derived_price(memory: Any, ratio: str) -> int:
+    """Asking price in minor units, from the tenant's computed valuation."""
+    from decimal import ROUND_HALF_UP, Decimal
+
+    amount = value_tenant(memory, now=NOW).amount * Decimal(ratio)
+    return int(amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) * 1_000_000)
 
 SELLER_TENANT = "tenant-seller"
 BUYER_TENANT = "tenant-buyer"
@@ -53,10 +65,17 @@ class Store:
     def __init__(self, workdir: Path) -> None:
         self.workdir = workdir
         self.workdir.mkdir(parents=True, exist_ok=True)
-        # The listing's encrypted envelope and content key are held in memory
-        # only. Persisting the content key next to the ciphertext would defeat
-        # the entire point of escrowing it.
-        self.listed: Any = None
+        # Encrypted envelopes and content keys are held in memory only, keyed by
+        # listing id. Persisting a content key next to its ciphertext would
+        # defeat the entire point of escrowing it.
+        self.listed: dict[str, Any] = {}
+        # Which tenant backs which listing, so a marketplace row can be opened.
+        self.tenants: dict[str, str] = {}
+
+    @property
+    def featured(self) -> Any:
+        """The listing the single-listing routes act on."""
+        return self.listed.get(LISTING_ID)
 
     @property
     def settlement(self) -> LocalSettlement:
@@ -72,6 +91,13 @@ class Store:
     def buyer(self):
         return open_tenant(self.workdir / "buyer.db", BUYER_TENANT)
 
+    def tenant(self, listing_id: str):
+        """Open the store behind a listing."""
+        name = self.tenants.get(listing_id)
+        if name is None:
+            raise HTTPException(404, f"no tenant for listing {listing_id!r}")
+        return open_tenant(self.workdir / f"{name}.db", name)
+
 
 STORE = Store(WORKDIR)
 
@@ -81,7 +107,12 @@ STORE = Store(WORKDIR)
 
 class ResetRequest(BaseModel):
     categories: list[str] | None = None
-    price: int = PRICE
+    #: Absolute asking price, in minor units. Left unset the featured listing
+    #: is priced off its own computed valuation like every other listing —
+    #: a fixed price drifts from the valuation until the marketplace shows a
+    #: spread that means nothing.
+    price: int | None = None
+    marketplace: bool = True
 
 
 class BuyRequest(BaseModel):
@@ -103,28 +134,98 @@ class WriteAttemptRequest(BaseModel):
 
 @app.post("/api/demo/reset")
 def reset(request: ResetRequest) -> dict[str, Any]:
-    """Wipe state, seed the seller, and post the listing."""
+    """Wipe state, seed every agent, and post the whole marketplace.
+
+    Each listing is a real export of a real store: the root, record count,
+    memory size and valuation are computed by the pipeline, never written down.
+    A marketplace of hardcoded rows would be the exact pattern this project
+    argues against.
+    """
     import shutil
 
     if STORE.workdir.exists():
         shutil.rmtree(STORE.workdir)
     STORE.workdir.mkdir(parents=True, exist_ok=True)
-    STORE.listed = None
+    STORE.listed, STORE.tenants = {}, {}
 
+    # The featured listing — the one the transfer walkthrough acts on.
     seller = STORE.seller()
     seed_seller(seller)
-
-    STORE.listed = list_asset(
+    STORE.tenants[LISTING_ID] = SELLER_TENANT
+    featured_price = request.price or _derived_price(seller, FEATURED_ASK_RATIO)
+    STORE.listed[LISTING_ID] = list_asset(
         seller,
         STORE.settlement,
         listing_id=LISTING_ID,
         agent_identity=SELLER.agent_id,
         seller_address=SELLER.address,
         private_key=SELLER.private_key,
-        price=request.price,
+        price=featured_price,
         categories=request.categories,
     )
-    return {"listing_id": LISTING_ID, "committed_root": STORE.listed.committed_root}
+
+    # The rest of the market.
+    if request.marketplace:
+        for archetype in CATALOG:
+            memory = open_tenant(
+                STORE.workdir / f"{archetype.tenant_id}.db", archetype.tenant_id
+            )
+            seed_archetype(memory, archetype)
+            STORE.tenants[archetype.listing_id] = archetype.tenant_id
+            # Price off the agent's own computed valuation, so the asking price
+            # and the reference figure can never contradict each other.
+            price = archetype.asking_price(value_tenant(memory, now=NOW).amount)
+            STORE.listed[archetype.listing_id] = list_asset(
+                memory,
+                STORE.settlement,
+                listing_id=archetype.listing_id,
+                agent_identity=archetype.agent_identity,
+                seller_address=SELLER.address,
+                private_key=SELLER.private_key,
+                price=price,
+            )
+
+    return {
+        "listing_id": LISTING_ID,
+        "committed_root": STORE.listed[LISTING_ID].committed_root,
+        "listings": len(STORE.listed),
+    }
+
+
+@app.get("/api/marketplace")
+def marketplace() -> dict[str, Any]:
+    """Every listing, with its computed preview.
+
+    Aggregate figures only, exactly as the single-listing preview returns them —
+    a marketplace must not become a second, more talkative path to record
+    bodies.
+    """
+    from succession.catalog import archetype_by_slug
+
+    rows = []
+    for listing in STORE.settlement.list_all():
+        held = STORE.listed.get(listing.listing_id)
+        if held is None:
+            continue
+        vertical, name = "Freight", "Meridian Logistics Co."
+        tenant = STORE.tenants.get(listing.listing_id, "")
+        if tenant.startswith("tenant-") and tenant != SELLER_TENANT:
+            try:
+                a = archetype_by_slug(tenant.removeprefix("tenant-"))
+                vertical, name = a.vertical, a.name
+            except KeyError:
+                pass
+        rows.append(
+            {
+                "listing": listing.to_dict(),
+                "preview": held.preview.to_dict(),
+                "name": name,
+                "vertical": vertical,
+                "featured": listing.listing_id == LISTING_ID,
+            }
+        )
+
+    return {"listings": rows, "count": len(rows)}
 
 
 @app.get("/api/listing")
@@ -139,9 +240,9 @@ def listing() -> dict[str, Any]:
 @app.get("/api/listing/preview")
 def preview() -> dict[str, Any]:
     """The data room: aggregate statistics only, no record bodies."""
-    if STORE.listed is None:
+    if STORE.featured is None:
         raise HTTPException(409, "no listing in this process; POST /api/demo/reset")
-    return STORE.listed.preview.to_dict()
+    return STORE.featured.preview.to_dict()
 
 
 @app.post("/api/listing/buy")
@@ -158,15 +259,15 @@ def buy(request: BuyRequest) -> dict[str, Any]:
 @app.post("/api/listing/transfer")
 def transfer() -> dict[str, Any]:
     """Deliver, re-key, verify, settle, seal, and record."""
-    if STORE.listed is None:
+    if STORE.featured is None:
         raise HTTPException(409, "no listing in this process; POST /api/demo/reset")
     try:
         outcome = execute_transfer(
             listing_id=LISTING_ID,
             settlement=STORE.settlement,
             seals=STORE.seals,
-            envelope=STORE.listed.envelope,
-            content_key=STORE.listed.content_key,
+            envelope=STORE.featured.envelope,
+            content_key=STORE.featured.content_key,
             seller_tenant_id=SELLER_TENANT,
             buyer_sink=STORE.buyer(),
             buyer_identity=BUYER.agent_id,

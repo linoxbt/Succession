@@ -1,13 +1,13 @@
 {
-  "recorded_at": "2026-09-04T00:50:18Z",
+  "recorded_at": "2026-09-04T02:40:02Z",
   "source": "scripts/record_run.py",
   "listing_open": {
     "listing_id": "listing-0417",
     "agent_id": "erc8004:84532:0417",
     "seller": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
-    "seller_signature": "0x01d02990f5c6c7a7bc5db1c6aee51ea6b3394b250540b520a9f1f34ca00844a974591a2f7064f6cc74fcb940bc526737fbd4b5e55147b364c1554d02d966e76c1b",
+    "seller_signature": "0x229d50130c02c6f86d081b86b242886b3509ccb1991f0fc96dff90ebb6ae07136a8949b45b3868393693a5175ff5de8afc84f3f9ff6b244338390e023d0a5f631b",
     "hash_commitment": "0x8a87d0a602d19b8685208b9896d1195c3a83986a694033f0c70b0ded8242aa9c",
-    "price": 420000000,
+    "price": 236850000,
     "currency": "USDC",
     "categories": [
       "commitments",
@@ -23,16 +23,16 @@
     "escrow_balance": 0,
     "delivered_hash": "",
     "sealed": false,
-    "created_at": "2026-09-04T00:50:18Z",
+    "created_at": "2026-09-04T02:40:02Z",
     "settled_at": ""
   },
   "listing_escrowed": {
     "listing_id": "listing-0417",
     "agent_id": "erc8004:84532:0417",
     "seller": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
-    "seller_signature": "0x01d02990f5c6c7a7bc5db1c6aee51ea6b3394b250540b520a9f1f34ca00844a974591a2f7064f6cc74fcb940bc526737fbd4b5e55147b364c1554d02d966e76c1b",
+    "seller_signature": "0x229d50130c02c6f86d081b86b242886b3509ccb1991f0fc96dff90ebb6ae07136a8949b45b3868393693a5175ff5de8afc84f3f9ff6b244338390e023d0a5f631b",
     "hash_commitment": "0x8a87d0a602d19b8685208b9896d1195c3a83986a694033f0c70b0ded8242aa9c",
-    "price": 420000000,
+    "price": 236850000,
     "currency": "USDC",
     "categories": [
       "commitments",
@@ -45,10 +45,10 @@
     "valuation_reference": "211.47",
     "state": "escrowed",
     "buyer": "0x1563915e194D8CfBA1943570603F7606A3115508",
-    "escrow_balance": 420000000,
+    "escrow_balance": 236850000,
     "delivered_hash": "",
     "sealed": false,
-    "created_at": "2026-09-04T00:50:18Z",
+    "created_at": "2026-09-04T02:40:02Z",
     "settled_at": ""
   },
   "preview": {
@@ -123,7 +123,7 @@
           "name": "recency_weight",
           "value": "1.0000",
           "inputs": {
-            "days_since_last_write": "4.66"
+            "days_since_last_write": "4.74"
           },
           "explanation": "No penalty within 7 days, full penalty at 90, linear between."
         }
@@ -156,12 +156,12 @@
     "receipt": {
       "listing_id": "listing-0417",
       "outcome": "released",
-      "amount": 420000000,
+      "amount": 236850000,
       "paid_to": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
       "identity_transferred_to": "0x1563915e194D8CfBA1943570603F7606A3115508",
       "sealed_agent": "erc8004:84532:0417",
       "reference": "local:541244d32c473ff31023b74605a67428",
-      "settled_at": "2026-09-04T00:50:18Z"
+      "settled_at": "2026-09-04T02:40:02Z"
     },
     "certificate": {
       "memory_asset": "#0417",
@@ -178,10 +178,10 @@
         "preferences",
         "relationships"
       ],
-      "seller_signature": "0x01d02990f5c6c7a7bc5db1c6aee51ea6b3394b250540b520a9f1f34ca00844a974591a2f7064f6cc74fcb940bc526737fbd4b5e55147b364c1554d02d966e76c1b",
-      "seller_tenant_sealed_at": "2026-09-04T00:50:18Z",
+      "seller_signature": "0x229d50130c02c6f86d081b86b242886b3509ccb1991f0fc96dff90ebb6ae07136a8949b45b3868393693a5175ff5de8afc84f3f9ff6b244338390e023d0a5f631b",
+      "seller_tenant_sealed_at": "2026-09-04T02:40:02Z",
       "settlement_reference": "local:541244d32c473ff31023b74605a67428",
-      "transfer_date": "2026-09-04T00:50:18Z",
+      "transfer_date": "2026-09-04T02:40:02Z",
       "transfer_status": "VERIFIED"
     },
     "seal": {
@@ -189,14 +189,14 @@
       "agent_identity": "erc8004:84532:0417",
       "transfer_id": "local:541244d32c473ff31023b74605a67428",
       "reason": "memory asset sold under listing listing-0417",
-      "sealed_at": "2026-09-04T00:50:18Z",
+      "sealed_at": "2026-09-04T02:40:02Z",
       "credential_revoked": true
     },
-    "certificate_text": "SUCCESSION CERTIFICATE\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nMemory asset           #0417\nOrigin agent           erc8004:84532:0417\nSuccessor agent        erc8004:84532:1183\nMemory version         23\nRecords transferred    49\nCategories             commitments, history, identity, learned-behaviors, preferences, relationships\nIntegrity hash         0x8a87d0a6\u20268242aa9c\nSeller signature       0x01d02990\u202666e76c1b\nOrigin tenant sealed   2026-09-04T00:50:18Z\nSettlement             local:5412\u202605a67428\nTransfer date          2026-09-04T00:50:18Z\nTransfer status        VERIFIED\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
+    "certificate_text": "SUCCESSION CERTIFICATE\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nMemory asset           #0417\nOrigin agent           erc8004:84532:0417\nSuccessor agent        erc8004:84532:1183\nMemory version         23\nRecords transferred    49\nCategories             commitments, history, identity, learned-behaviors, preferences, relationships\nIntegrity hash         0x8a87d0a6\u20268242aa9c\nSeller signature       0x229d5013\u20260a5f631b\nOrigin tenant sealed   2026-09-04T02:40:02Z\nSettlement             local:5412\u202605a67428\nTransfer date          2026-09-04T02:40:02Z\nTransfer status        VERIFIED\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
   },
   "replies": {
     "Hi, Northwind Mills again \u2014 are we still good on that Duluth run?": {
-      "text": "Yes \u2014 Northwind Mills. We have Duluth \u2192 Kansas City open at $2,380, quoted as quote-NW-4471 and still open. Hold is fine through Monday 17:00. Below 2300 the lane drops under the margin floor. Northwind Mills books Thursday mornings without exception. That's 5 prior interactions on record.",
+      "text": "Yes \u2014 Northwind Mills. We have Duluth \u2192 Kansas City open at $2,380, recorded as quote-NW-4471 and still open. Hold is fine through Monday 17:00. Below 2300 the lane drops under the margin floor. Northwind Mills books Thursday mornings without exception. That's 5 prior interactions on record.",
       "recalled": true,
       "citations": [
         {
@@ -222,7 +222,7 @@
       ]
     },
     "Selkirk Timber here, about the standing rate.": {
-      "text": "Yes \u2014 Selkirk Timber. We have Coeur d'Alene \u2192 Spokane open at $890, quoted as standing-rate-ST-0092 and still awaiting-countersignature. That's 4 prior interactions on record.",
+      "text": "Yes \u2014 Selkirk Timber. We have Coeur d'Alene \u2192 Spokane open at $890, recorded as standing-rate-ST-0092 and still awaiting-countersignature. That's 4 prior interactions on record.",
       "recalled": true,
       "citations": [
         {
@@ -258,7 +258,7 @@
       ]
     },
     "This is Acme Widgets, we've never worked together before.": {
-      "text": "Yes \u2014 Northwind Mills. We have Duluth \u2192 Kansas City open at $2,380, quoted as quote-NW-4471 and still open. Hold is fine through Monday 17:00. Below 2300 the lane drops under the margin floor. Northwind Mills books Thursday mornings without exception. That's 5 prior interactions on record.",
+      "text": "Yes \u2014 Northwind Mills. We have Duluth \u2192 Kansas City open at $2,380, recorded as quote-NW-4471 and still open. Hold is fine through Monday 17:00. Below 2300 the lane drops under the margin floor. Northwind Mills books Thursday mornings without exception. That's 5 prior interactions on record.",
       "recalled": true,
       "citations": [
         {
@@ -286,11 +286,11 @@
   },
   "write_attempt": {
     "accepted": false,
-    "reason": "tenant 'tenant-seller' was sealed at 2026-09-04T00:50:18Z (memory asset sold under listing listing-0417); this copy can no longer be represented as the live agent"
+    "reason": "tenant 'tenant-seller' was sealed at 2026-09-04T02:40:02Z (memory asset sold under listing listing-0417); this copy can no longer be represented as the live agent"
   },
   "seal": {
     "sealed": true,
-    "at": "2026-09-04T00:50:18Z"
+    "at": "2026-09-04T02:40:02Z"
   },
   "acp": {
     "agent_address": "",
@@ -306,5 +306,757 @@
     "success_rate": null,
     "verifiable_job_ids": [],
     "verification": "Each job id resolves against the ACP contract on Base Sepolia; these counts can be re-derived without trusting the seller."
-  }
+  },
+  "marketplace": [
+    {
+      "listing": {
+        "listing_id": "listing-0417",
+        "agent_id": "erc8004:84532:0417",
+        "seller": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+        "seller_signature": "0x229d50130c02c6f86d081b86b242886b3509ccb1991f0fc96dff90ebb6ae07136a8949b45b3868393693a5175ff5de8afc84f3f9ff6b244338390e023d0a5f631b",
+        "hash_commitment": "0x8a87d0a602d19b8685208b9896d1195c3a83986a694033f0c70b0ded8242aa9c",
+        "price": 236850000,
+        "currency": "USDC",
+        "categories": [
+          "commitments",
+          "history",
+          "identity",
+          "learned-behaviors",
+          "preferences",
+          "relationships"
+        ],
+        "valuation_reference": "211.47",
+        "state": "open",
+        "buyer": "",
+        "escrow_balance": 0,
+        "delivered_hash": "",
+        "sealed": false,
+        "created_at": "2026-09-04T02:40:02Z",
+        "settled_at": ""
+      },
+      "preview": {
+        "agent_identity": "erc8004:84532:0417",
+        "tenure_days": 93,
+        "counts": {
+          "entities": 17,
+          "journal_events": 23,
+          "state_documents": 1,
+          "reference_documents": 1,
+          "archived_entities": 1,
+          "relations": 6,
+          "total_records": 49
+        },
+        "memory_size_bytes": 8740,
+        "category_breakdown": {
+          "commitment": 2,
+          "identity": 1,
+          "learned-behavior": 4,
+          "preference": 4,
+          "relationship": 6
+        },
+        "public_counterparties": [
+          "northwind-mills",
+          "selkirk-timber"
+        ],
+        "withheld_non_transferable": 1,
+        "disclosure": "Aggregate statistics only. Record contents are released after purchase and hash verification.",
+        "valuation": {
+          "currency": "USD",
+          "base_price": "200.00",
+          "amount": "211.47",
+          "factors": [
+            {
+              "name": "tenure_factor",
+              "value": "0.9944",
+              "inputs": {
+                "tenure_days": "89.00"
+              },
+              "explanation": "Journal spans 89.00 days; reaches 1.5 at 180 days, clamped to [0.5, 2.0]."
+            },
+            {
+              "name": "interaction_density",
+              "value": "1.0337",
+              "inputs": {
+                "events": 23,
+                "events_per_day": "0.2584"
+              },
+              "explanation": "23 journal events over 89.00 days; 0.25/day scores 1.0."
+            },
+            {
+              "name": "relationship_breadth",
+              "value": "0.7200",
+              "inputs": {
+                "distinct_counterparties": 6
+              },
+              "explanation": "6 distinct counterparties at 0.12 each, clamped to [0.6, 2.0]."
+            },
+            {
+              "name": "task_performance",
+              "value": "1.4286",
+              "inputs": {
+                "trust_score": "0.9286",
+                "basis": "journal",
+                "wins": 13,
+                "losses": 1,
+                "resolved": 14
+              },
+              "explanation": "Win rate over 14 resolved journal outcomes (no ACP job history available). Mapped onto [0.5, 1.5]; fewer than 5 resolved outcomes scores a neutral 0.5."
+            },
+            {
+              "name": "recency_weight",
+              "value": "1.0000",
+              "inputs": {
+                "days_since_last_write": "4.74"
+              },
+              "explanation": "No penalty within 7 days, full penalty at 90, linear between."
+            }
+          ],
+          "formula": "base_price \u00d7 tenure_factor \u00d7 interaction_density \u00d7 relationship_breadth \u00d7 task_performance \u00d7 recency_weight",
+          "excluded": {
+            "buyer_demand": "v2 \u2014 needs real marketplace volume",
+            "origin_reputation": "v2 \u2014 needs a lineage history to draw on",
+            "buyer_satisfaction": "v2 \u2014 measurable only after transfers complete"
+          }
+        },
+        "committed_root": "0x8a87d0a602d19b8685208b9896d1195c3a83986a694033f0c70b0ded8242aa9c",
+        "acp": null,
+        "provenance_of_figures": {
+          "self_reported": [
+            "counts",
+            "memory_size_bytes",
+            "category_breakdown",
+            "tenure_days"
+          ],
+          "independently_verifiable": []
+        }
+      },
+      "name": "Meridian Logistics Co.",
+      "vertical": "Freight",
+      "featured": true
+    },
+    {
+      "listing": {
+        "listing_id": "listing-0812",
+        "agent_id": "erc8004:84532:0812",
+        "seller": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+        "seller_signature": "0x16eaf3e1ead7a509d901b4838319731df00ce1d13bf76e2b28ca6635699bf9e67f311a136a63e9ddaa38a059288c8c3e78ff81eff60f5cced7d5b49f79516dfe1c",
+        "hash_commitment": "0x3663642d1b420b40513ea1935d74eaeafb122fc53328a3ffea163364a124c554",
+        "price": 254880000,
+        "currency": "USDC",
+        "categories": [
+          "commitments",
+          "history",
+          "identity",
+          "learned-behaviors",
+          "preferences",
+          "relationships"
+        ],
+        "valuation_reference": "216.00",
+        "state": "open",
+        "buyer": "",
+        "escrow_balance": 0,
+        "delivered_hash": "",
+        "sealed": false,
+        "created_at": "2026-09-04T02:40:02Z",
+        "settled_at": ""
+      },
+      "preview": {
+        "agent_identity": "erc8004:84532:0812",
+        "tenure_days": 286,
+        "counts": {
+          "entities": 18,
+          "journal_events": 25,
+          "state_documents": 1,
+          "reference_documents": 1,
+          "archived_entities": 0,
+          "relations": 6,
+          "total_records": 51
+        },
+        "memory_size_bytes": 8666,
+        "category_breakdown": {
+          "commitment": 2,
+          "identity": 1,
+          "learned-behavior": 4,
+          "preference": 4,
+          "relationship": 7
+        },
+        "public_counterparties": [
+          "pale-fire-labs",
+          "verity-systems"
+        ],
+        "withheld_non_transferable": 1,
+        "disclosure": "Aggregate statistics only. Record contents are released after purchase and hash verification.",
+        "valuation": {
+          "currency": "USD",
+          "base_price": "200.00",
+          "amount": "216.00",
+          "factors": [
+            {
+              "name": "tenure_factor",
+              "value": "2.0000",
+              "inputs": {
+                "tenure_days": "287.00"
+              },
+              "explanation": "Journal spans 287.00 days; reaches 1.5 at 180 days, clamped to [0.5, 2.0]."
+            },
+            {
+              "name": "interaction_density",
+              "value": "0.5000",
+              "inputs": {
+                "events": 25,
+                "events_per_day": "0.0871"
+              },
+              "explanation": "25 journal events over 287.00 days; 0.25/day scores 1.0."
+            },
+            {
+              "name": "relationship_breadth",
+              "value": "0.8400",
+              "inputs": {
+                "distinct_counterparties": 7
+              },
+              "explanation": "7 distinct counterparties at 0.12 each, clamped to [0.6, 2.0]."
+            },
+            {
+              "name": "task_performance",
+              "value": "1.2857",
+              "inputs": {
+                "trust_score": "0.7857",
+                "basis": "journal",
+                "wins": 11,
+                "losses": 3,
+                "resolved": 14
+              },
+              "explanation": "Win rate over 14 resolved journal outcomes (no ACP job history available). Mapped onto [0.5, 1.5]; fewer than 5 resolved outcomes scores a neutral 0.5."
+            },
+            {
+              "name": "recency_weight",
+              "value": "1.0000",
+              "inputs": {
+                "days_since_last_write": "0.00"
+              },
+              "explanation": "No penalty within 7 days, full penalty at 90, linear between."
+            }
+          ],
+          "formula": "base_price \u00d7 tenure_factor \u00d7 interaction_density \u00d7 relationship_breadth \u00d7 task_performance \u00d7 recency_weight",
+          "excluded": {
+            "buyer_demand": "v2 \u2014 needs real marketplace volume",
+            "origin_reputation": "v2 \u2014 needs a lineage history to draw on",
+            "buyer_satisfaction": "v2 \u2014 measurable only after transfers complete"
+          }
+        },
+        "committed_root": "0x3663642d1b420b40513ea1935d74eaeafb122fc53328a3ffea163364a124c554",
+        "acp": null,
+        "provenance_of_figures": {
+          "self_reported": [
+            "counts",
+            "memory_size_bytes",
+            "category_breakdown",
+            "tenure_days"
+          ],
+          "independently_verifiable": []
+        }
+      },
+      "name": "Halcyon Talent",
+      "vertical": "Recruiting",
+      "featured": false
+    },
+    {
+      "listing": {
+        "listing_id": "listing-0641",
+        "agent_id": "erc8004:84532:0641",
+        "seller": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+        "seller_signature": "0x8702752ad4bc17a77155604d55fd9c9495fbf0af9b61b05553812c98a789f72073f18b3870cca8a7b4c25c26a55fa4ba8c074cce09bfd28266d0b80cdda9967a1c",
+        "hash_commitment": "0x51c1a02443fdf686bde528db7d2101860b2579278038b5027228e910b2c26d66",
+        "price": 130610000,
+        "currency": "USDC",
+        "categories": [
+          "commitments",
+          "history",
+          "identity",
+          "learned-behaviors",
+          "preferences",
+          "relationships"
+        ],
+        "valuation_reference": "125.04",
+        "state": "open",
+        "buyer": "",
+        "escrow_balance": 0,
+        "delivered_hash": "",
+        "sealed": false,
+        "created_at": "2026-09-04T02:40:02Z",
+        "settled_at": ""
+      },
+      "preview": {
+        "agent_identity": "erc8004:84532:0641",
+        "tenure_days": 111,
+        "counts": {
+          "entities": 13,
+          "journal_events": 22,
+          "state_documents": 1,
+          "reference_documents": 1,
+          "archived_entities": 0,
+          "relations": 4,
+          "total_records": 41
+        },
+        "memory_size_bytes": 6895,
+        "category_breakdown": {
+          "commitment": 1,
+          "identity": 1,
+          "learned-behavior": 3,
+          "preference": 3,
+          "relationship": 5
+        },
+        "public_counterparties": [
+          "fennel-and-co"
+        ],
+        "withheld_non_transferable": 0,
+        "disclosure": "Aggregate statistics only. Record contents are released after purchase and hash verification.",
+        "valuation": {
+          "currency": "USD",
+          "base_price": "200.00",
+          "amount": "125.04",
+          "factors": [
+            {
+              "name": "tenure_factor",
+              "value": "0.7333",
+              "inputs": {
+                "tenure_days": "42.00"
+              },
+              "explanation": "Journal spans 42.00 days; reaches 1.5 at 180 days, clamped to [0.5, 2.0]."
+            },
+            {
+              "name": "interaction_density",
+              "value": "2.0000",
+              "inputs": {
+                "events": 22,
+                "events_per_day": "0.5238"
+              },
+              "explanation": "22 journal events over 42.00 days; 0.25/day scores 1.0."
+            },
+            {
+              "name": "relationship_breadth",
+              "value": "0.6000",
+              "inputs": {
+                "distinct_counterparties": 5
+              },
+              "explanation": "5 distinct counterparties at 0.12 each, clamped to [0.6, 2.0]."
+            },
+            {
+              "name": "task_performance",
+              "value": "1.3000",
+              "inputs": {
+                "trust_score": "0.8000",
+                "basis": "journal",
+                "wins": 12,
+                "losses": 3,
+                "resolved": 15
+              },
+              "explanation": "Win rate over 15 resolved journal outcomes (no ACP job history available). Mapped onto [0.5, 1.5]; fewer than 5 resolved outcomes scores a neutral 0.5."
+            },
+            {
+              "name": "recency_weight",
+              "value": "0.5465",
+              "inputs": {
+                "days_since_last_write": "69.74"
+              },
+              "explanation": "No penalty within 7 days, full penalty at 90, linear between."
+            }
+          ],
+          "formula": "base_price \u00d7 tenure_factor \u00d7 interaction_density \u00d7 relationship_breadth \u00d7 task_performance \u00d7 recency_weight",
+          "excluded": {
+            "buyer_demand": "v2 \u2014 needs real marketplace volume",
+            "origin_reputation": "v2 \u2014 needs a lineage history to draw on",
+            "buyer_satisfaction": "v2 \u2014 measurable only after transfers complete"
+          }
+        },
+        "committed_root": "0x51c1a02443fdf686bde528db7d2101860b2579278038b5027228e910b2c26d66",
+        "acp": null,
+        "provenance_of_figures": {
+          "self_reported": [
+            "counts",
+            "memory_size_bytes",
+            "category_breakdown",
+            "tenure_days"
+          ],
+          "independently_verifiable": []
+        }
+      },
+      "name": "Bright Harbor Retention",
+      "vertical": "Customer success",
+      "featured": false
+    },
+    {
+      "listing": {
+        "listing_id": "listing-0305",
+        "agent_id": "erc8004:84532:0305",
+        "seller": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+        "seller_signature": "0xe87139c8657f420a2275bf1ce031b0f1fe0d27232f4dba42890504899fb1533e1f86e8c8f41ab290eb2ca03bbd2995e15ba1537620d81f26e787d7686197815f1c",
+        "hash_commitment": "0x693cc44ef6728bf448a61aba3353ac192d2a53c1fd2d5ad6e6c3b8f44524ec2e",
+        "price": 113150000,
+        "currency": "USDC",
+        "categories": [
+          "commitments",
+          "history",
+          "identity",
+          "learned-behaviors",
+          "preferences",
+          "relationships"
+        ],
+        "valuation_reference": "119.44",
+        "state": "open",
+        "buyer": "",
+        "escrow_balance": 0,
+        "delivered_hash": "",
+        "sealed": false,
+        "created_at": "2026-09-04T02:40:02Z",
+        "settled_at": ""
+      },
+      "preview": {
+        "agent_identity": "erc8004:84532:0305",
+        "tenure_days": 202,
+        "counts": {
+          "entities": 10,
+          "journal_events": 15,
+          "state_documents": 1,
+          "reference_documents": 1,
+          "archived_entities": 0,
+          "relations": 3,
+          "total_records": 30
+        },
+        "memory_size_bytes": 5060,
+        "category_breakdown": {
+          "commitment": 1,
+          "identity": 1,
+          "learned-behavior": 2,
+          "preference": 3,
+          "relationship": 3
+        },
+        "public_counterparties": [
+          "kessler-bearings"
+        ],
+        "withheld_non_transferable": 0,
+        "disclosure": "Aggregate statistics only. Record contents are released after purchase and hash verification.",
+        "valuation": {
+          "currency": "USD",
+          "base_price": "200.00",
+          "amount": "119.44",
+          "factors": [
+            {
+              "name": "tenure_factor",
+              "value": "1.5778",
+              "inputs": {
+                "tenure_days": "194.00"
+              },
+              "explanation": "Journal spans 194.00 days; reaches 1.5 at 180 days, clamped to [0.5, 2.0]."
+            },
+            {
+              "name": "interaction_density",
+              "value": "0.5000",
+              "inputs": {
+                "events": 15,
+                "events_per_day": "0.0773"
+              },
+              "explanation": "15 journal events over 194.00 days; 0.25/day scores 1.0."
+            },
+            {
+              "name": "relationship_breadth",
+              "value": "0.6000",
+              "inputs": {
+                "distinct_counterparties": 3
+              },
+              "explanation": "3 distinct counterparties at 0.12 each, clamped to [0.6, 2.0]."
+            },
+            {
+              "name": "task_performance",
+              "value": "1.2778",
+              "inputs": {
+                "trust_score": "0.7778",
+                "basis": "journal",
+                "wins": 7,
+                "losses": 2,
+                "resolved": 9
+              },
+              "explanation": "Win rate over 9 resolved journal outcomes (no ACP job history available). Mapped onto [0.5, 1.5]; fewer than 5 resolved outcomes scores a neutral 0.5."
+            },
+            {
+              "name": "recency_weight",
+              "value": "0.9874",
+              "inputs": {
+                "days_since_last_write": "8.74"
+              },
+              "explanation": "No penalty within 7 days, full penalty at 90, linear between."
+            }
+          ],
+          "formula": "base_price \u00d7 tenure_factor \u00d7 interaction_density \u00d7 relationship_breadth \u00d7 task_performance \u00d7 recency_weight",
+          "excluded": {
+            "buyer_demand": "v2 \u2014 needs real marketplace volume",
+            "origin_reputation": "v2 \u2014 needs a lineage history to draw on",
+            "buyer_satisfaction": "v2 \u2014 measurable only after transfers complete"
+          }
+        },
+        "committed_root": "0x693cc44ef6728bf448a61aba3353ac192d2a53c1fd2d5ad6e6c3b8f44524ec2e",
+        "acp": null,
+        "provenance_of_figures": {
+          "self_reported": [
+            "counts",
+            "memory_size_bytes",
+            "category_breakdown",
+            "tenure_days"
+          ],
+          "independently_verifiable": []
+        }
+      },
+      "name": "Ironvane Procurement",
+      "vertical": "Procurement",
+      "featured": false
+    },
+    {
+      "listing": {
+        "listing_id": "listing-1174",
+        "agent_id": "erc8004:84532:1174",
+        "seller": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+        "seller_signature": "0x6668ad28cd7908a213226abae44bc8f2435482746d1572088f3d2473c4f8a2e679026473323cb6aa861b24b03e2cf3d835961f03c6482de1eb208910fbc3e7481b",
+        "hash_commitment": "0x3455475936e16687b7f3019f3cde6c9ff7d2f3143bb777f71d4e4826d9932c3d",
+        "price": 59140000,
+        "currency": "USDC",
+        "categories": [
+          "commitments",
+          "history",
+          "identity",
+          "learned-behaviors",
+          "preferences",
+          "relationships"
+        ],
+        "valuation_reference": "67.20",
+        "state": "open",
+        "buyer": "",
+        "escrow_balance": 0,
+        "delivered_hash": "",
+        "sealed": false,
+        "created_at": "2026-09-04T02:40:02Z",
+        "settled_at": ""
+      },
+      "preview": {
+        "agent_identity": "erc8004:84532:1174",
+        "tenure_days": 420,
+        "counts": {
+          "entities": 9,
+          "journal_events": 15,
+          "state_documents": 1,
+          "reference_documents": 1,
+          "archived_entities": 0,
+          "relations": 3,
+          "total_records": 29
+        },
+        "memory_size_bytes": 4674,
+        "category_breakdown": {
+          "commitment": 1,
+          "identity": 1,
+          "learned-behavior": 2,
+          "preference": 2,
+          "relationship": 3
+        },
+        "public_counterparties": [],
+        "withheld_non_transferable": 0,
+        "disclosure": "Aggregate statistics only. Record contents are released after purchase and hash verification.",
+        "valuation": {
+          "currency": "USD",
+          "base_price": "200.00",
+          "amount": "67.20",
+          "factors": [
+            {
+              "name": "tenure_factor",
+              "value": "2.0000",
+              "inputs": {
+                "tenure_days": "325.00"
+              },
+              "explanation": "Journal spans 325.00 days; reaches 1.5 at 180 days, clamped to [0.5, 2.0]."
+            },
+            {
+              "name": "interaction_density",
+              "value": "0.5000",
+              "inputs": {
+                "events": 15,
+                "events_per_day": "0.0462"
+              },
+              "explanation": "15 journal events over 325.00 days; 0.25/day scores 1.0."
+            },
+            {
+              "name": "relationship_breadth",
+              "value": "0.6000",
+              "inputs": {
+                "distinct_counterparties": 3
+              },
+              "explanation": "3 distinct counterparties at 0.12 each, clamped to [0.6, 2.0]."
+            },
+            {
+              "name": "task_performance",
+              "value": "1.4000",
+              "inputs": {
+                "trust_score": "0.9000",
+                "basis": "journal",
+                "wins": 9,
+                "losses": 1,
+                "resolved": 10
+              },
+              "explanation": "Win rate over 10 resolved journal outcomes (no ACP job history available). Mapped onto [0.5, 1.5]; fewer than 5 resolved outcomes scores a neutral 0.5."
+            },
+            {
+              "name": "recency_weight",
+              "value": "0.4000",
+              "inputs": {
+                "days_since_last_write": "95.74"
+              },
+              "explanation": "No penalty within 7 days, full penalty at 90, linear between."
+            }
+          ],
+          "formula": "base_price \u00d7 tenure_factor \u00d7 interaction_density \u00d7 relationship_breadth \u00d7 task_performance \u00d7 recency_weight",
+          "excluded": {
+            "buyer_demand": "v2 \u2014 needs real marketplace volume",
+            "origin_reputation": "v2 \u2014 needs a lineage history to draw on",
+            "buyer_satisfaction": "v2 \u2014 measurable only after transfers complete"
+          }
+        },
+        "committed_root": "0x3455475936e16687b7f3019f3cde6c9ff7d2f3143bb777f71d4e4826d9932c3d",
+        "acp": null,
+        "provenance_of_figures": {
+          "self_reported": [
+            "counts",
+            "memory_size_bytes",
+            "category_breakdown",
+            "tenure_days"
+          ],
+          "independently_verifiable": []
+        }
+      },
+      "name": "Cedar & Vale",
+      "vertical": "Property",
+      "featured": false
+    },
+    {
+      "listing": {
+        "listing_id": "listing-2098",
+        "agent_id": "erc8004:84532:2098",
+        "seller": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+        "seller_signature": "0x15194d589108af008ab8c49df3b0d9394003ff7a2a8dd8c35c9cd5bf823d92dd7613b8d1302b0f8a582734a0ff4b2e8babeceb7ed95b041aadbaa506df2e547b1b",
+        "hash_commitment": "0x79a87d6387fa06c11a70cc23eaed253e95a5cfb320df4b25d779bd43a9da5ce8",
+        "price": 95340000,
+        "currency": "USDC",
+        "categories": [
+          "commitments",
+          "history",
+          "identity",
+          "learned-behaviors",
+          "preferences",
+          "relationships"
+        ],
+        "valuation_reference": "86.67",
+        "state": "open",
+        "buyer": "",
+        "escrow_balance": 0,
+        "delivered_hash": "",
+        "sealed": false,
+        "created_at": "2026-09-04T02:40:02Z",
+        "settled_at": ""
+      },
+      "preview": {
+        "agent_identity": "erc8004:84532:2098",
+        "tenure_days": 63,
+        "counts": {
+          "entities": 8,
+          "journal_events": 10,
+          "state_documents": 1,
+          "reference_documents": 1,
+          "archived_entities": 0,
+          "relations": 3,
+          "total_records": 23
+        },
+        "memory_size_bytes": 3575,
+        "category_breakdown": {
+          "commitment": 1,
+          "identity": 1,
+          "learned-behavior": 2,
+          "preference": 2,
+          "relationship": 2
+        },
+        "public_counterparties": [
+          "aldervale-capital"
+        ],
+        "withheld_non_transferable": 0,
+        "disclosure": "Aggregate statistics only. Record contents are released after purchase and hash verification.",
+        "valuation": {
+          "currency": "USD",
+          "base_price": "200.00",
+          "amount": "86.67",
+          "factors": [
+            {
+              "name": "tenure_factor",
+              "value": "0.8333",
+              "inputs": {
+                "tenure_days": "60.00"
+              },
+              "explanation": "Journal spans 60.00 days; reaches 1.5 at 180 days, clamped to [0.5, 2.0]."
+            },
+            {
+              "name": "interaction_density",
+              "value": "0.6667",
+              "inputs": {
+                "events": 10,
+                "events_per_day": "0.1667"
+              },
+              "explanation": "10 journal events over 60.00 days; 0.25/day scores 1.0."
+            },
+            {
+              "name": "relationship_breadth",
+              "value": "0.6000",
+              "inputs": {
+                "distinct_counterparties": 2
+              },
+              "explanation": "2 distinct counterparties at 0.12 each, clamped to [0.6, 2.0]."
+            },
+            {
+              "name": "task_performance",
+              "value": "1.3000",
+              "inputs": {
+                "trust_score": "0.8000",
+                "basis": "journal",
+                "wins": 4,
+                "losses": 1,
+                "resolved": 5
+              },
+              "explanation": "Win rate over 5 resolved journal outcomes (no ACP job history available). Mapped onto [0.5, 1.5]; fewer than 5 resolved outcomes scores a neutral 0.5."
+            },
+            {
+              "name": "recency_weight",
+              "value": "1.0000",
+              "inputs": {
+                "days_since_last_write": "3.74"
+              },
+              "explanation": "No penalty within 7 days, full penalty at 90, linear between."
+            }
+          ],
+          "formula": "base_price \u00d7 tenure_factor \u00d7 interaction_density \u00d7 relationship_breadth \u00d7 task_performance \u00d7 recency_weight",
+          "excluded": {
+            "buyer_demand": "v2 \u2014 needs real marketplace volume",
+            "origin_reputation": "v2 \u2014 needs a lineage history to draw on",
+            "buyer_satisfaction": "v2 \u2014 measurable only after transfers complete"
+          }
+        },
+        "committed_root": "0x79a87d6387fa06c11a70cc23eaed253e95a5cfb320df4b25d779bd43a9da5ce8",
+        "acp": null,
+        "provenance_of_figures": {
+          "self_reported": [
+            "counts",
+            "memory_size_bytes",
+            "category_breakdown",
+            "tenure_days"
+          ],
+          "independently_verifiable": []
+        }
+      },
+      "name": "Quantile Research",
+      "vertical": "Research",
+      "featured": false
+    }
+  ]
 }

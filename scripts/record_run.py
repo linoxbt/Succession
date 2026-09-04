@@ -25,6 +25,8 @@ sys.path.insert(0, str(ROOT / "packages" / "succession" / "src"))
 
 from succession.acp import job_history_from_memory  # noqa: E402
 from succession.agent import Agent  # noqa: E402
+from succession.catalog import CATALOG, NOW, seed_archetype  # noqa: E402
+from succession.valuation import value_tenant  # noqa: E402
 from succession.demokeys import BUYER, SELLER  # noqa: E402
 from succession.memory.sibyl import open_tenant  # noqa: E402
 from succession.seal import SealRegistry, TenantSealed, guard  # noqa: E402
@@ -32,7 +34,7 @@ from succession.seed import seed_seller  # noqa: E402
 from succession.settlement import LocalSettlement  # noqa: E402
 from succession.transfer import execute_transfer, list_asset  # noqa: E402
 
-LISTING, PRICE = "listing-0417", 420_000_000
+LISTING, FEATURED_ASK_RATIO = "listing-0417", "1.12"
 
 PROMPTS = [
     "Hi, Northwind Mills again — are we still good on that Duluth run?",
@@ -66,15 +68,44 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001 - absent credentials are the norm
         print(f"no ACP history ({type(exc).__name__}); recording without it")
 
+    from decimal import ROUND_HALF_UP, Decimal
+
+    featured_value = value_tenant(seller, now=NOW).amount * Decimal(FEATURED_ASK_RATIO)
+    featured_price = int(
+        featured_value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) * 1_000_000
+    )
     listed = list_asset(
         seller, settlement,
         listing_id=LISTING, agent_identity=SELLER.agent_id,
-        seller_address=SELLER.address, private_key=SELLER.private_key, price=PRICE,
+        seller_address=SELLER.address, private_key=SELLER.private_key,
+        price=featured_price,
     )
     listing_open = settlement.get(LISTING).to_dict()
     preview = listed.preview.to_dict()
 
-    settlement.buy(LISTING, buyer=BUYER.address, amount=PRICE)
+    # The rest of the market, exported for real so the hosted marketplace shows
+    # computed roots and valuations rather than a table of typed-in numbers.
+    marketplace = [{
+        "listing": listing_open, "preview": preview,
+        "name": "Meridian Logistics Co.", "vertical": "Freight", "featured": True,
+    }]
+    for archetype in CATALOG:
+        store = open_tenant(work / f"{archetype.slug}.db", archetype.tenant_id)
+        seed_archetype(store, archetype)
+        entry = list_asset(
+            store, settlement,
+            listing_id=archetype.listing_id, agent_identity=archetype.agent_identity,
+            seller_address=SELLER.address, private_key=SELLER.private_key,
+            price=archetype.asking_price(value_tenant(store, now=NOW).amount),
+        )
+        marketplace.append({
+            "listing": settlement.get(archetype.listing_id).to_dict(),
+            "preview": entry.preview.to_dict(),
+            "name": archetype.name, "vertical": archetype.vertical, "featured": False,
+        })
+    print(f"exported {len(marketplace)} marketplace listings")
+
+    settlement.buy(LISTING, buyer=BUYER.address, amount=featured_price)
     listing_escrowed = settlement.get(LISTING).to_dict()
 
     buyer = open_tenant(work / "buyer.db", "tenant-buyer")
@@ -114,6 +145,7 @@ def main() -> int:
         "write_attempt": write_attempt,
         "seal": {"sealed": True, "at": seal.sealed_at},
         "acp": job_history_from_memory(buyer).to_dict(),
+        "marketplace": marketplace,
     }
 
     ledger = ROOT / "deployments" / "transfers.json"

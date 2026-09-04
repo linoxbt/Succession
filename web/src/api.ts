@@ -113,6 +113,14 @@ export interface Reply {
   citations: { tier: string; key: string }[];
 }
 
+export interface MarketRow {
+  listing: Listing;
+  preview: Preview;
+  name: string;
+  vertical: string;
+  featured: boolean;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -146,6 +154,8 @@ export const api = {
       body: JSON.stringify({ categories: categories ?? null }),
     }),
   listing: () => request<Listing>("/api/listing"),
+  marketplace: () =>
+    request<{ listings: MarketRow[]; count: number }>("/api/marketplace"),
   preview: () => request<Preview>("/api/listing/preview"),
   buy: () => request<Listing>("/api/listing/buy", { method: "POST", body: "{}" }),
   transfer: () => request<Outcome>("/api/listing/transfer", { method: "POST" }),

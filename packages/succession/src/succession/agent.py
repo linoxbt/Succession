@@ -115,6 +115,11 @@ class Agent:
         # — the lane, or a detail from the notes. Take its top-ranked hit.
         return hits[0] if hits else None
 
+    # -- description --------------------------------------------------
+
+    def _noop(self) -> None:  # pragma: no cover - placeholder anchor
+        return None
+
     def _search_relationships(self, text: str) -> list[dict[str, Any]]:
         """FTS over the relationship category, one distinctive term at a time.
 
@@ -225,12 +230,7 @@ class Agent:
         commitment = context.get("commitment")
         state = context.get("state")
         if commitment is not None:
-            body = commitment["body"]
-            rate = body.get("quoted_rate_usd") or body.get("proposed_standing_rate_usd")
-            parts.append(
-                f"We have {body['lane']} open at ${rate:,}, quoted as "
-                f"{commitment['name']} and still {body['status']}."
-            )
+            parts.append(_describe_commitment(commitment))
             citations.append(Citation("commitment", commitment["name"]))
 
         if state and state.get("counterparty") == company:
@@ -253,3 +253,41 @@ class Agent:
             )
 
         return Reply(text=" ".join(parts), citations=citations)
+
+
+#: Fields that name *what* a commitment is about, in order of preference. An
+#: agent's domain decides which of these its commitments carry, so the
+#: description composes from whichever are present rather than assuming one
+#: vocabulary — the first version of this hardcoded freight and produced a
+#: KeyError the moment a recruiting agent was seeded.
+_SUBJECT_FIELDS = (
+    "lane", "role", "line", "deliverable", "offer", "counterparty", "units",
+)
+
+#: Fields carrying a monetary amount, again in preference order.
+_VALUE_FIELDS = (
+    "quoted_rate_usd", "proposed_standing_rate_usd", "fee_usd", "value_usd",
+)
+
+
+def _describe_commitment(commitment: dict[str, Any]) -> str:
+    """One sentence about an open commitment, from whatever fields it has."""
+    body = commitment.get("body") or {}
+
+    subject = next(
+        (str(body[f]) for f in _SUBJECT_FIELDS if body.get(f) not in (None, "")),
+        None,
+    )
+    amount = next(
+        (body[f] for f in _VALUE_FIELDS if isinstance(body.get(f), (int, float))),
+        None,
+    )
+    status = body.get("status")
+
+    clause = "We have " + (f"{subject} open" if subject else "an open item")
+    if amount is not None:
+        clause += f" at ${amount:,}"
+    clause += f", recorded as {commitment['name']}"
+    if status:
+        clause += f" and still {status}"
+    return clause + "."
