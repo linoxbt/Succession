@@ -166,6 +166,10 @@ export const api = {
   preview: () => request<Preview>("/api/listing/preview"),
   buy: () => request<Listing>("/api/listing/buy", { method: "POST", body: "{}" }),
   transfer: () => request<Outcome>("/api/listing/transfer", { method: "POST" }),
+  /** The settled outcome, if there is one. 404 means "has not settled", which
+   *  is why the caller distinguishes it from a failure rather than swallowing
+   *  every error into an empty screen. */
+  outcome: () => request<Outcome>("/api/listing/outcome"),
   seal: (tenant: string) =>
     request<{ sealed: boolean; record: { sealed_at: string; reason: string } | null }>(
       `/api/seal/${tenant}`,

@@ -123,3 +123,98 @@ def test_a_partial_listing_transfers_over_http(client):
         "preferences",
         "relationships",
     ]
+
+
+# -- the settled outcome survives a reload --------------------------------
+
+
+def test_outcome_is_404_before_settlement(client):
+    """"Has not settled" and "failed" must not look the same to the console."""
+    assert client.get("/api/listing/outcome").status_code == 404
+
+
+def test_outcome_is_recoverable_after_settlement(client):
+    """A settled sale must survive a page reload.
+
+    The receipt is durable in settlement.db, but the certificate is assembled
+    from the package header, which lives only in the listing process. Without a
+    persisted outcome the confirmation screen and the ledger vanished on
+    refresh for a transfer that genuinely happened — the UI asserting that
+    nothing had occurred.
+    """
+    client.post("/api/listing/buy", json={}).raise_for_status()
+    settled = client.post("/api/listing/transfer").json()
+
+    recovered = client.get("/api/listing/outcome")
+
+    assert recovered.status_code == 200
+    body = recovered.json()
+    assert body["outcome"] == "verified" == settled["outcome"]
+    assert body["committed_root"] == settled["committed_root"]
+    assert body["certificate"]["transfer_status"] == "VERIFIED"
+    # The downloadable certificate is part of what has to survive; rebuilding
+    # it from the header is exactly what a reload cannot do.
+    assert body["certificate_text"]
+
+
+def test_reset_clears_a_previous_outcome(client):
+    """Otherwise a fresh demo opens showing the last sale's certificate."""
+    client.post("/api/listing/buy", json={}).raise_for_status()
+    client.post("/api/listing/transfer").raise_for_status()
+    assert client.get("/api/listing/outcome").status_code == 200
+
+    client.post("/api/demo/reset", json={}).raise_for_status()
+
+    assert client.get("/api/listing/outcome").status_code == 404
+
+
+# -- the settlement backend names itself ----------------------------------
+
+
+def test_chain_route_reports_local_when_nothing_is_deployed(client, monkeypatch):
+    """LocalSettlement must never be presentable as the chain."""
+    monkeypatch.setenv("SUCCESSION_DEPLOYMENT", "/nonexistent/base-sepolia.json")
+
+    body = client.get("/api/chain").json()
+
+    assert body["mode"] == "local"
+    assert body["deployment"] is None
+    assert "No transaction reaches Base" in body["explanation"]
+
+
+def test_chain_route_reports_the_deployment_when_one_exists(
+    client, monkeypatch, tmp_path
+):
+    record = {
+        "chain_id": 84532,
+        "listing_contract": "0x" + "11" * 20,
+        "identity_registry": "0x7177a6867296406881E20d6647232314736Dd09A",
+        "identity_registry_is_mock": False,
+        "payment_token": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+        "arbiter": "0x" + "22" * 20,
+    }
+    path = tmp_path / "base-sepolia.json"
+    path.write_text(json.dumps(record))
+    monkeypatch.setenv("SUCCESSION_DEPLOYMENT", str(path))
+
+    body = client.get("/api/chain").json()
+
+    assert body["mode"] == "chain"
+    assert body["chain_id"] == 84532
+    assert body["deployment"]["identity_registry_is_mock"] is False
+
+
+def test_chain_route_is_read_per_request_not_cached(client, monkeypatch, tmp_path):
+    """Deploying happens while the service is already running.
+
+    A value cached at import would keep reporting local mode until someone
+    restarted it, which is the shape of bug that gets diagnosed as "the deploy
+    silently failed".
+    """
+    path = tmp_path / "base-sepolia.json"
+    monkeypatch.setenv("SUCCESSION_DEPLOYMENT", str(path))
+    assert client.get("/api/chain").json()["mode"] == "local"
+
+    path.write_text(json.dumps({"chain_id": 84532, "listing_contract": "0x0"}))
+
+    assert client.get("/api/chain").json()["mode"] == "chain"

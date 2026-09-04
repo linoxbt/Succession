@@ -23,6 +23,7 @@
  * Selecting a subset switches you to a notice explaining that, rather than
  * quietly replaying the full-succession numbers under a partial-sale heading.
  */
+import { ApiError } from "./api";
 import type { Listing, MarketRow, Outcome, Preview, Reply } from "./api";
 
 /** One row of the settlement ledger, as `scripts/run_transfers.py` writes it. */
@@ -140,6 +141,13 @@ export function recordedApi(run: RecordedRun) {
     },
     transfer: async () => {
       phase = "confirmed";
+      return run.outcome;
+    },
+    // The recorded run replays from the start on every load, so before its
+    // settlement beat there is no outcome to recover — the same 404 the live
+    // service gives for a sale that has not settled.
+    outcome: async (): Promise<Outcome> => {
+      if (phase !== "confirmed") throw new ApiError("has not settled", 404);
       return run.outcome;
     },
     // The seller is sealed by the sale, so before settlement it is not sealed.

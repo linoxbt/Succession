@@ -274,7 +274,7 @@ export function Docs() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Filter"
           aria-label="Filter documentation"
-          className="mb-3 w-full rounded-md border border-rule bg-parchment px-3 py-2 text-[0.8125rem] placeholder:text-faint"
+          className="mb-3 w-full border border-rule bg-vellum px-3 py-2 text-[0.8125rem] placeholder:text-faint"
         />
         <ul className="space-y-0.5">
           {filtered.map((d) => (
@@ -332,9 +332,11 @@ export function Docs() {
 
 // -- small prose primitives ------------------------------------------------
 
+/** Body copy is ink. Muted is for labels and asides — a document whose own
+ *  argument is set in the secondary colour reads as a footnote to itself. */
 function P({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <p className={`max-w-[70ch] text-[0.9375rem] leading-relaxed text-muted ${className}`}>
+    <p className={`mt-4 max-w-[70ch] text-[0.9375rem] leading-relaxed text-ink ${className}`}>
       {children}
     </p>
   );
@@ -342,7 +344,7 @@ function P({ children, className = "" }: { children: ReactNode; className?: stri
 
 function Code({ children }: { children: ReactNode }) {
   return (
-    <code className="rounded bg-parchment px-1.5 py-0.5 font-mono text-[0.8125rem] text-ink">
+    <code className="bg-parchment px-1.5 py-0.5 font-mono text-[0.8125rem] text-ink">
       {children}
     </code>
   );
@@ -350,7 +352,7 @@ function Code({ children }: { children: ReactNode }) {
 
 function Pre({ children }: { children: string }) {
   return (
-    <pre className="mt-5 overflow-x-auto rounded-lg border border-rule bg-parchment p-4 font-mono text-[0.8125rem] leading-relaxed text-muted">
+    <pre className="mt-5 overflow-x-auto border border-rule bg-parchment p-4 font-mono text-[0.8125rem] leading-relaxed text-ink">
       {children}
     </pre>
   );
@@ -360,7 +362,7 @@ function Callout({ children, tone = "escrow" }: { children: ReactNode; tone?: "e
   const border = tone === "void" ? "border-void/40" : "border-escrow/40";
   return (
     <div className={`mt-6 border-l-2 ${border} pl-4`}>
-      <p className="max-w-[68ch] text-[0.9375rem] leading-relaxed text-muted">{children}</p>
+      <p className="max-w-[68ch] text-[0.9375rem] leading-relaxed text-ink">{children}</p>
     </div>
   );
 }
@@ -373,7 +375,7 @@ function Ol({ items }: { items: [string, string][] }) {
           <span className="tnum w-5 shrink-0 pt-0.5 text-xs text-faint">{i + 1}</span>
           <span className="max-w-[66ch] text-[0.9375rem] leading-relaxed">
             <span className="font-medium text-ink">{term}. </span>
-            <span className="text-muted">{line}</span>
+            <span className="text-ink">{line}</span>
           </span>
         </li>
       ))}
@@ -389,7 +391,7 @@ function Ul({ items }: { items: string[] }) {
           <span className="pt-2 text-faint" aria-hidden>
             <Badge>·</Badge>
           </span>
-          <span className="max-w-[68ch] text-[0.9375rem] leading-relaxed text-muted">
+          <span className="max-w-[68ch] text-[0.9375rem] leading-relaxed text-ink">
             {line}
           </span>
         </li>

@@ -181,8 +181,13 @@ preflight checks.
 
 Small, specific, and worth writing down before it is forgotten.
 
-- [ ] `service/app.py` holds the listing envelope in process memory, so a
-      restart loses an in-flight sale. Needs durable storage.
+- [ ] `service/app.py` holds the listing envelope and content key in process
+      memory, so a restart loses an *in-flight* sale. Needs durable storage —
+      with the constraint that the content key must still be unreleasable
+      before escrow funds, which is why it is not simply written next to the
+      ciphertext. A *settled* sale now survives a restart: the outcome and its
+      certificate are persisted under the workdir and served from
+      `GET /api/listing/outcome`.
 - [ ] The recorded-run artifact is regenerated manually. It should be a CI step,
       so it cannot drift from the pipeline it claims to record.
 - [ ] `contracts/compile.js` exists because Foundry could not be installed in the

@@ -109,6 +109,11 @@ function Surface() {
             .then((s) => ({ sealed: s.sealed, at: s.record?.sealed_at ?? "" }))
             .catch(() => null),
         );
+        // A settled sale must survive a reload. Without this the confirmation
+        // screen and the ledger vanished on refresh for a transfer that
+        // genuinely happened, which is the UI asserting that nothing occurred.
+        // A 404 is the honest "has not settled yet" and leaves outcome null.
+        setOutcome(await client.outcome().catch(() => null));
       } catch {
         setListing(null);
       }

@@ -58,9 +58,9 @@ export function Memory({
     <div className="space-y-6">
       <Section
         title="Successor agent"
-        action={<span className="text-xs text-faint">Cold session, new tenant</span>}
+        action={<span className="text-[0.8125rem] text-muted">Cold session, new tenant</span>}
       >
-        <div className="min-h-[15rem] space-y-5 px-5 py-5">
+        <div className={`space-y-5 py-5 ${turns.length ? "min-h-[15rem]" : ""}`}>
           {turns.length === 0 ? (
             <p className="text-[0.8125rem] text-faint">
               Message the agent as a returning customer.
@@ -68,7 +68,7 @@ export function Memory({
           ) : null}
           {turns.map((turn, i) => (
             <div key={i} className="space-y-1">
-              <p className="text-[0.6875rem] uppercase tracking-[0.08em] text-faint">
+              <p className="text-[0.75rem] uppercase tracking-[0.06em] text-faint">
                 {turn.from === "customer" ? "Customer" : "Agent"}
               </p>
               <p className="text-[0.9375rem] leading-relaxed">{turn.text}</p>
@@ -82,7 +82,7 @@ export function Memory({
         </div>
         <Rule />
         <form
-          className="flex flex-col gap-2 px-5 py-4 sm:flex-row"
+          className="flex flex-col gap-2 py-4 sm:flex-row"
           onSubmit={(e) => {
             e.preventDefault();
             void send(draft);
@@ -96,7 +96,7 @@ export function Memory({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Message the agent as a returning customer"
-            className="flex-1 rounded-md border border-rule bg-vellum px-3 py-2 text-[0.8125rem] placeholder:text-faint"
+            className="flex-1 border border-rule bg-vellum px-3 py-2 text-[0.875rem] placeholder:text-faint"
           />
           <Button type="submit" disabled={busy}>
             {busy ? "…" : "Send"}

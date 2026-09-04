@@ -137,6 +137,10 @@ class WriteAttemptRequest(BaseModel):
 def reset(request: ResetRequest) -> dict[str, Any]:
     """Wipe state, seed every agent, and post the whole marketplace.
 
+    Clears any persisted outcome first: a reset that left the previous sale's
+    certificate on disk would show a settled transfer against a listing that
+    has just been re-created.
+
     Each listing is a real export of a real store: the root, record count,
     memory size and valuation are computed by the pipeline, never written down.
     A marketplace of hardcoded rows would be the exact pattern this project
@@ -281,7 +285,46 @@ def transfer() -> dict[str, Any]:
     payload = outcome.to_dict()
     if outcome.certificate is not None:
         payload["certificate_text"] = outcome.certificate.to_text()
+    _save_outcome(payload)
     return payload
+
+
+def _outcome_path() -> Path:
+    return STORE.workdir / "outcomes" / f"{LISTING_ID}.json"
+
+
+def _save_outcome(payload: dict[str, Any]) -> None:
+    """Persist what the transfer produced, so a reload can recover it.
+
+    The settlement receipt is already durable in ``settlement.db``, but the
+    certificate is assembled from the package header, which lives only in this
+    process. Without this, reloading the page after a completed sale showed an
+    empty ledger and no confirmation screen for a transfer that genuinely
+    happened — the UI claiming, in effect, that nothing had occurred.
+
+    Written after settlement rather than before, so a file only ever exists for
+    a sale that actually reached an outcome.
+    """
+    path = _outcome_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+@app.get("/api/listing/outcome")
+def listing_outcome() -> dict[str, Any]:
+    """The settled outcome, if this listing reached one.
+
+    404 is the meaningful answer for a sale that has not settled — it is what
+    lets the console distinguish "not yet" from "failed", which the two states
+    on the confirmation screen depend on telling apart.
+    """
+    path = _outcome_path()
+    if not path.is_file():
+        raise HTTPException(404, f"listing {LISTING_ID!r} has not settled")
+    try:
+        return json.loads(path.read_text("utf-8"))
+    except (OSError, ValueError) as exc:
+        raise HTTPException(500, f"outcome record unreadable: {exc}") from exc
 
 
 @app.get("/api/seal/{tenant_id}")
