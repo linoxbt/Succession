@@ -266,3 +266,39 @@ def test_a_reverted_transaction_is_not_reported_as_success(evm, seller, agent_id
         evm["settlement"].confirm_transfer(
             LISTING, delivered_hash="0x" + "11" * 32, buyer_identity=BUYER.agent_id
         )
+
+
+# -- cross-language encoding parity ---------------------------------------
+
+
+def test_listing_id_encoding_vectors():
+    """Pinned vectors, shared with the frontend's `listingIdToBytes32`.
+
+    The browser re-implements this encoding in TypeScript because it builds the
+    `confirmTransfer` calldata itself. Two implementations of one wire format
+    is a drift risk with an expensive failure mode — a mismatched key does not
+    error, it addresses a *different* storage slot, so the contract reports
+    `NoSuchListing` for a listing that plainly exists. These vectors are the
+    fixed point both sides are checked against; `web/src/chain/Wallet.tsx`
+    quotes them in the same order.
+    """
+    from succession.chain import listing_id_to_bytes32
+
+    vectors = {
+        "listing-0417": "6c697374696e672d303431370000000000000000000000000000000000000000",
+        "a": "6100000000000000000000000000000000000000000000000000000000000000",
+        "listing-with-a-quite-long-id!!": (
+            "6c697374696e672d776974682d612d71756974652d6c6f6e672d696421210000"
+        ),
+    }
+    for listing_id, expected in vectors.items():
+        assert listing_id_to_bytes32(listing_id).hex() == expected
+
+
+def test_listing_id_longer_than_32_bytes_is_refused():
+    """Truncating would make two distinct listings share one storage slot."""
+    from succession.chain import listing_id_to_bytes32
+    from succession.settlement import SettlementError
+
+    with pytest.raises(SettlementError, match="the contract key is 32"):
+        listing_id_to_bytes32("x" * 33)

@@ -26,10 +26,12 @@ preflight checks.
 - [ ] **Run 5 real transfers** — `python scripts/run_transfers.py --count 5`.
       Each gets its own agent identity and tenant; one is corrupted on purpose,
       because five successes say nothing about the refund path.
-- [ ] **Point `IDENTITY_REGISTRY_ADDRESS` at a real ERC-8004 registry.** Without
-      it the deploy uses an ERC-721 stand-in and records
-      `identity_registry_is_mock: true`. Shipping the stand-in silently would be
-      the one dishonest thing in the stack.
+- [x] **Point `IDENTITY_REGISTRY_ADDRESS` at a real ERC-8004 registry.** Done:
+      `0x7177a6867296406881E20d6647232314736Dd09A` on Base Sepolia, verified on
+      chain (ERC-721 by `supportsInterface`, live agents, every function
+      `ListingContract` calls present). It is the default; the ERC-721 stand-in
+      is now reachable only from `--local`, and the deploy script exits rather
+      than build on an address holding no code.
 - [ ] **Re-record the hosted artifact** — `python scripts/record_run.py` folds
       the real ledger in, so the console's Transfers view shows actual
       transactions.
@@ -67,11 +69,15 @@ preflight checks.
 
 ### Correctness
 
-- [ ] **An Evaluator agent for the arbiter role.** The buyer-asserted hash is the
-      known hole: a dishonest buyer can claim a mismatch, take the refund and
-      keep the package. The contract already accepts an arbiter; it needs a real
-      third party that independently re-derives the root, following the trust
-      pattern ACP already uses for job quality.
+- [x] **An Evaluator agent for the arbiter role.** Built — `evaluator.py`. It
+      re-runs the export pipeline over the buyer's own store rather than
+      checking a number it was handed, signs a domain-separated verdict, and
+      settles as the contract's arbiter with its own root. Receipts record
+      `confirmed_by` so a buyer's self-report never reads as an independent
+      check. **Still open:** the buyer can deny the evaluator access to their
+      store, in which case the escrow expires back to them and nobody is paid —
+      correct, but it means the evaluator is opt-in rather than enforced. Making
+      access a condition of the key release is the next step.
 - [ ] **Dispute resolution.** What happens when buyer and seller disagree after
       settlement. Currently: nothing.
 - [ ] **Idempotent settlement recovery.** If the process dies between
@@ -88,12 +94,18 @@ preflight checks.
 
 ### Product
 
-- [ ] **Real authentication and accounts.** There is no notion of a user.
-- [ ] **Multi-listing marketplace.** One clean listing flow proves the
-      mechanism; a market needs browse, filter, search and watchlists.
+- [ ] **Real authentication and accounts.** There is no notion of a user. A
+      connected wallet is now an *address*, not an account — nothing is
+      authorised against it server-side.
+- [x] **Multi-listing marketplace.** Six listings, each a real export, sortable
+      and filterable by vertical, state, valuation, price and spread.
+- [ ] **Watchlists and search** across the marketplace.
 - [ ] **Seller onboarding** — connect a store, walk the redaction pass, preview
       what a buyer will see before committing.
-- [ ] **A redaction review UI.** Flags are set in code today.
+- [ ] **A redaction review UI.** Flags are still set in code, but the listing
+      flow now *reads* them: the scope selector greys out and disables any
+      category with nothing sellable in it, from the data room's per-category
+      transferability report. Setting the flags is what remains.
 - [ ] **Notifications** — listing sold, escrow funded, transfer verified,
       confirmation window expiring.
 - [ ] **Fiat on-ramp** or a clear statement that this is crypto-native only.
@@ -182,6 +194,11 @@ Small, specific, and worth writing down before it is forgotten.
 - [ ] The web app's route handling is a single path check. A third destination
       justifies a router.
 - [ ] No E2E test drives the browser against the live service — the Playwright
-      passes are manual.
+      passes are manual. (The Part 9 rebuild was verified this way: list, fund,
+      deliver, settle, screenshot. It should be a CI job, not a habit.)
+- [ ] The frontend re-implements `listing_id_to_bytes32` in TypeScript because
+      it builds its own calldata. Shared vectors are pinned in
+      `test_listing_id_encoding_vectors`, but a shared fixture file would be
+      better than two implementations agreeing by test.
 - [ ] `demokeys.py` ships hardcoded keys. They are worthless and documented as
       such, but a production build should not compile them in at all.

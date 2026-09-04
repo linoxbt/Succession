@@ -10,6 +10,9 @@
  * transaction actually is rather than where the UI last believed it was.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { WagmiProvider } from "wagmi";
+import { config as wagmiConfig } from "./chain/config";
 import { api, type Listing, type MarketRow, type Outcome, type Preview } from "./api";
 import { Agents } from "./dash/Agents";
 import { Docs } from "./dash/Docs";
@@ -20,10 +23,29 @@ import { Overview } from "./dash/Overview";
 import { Shell, type View } from "./dash/Shell";
 import { Transfers, type TransferRow } from "./dash/Transfers";
 import { Landing } from "./landing/Landing";
+import { WalletBar, useChainStatus } from "./chain/Wallet";
 import { loadRecordedRun, probeLiveApi, recordedApi, type RecordedRun } from "./recorded";
 import { Badge } from "./ui";
 
+/**
+ * Wallet plumbing wraps the whole app rather than only the console, so a
+ * connection survives navigating between the landing page and the console. It
+ * costs nothing when no deployment exists: `WalletBar` renders nothing in local
+ * mode, and wagmi opens no connection until a connector is clicked.
+ */
 export default function App() {
+  return (
+    <WagmiProvider config={wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
+        <Surface />
+      </QueryClientProvider>
+    </WagmiProvider>
+  );
+}
+
+const queryClient = new QueryClient();
+
+function Surface() {
   const [route, setRoute] = useState<"landing" | "console">(
     window.location.pathname.startsWith("/app") ? "console" : "landing",
   );
@@ -39,6 +61,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   const backend = useMemo(() => (recorded ? recordedApi(recorded) : api), [recorded]);
+  const chainStatus = useChainStatus();
 
   const navigate = useCallback((next: "landing" | "console") => {
     window.history.pushState({}, "", next === "console" ? "/app" : "/");
@@ -140,10 +163,15 @@ export default function App() {
       view={view}
       onNavigate={setView}
       onHome={() => navigate("landing")}
-      banner={recorded ? <RecordedBanner run={recorded} /> : null}
+      banner={
+        <>
+          <WalletBar status={chainStatus} />
+          {recorded ? <RecordedBanner run={recorded} /> : null}
+        </>
+      }
     >
       {error ? (
-        <div className="mb-5 rounded-md border border-bad/40 bg-bad/10 px-4 py-3 text-[0.8125rem] text-bad">
+        <div className="mb-6 border-l-2 border-void px-4 py-3 text-[0.875rem] text-void">
           {error}
         </div>
       ) : null}
@@ -160,6 +188,7 @@ export default function App() {
           preview={preview}
           outcome={outcome}
           busy={busy}
+          chainStatus={chainStatus}
           onList={onList}
           onBuy={onBuy}
           onSettle={onSettle}
@@ -179,8 +208,8 @@ export default function App() {
  */
 function RecordedBanner({ run }: { run: RecordedRun }) {
   return (
-    <div className="border-b border-warn/30 bg-warn/[0.07] px-5 py-2.5">
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.75rem] text-warn">
+    <div className="border-b border-rule px-6 py-2.5">
+      <p className="mx-auto flex max-w-document flex-wrap items-center gap-x-2 gap-y-1 text-[0.8125rem]">
         <Badge tone="escrow">Recorded</Badge>
         <span className="text-muted">
           No service running. Replaying one real transfer captured {run.recorded_at}.

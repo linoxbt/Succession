@@ -12,6 +12,7 @@ with ``POST /api/demo/reset``.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -338,6 +339,65 @@ def agent_provenance(side: str) -> dict[str, Any]:
         return memory.client.get_entity("provenance", "acquisition")["body"]
     except Exception:  # noqa: BLE001 - absence is the meaningful answer here
         raise HTTPException(404, "no acquisition record for this agent") from None
+
+
+@app.get("/api/chain")
+def chain() -> dict[str, Any]:
+    """What settlement backend is actually in use, and where.
+
+    The frontend needs this to decide whether the buyer can pay from their own
+    wallet, and — more importantly — so it can say which backend settled a sale
+    instead of letting the two look identical. ``LocalSettlement`` mirrors the
+    contract's state machine faithfully enough that a screen showing only the
+    outcome could not tell them apart, and a demo that quietly presented the
+    mirror as the chain would be exactly the dishonesty this project exists to
+    avoid.
+
+    A deployment file is the only thing that makes on-chain mode available.
+    There is no configuration flag that turns it on without one, because a flag
+    is something that can be set wrongly.
+    """
+    record = _deployment()
+    if record is None:
+        return {
+            "mode": "local",
+            "explanation": (
+                "Settling through LocalSettlement, an in-process mirror of "
+                "ListingContract's state machine. No transaction reaches Base. "
+                "Deploy with scripts/deploy_base_sepolia.py to settle on chain."
+            ),
+            "chain_id": None,
+            "deployment": None,
+        }
+    return {
+        "mode": "chain",
+        "explanation": (
+            "Settling on Base Sepolia through the deployed ListingContract."
+        ),
+        "chain_id": record.get("chain_id"),
+        "deployment": record,
+    }
+
+
+def _deployment() -> dict[str, Any] | None:
+    """Read the deployment record, if one has been written.
+
+    Deliberately re-read per request rather than cached at import: deploying is
+    something that happens while the service is already running, and a cached
+    ``None`` would keep reporting local mode until someone restarted it.
+    """
+    path = Path(
+        os.environ.get(
+            "SUCCESSION_DEPLOYMENT",
+            Path(__file__).resolve().parents[1] / "deployments" / "base-sepolia.json",
+        )
+    )
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
 
 
 @app.get("/api/health")

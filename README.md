@@ -13,7 +13,7 @@ and verified by the buyer re-hashing their own store.
 [Overview](#overview) · [How it works](#how-a-sale-works) · [Quick start](#quick-start) ·
 [Architecture](#architecture) · [Security](#security-model) · [Roadmap](docs/ROADMAP.md)
 
-`174 tests` · `Python 3.11+` · `Solidity 0.8.28` · `React 18`
+`229 tests` · `Python 3.11+` · `Solidity 0.8.28` · `React 18`
 
 </div>
 
@@ -85,8 +85,8 @@ half-written tenant, and leaves the seller exactly as they were.
 git clone https://github.com/linoxbt/Succession && cd Succession
 
 python -m venv .venv
-.venv/bin/pip install -e "packages/succession[dev,service,acp,chain]"
-.venv/bin/python -m pytest packages/succession/tests        # 174 tests
+.venv/bin/pip install -e "packages/succession[test,service,acp,chain]"
+.venv/bin/python -m pytest packages/succession/tests        # 229 tests
 
 ( cd contracts && npm install && npm run build )            # solc → artifacts
 .venv/bin/python -m succession.demo                         # the whole workflow
@@ -128,6 +128,8 @@ packages/succession/src/succession/
 ├── envelope.py      AES-256-GCM delivery, key escrowed with payment
 ├── settlement.py    the SettlementBackend interface + local mirror
 ├── chain.py         the same interface, over web3, against Base
+├── erc8004.py       identity: registration, the agent file, transfer
+├── evaluator.py     the arbiter that re-derives instead of trusting
 ├── acp.py           Virtuals ACP job history
 ├── valuation.py     five clamped factors, exact decimal
 ├── dataroom.py      aggregate-only preview
@@ -142,6 +144,7 @@ contracts/src/ListingContract.sol    escrow, atomic settlement, the sealed flag
 scripts/                             deploy, run N transfers, record a run
 service/                             FastAPI over the pipeline
 web/                                 landing page and operations console
+web/src/chain/                       wallet connection and on-chain escrow
 ```
 
 ### The memory package
@@ -228,13 +231,16 @@ buyers watching" is exactly the pattern a technical reader probes first.
 | Stack | Where it does work | Status |
 |---|---|---|
 | **Sibyl Memory** | The asset itself. Five tiers export, hash, transfer and re-key; the successor agent retrieves through the FTS5 index. Delete this layer and there is no product. | Executed |
-| **Base** | `ListingContract.sol` holds escrow and, in one transaction, releases payment, transfers the ERC-8004 identity and sets the sealed flag. `chain.py` drives it over web3. | Built; contract executed against real bytecode in py-evm. **Not yet deployed to Base Sepolia.** |
+| **Base** | `ListingContract.sol` holds escrow and, in one transaction, releases payment, transfers the ERC-8004 identity and sets the sealed flag. `chain.py` drives it over web3; the browser funds escrow through Wagmi and the Base Account connector. Identity is a real ERC-8004 registry on Base Sepolia (`0x7177a686…36Dd09A`), verified on chain rather than assumed, and payment moves in Circle's USDC. | Built; contract executed against real bytecode in py-evm, registry verified live. **Not yet deployed to Base Sepolia** — needs a funded key. |
 | **Virtuals ACP** | `acp.py` reads job history through `virtuals-acp` and makes it the data room's quality-of-earnings signal, the valuation's `task_performance` input, and part of the transferred memory. | Built. **Not yet registered** — needs a whitelisted wallet and entity id. |
 
-Base Sepolia RPCs and `acpx.virtuals.gg` are unreachable from the environment
-this was built in, and neither a funded wallet nor ACP credentials were
-available. The code paths are complete and tested; what is missing is
-credentials and a network route.
+Base Sepolia and `acpx.virtuals.gg` are both reachable now, and the ERC-8004
+registry above was verified against the live chain — `test_erc8004.py` re-checks
+it on every run and skips rather than fails when the network is not there. What
+is still missing is a **funded deployer key** and **ACP credentials**, neither of
+which is a code path. Everything that does not need money or a whitelist is
+done; the deploy script refuses to build on an address that holds no code, so it
+cannot quietly succeed against nothing.
 
 ```bash
 # Finish both. Preflights keys, RPC reachability and wallet balances first.
@@ -281,12 +287,16 @@ bytes; it was the right to *be* that agent.
 
 ### Known limits
 
-- **The buyer asserts the delivered hash.** A dishonest buyer can submit a wrong
-  one, take the automatic refund, and keep the decrypted package. No on-chain
-  logic closes this — the chain cannot see the delivered bytes. The contract's
-  `arbiter` role is the hook for an Evaluator-style agent; wiring a real one in
-  is roadmap, and the role exists so the contract need not be redeployed to gain
-  it.
+- **The buyer asserts the delivered hash — unless an Evaluator settles.** Left
+  to the buyer, a dishonest one can submit a wrong root, take the automatic
+  refund, and keep the decrypted package; no on-chain logic closes that, because
+  the chain cannot see the delivered bytes. `evaluator.py` is the third party
+  that does: it is handed the buyer's *store*, not a number, re-runs the export
+  pipeline over it, and settles as the contract's `arbiter` with the root it
+  derived itself. Receipts record which of the two confirmed, so the weaker
+  evidence never reads as the stronger one. What remains open is that the buyer
+  can refuse the evaluator access — in which case nobody is paid and the escrow
+  expires back to them, which is the right outcome rather than a silent one.
 - **`relationships/` carries the WARM edges**, so its subroot depends on which
   other categories travel with it — an edge is pruned when the entity at its far
   end is not part of the sale. A partial sale therefore commits its own root.
@@ -303,7 +313,7 @@ bytes; it was the right to *be* that agent.
 ## Testing
 
 ```bash
-.venv/bin/python -m pytest packages/succession/tests   # 174
+.venv/bin/python -m pytest packages/succession/tests   # 229
 ( cd contracts && forge test )                         # mirrored Foundry suite
 ```
 
@@ -321,6 +331,8 @@ bytes; it was the right to *be* that agent.
 | `test_agent` | Recall by name, by lane, and after a transfer |
 | `test_cli` | Export and import as separate processes |
 | `test_service` | The HTTP layer, end to end |
+| `test_erc8004` | The registration file, the identity string, and the live registry |
+| `test_evaluator` | Independent re-derivation, and the theft the contract cannot stop alone |
 
 Foundry is the contract toolchain; where `forge` cannot be installed,
 `contracts/compile.js` drives solc and the Python suite executes the same

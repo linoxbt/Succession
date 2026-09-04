@@ -44,10 +44,29 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - working-directory: web
+
+      # The frontend's contract ABI is generated from the compiled artifact, so
+      # the contracts have to be built before it can be checked for staleness.
+      - name: Build contracts
+        working-directory: contracts
         run: |
-          npm ci
+          npm install
           npm run build
+
+      - working-directory: web
+        run: npm ci
+
+      # A hand-edited or stale ABI does not fail at build time — it fails as an
+      # unexplained revert with a buyer's money in escrow. Regenerate and
+      # insist nothing moved.
+      - name: Check the generated ABI is current
+        working-directory: web
+        run: |
+          node scripts/generate-abi.mjs
+          git diff --exit-code src/chain/abi.ts
+
+      - working-directory: web
+        run: npm run build
 
   forge:
     runs-on: ubuntu-latest

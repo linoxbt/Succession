@@ -17,6 +17,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { Listing, Outcome, Preview } from "../api";
 import { formatAmount } from "../api";
+import type { ChainStatus, Deployment } from "../chain/Wallet";
+import { ConfirmOnChain, FundEscrow, SettlementMode } from "../chain/Wallet";
 import {
   Badge,
   Button,
@@ -53,6 +55,7 @@ export function ListingView({
   preview,
   outcome,
   busy,
+  chainStatus,
   onList,
   onBuy,
   onSettle,
@@ -61,6 +64,7 @@ export function ListingView({
   preview: Preview | null;
   outcome: Outcome | null;
   busy: boolean;
+  chainStatus?: ChainStatus | null;
   onList: (categories: string[] | null) => void;
   onBuy: () => void;
   onSettle: () => void;
@@ -69,12 +73,28 @@ export function ListingView({
     return <ScopeSelector preview={preview} busy={busy} onList={onList} />;
   }
 
+  const deployment =
+    chainStatus?.mode === "chain" ? chainStatus.deployment : null;
+
   return (
     <div className="space-y-10">
       {preview ? <DataRoom preview={preview} listing={listing} /> : null}
-      {listing.state === "open" ? <OpenEscrow listing={listing} busy={busy} onBuy={onBuy} /> : null}
+      <SettlementMode status={chainStatus ?? null} />
+      {listing.state === "open" ? (
+        <OpenEscrow
+          listing={listing}
+          busy={busy}
+          onBuy={onBuy}
+          deployment={deployment}
+        />
+      ) : null}
       {listing.state === "escrowed" ? (
-        <EscrowHeld listing={listing} busy={busy} onSettle={onSettle} />
+        <EscrowHeld
+          listing={listing}
+          busy={busy}
+          onSettle={onSettle}
+          deployment={deployment}
+        />
       ) : null}
       {outcome ? <Settlement outcome={outcome} /> : null}
     </div>
@@ -306,18 +326,36 @@ function OpenEscrow({
   listing,
   busy,
   onBuy,
+  deployment,
 }: {
   listing: Listing;
   busy: boolean;
   onBuy: () => void;
+  deployment: Deployment | null;
 }) {
   return (
     <Section title="Request transfer">
-      <div className="mt-4 flex flex-wrap items-center gap-5">
-        <Button onClick={onBuy} disabled={busy}>
-          {busy ? "Funding…" : `Fund escrow — ${formatAmount(listing.price, listing.currency)}`}
-        </Button>
-        <Note>The content key is released only against funded escrow.</Note>
+      <div className="mt-4">
+        {deployment ? (
+          // On chain, the buyer's own wallet funds escrow. `onBuy` still runs
+          // afterwards so the service picks the listing's new state up from the
+          // contract rather than being told about it by this component.
+          <FundEscrow
+            deployment={deployment}
+            listingId={listing.listing_id}
+            price={BigInt(listing.price)}
+            onFunded={onBuy}
+          />
+        ) : (
+          <div className="flex flex-wrap items-center gap-5">
+            <Button onClick={onBuy} disabled={busy}>
+              {busy
+                ? "Funding…"
+                : `Fund escrow — ${formatAmount(listing.price, listing.currency)}`}
+            </Button>
+            <Note>The content key is released only against funded escrow.</Note>
+          </div>
+        )}
       </div>
     </Section>
   );
@@ -327,10 +365,12 @@ function EscrowHeld({
   listing,
   busy,
   onSettle,
+  deployment,
 }: {
   listing: Listing;
   busy: boolean;
   onSettle: () => void;
+  deployment: Deployment | null;
 }) {
   return (
     <Section
@@ -354,8 +394,22 @@ function EscrowHeld({
         <Button onClick={onSettle} disabled={busy}>
           {busy ? "Settling…" : "Deliver and settle"}
         </Button>
-        <Note>Payment, identity and the seal move together, or not at all.</Note>
+        <Note>
+          {deployment
+            ? "The package is delivered and re-hashed off chain; the root that comes back is submitted on chain."
+            : "Payment, identity and the seal move together, or not at all."}
+        </Note>
       </div>
+      {deployment && listing.delivered_hash ? (
+        <div className="mt-5">
+          <ConfirmOnChain
+            deployment={deployment}
+            listingId={listing.listing_id}
+            deliveredRoot={listing.delivered_hash}
+            onConfirmed={onSettle}
+          />
+        </div>
+      ) : null}
     </Section>
   );
 }
