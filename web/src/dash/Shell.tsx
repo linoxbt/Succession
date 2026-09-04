@@ -2,8 +2,9 @@
  * The console shell: left rail, dense content, no chrome that does not work.
  */
 import type { ReactNode } from "react";
+import { Wordmark } from "../brand/Logo";
 
-export type View = "overview" | "listing" | "transfers" | "agents" | "memory";
+export type View = "overview" | "listing" | "transfers" | "agents" | "memory" | "docs";
 
 const NAV: { id: View; label: string }[] = [
   { id: "overview", label: "Overview" },
@@ -11,6 +12,7 @@ const NAV: { id: View; label: string }[] = [
   { id: "transfers", label: "Transfers" },
   { id: "agents", label: "Agents" },
   { id: "memory", label: "Memory" },
+  { id: "docs", label: "Docs" },
 ];
 
 export function Shell({
@@ -34,9 +36,10 @@ export function Shell({
         <aside className="sticky top-0 hidden h-screen w-56 shrink-0 border-r border-line bg-panel md:block">
           <button
             onClick={onHome}
-            className="flex w-full items-center gap-2 px-5 py-5 text-left text-[0.9375rem] font-semibold tracking-tight hover:text-white"
+            className="flex w-full items-center px-5 py-5 text-left transition-colors hover:text-white"
+            aria-label="Succession home"
           >
-            Succession
+            <Wordmark size={20} />
           </button>
           <nav className="px-2">
             {NAV.map((item) => (

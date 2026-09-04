@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type Listing, type Outcome, type Preview } from "./api";
 import { Agents } from "./dash/Agents";
+import { Docs } from "./dash/Docs";
 import { ListingView } from "./dash/ListingView";
 import { Memory } from "./dash/Memory";
 import { Overview } from "./dash/Overview";
@@ -119,7 +120,15 @@ export default function App() {
     });
 
   if (route === "landing") {
-    return <Landing onEnter={() => navigate("console")} />;
+    return (
+      <Landing
+        onEnter={() => navigate("console")}
+        onDocs={() => {
+          setView("docs");
+          navigate("console");
+        }}
+      />
+    );
   }
 
   return (
@@ -152,6 +161,7 @@ export default function App() {
       {view === "transfers" ? <Transfers rows={ledger} current={outcome} /> : null}
       {view === "agents" ? <Agents preview={preview} /> : null}
       {view === "memory" ? <Memory backend={backend} sealed={sealed} /> : null}
+      {view === "docs" ? <Docs /> : null}
     </Shell>
   );
 }
