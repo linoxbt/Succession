@@ -15,7 +15,10 @@ environment did not.
 
 REPO      https://github.com/linoxbt/Succession
 BRANCH    claude/session-3993th   (work on this branch, push to it)
-STATE     183 tests passing, web build clean, nothing deployed anywhere
+STATE     248 Python tests and 28 Foundry tests passing, web build clean.
+          The UI is deployed at https://successmarket.netlify.app, which
+          builds this branch. The contract is not deployed and ACP is not
+          registered — both need credentials, not code.
 
 Read these first, in this order. They are accurate and were written for you:
   README.md                     what the system is and how it settles
@@ -190,7 +193,13 @@ missing feature.
 
 ## Hosts that were blocked, for reference
 
-Confirmed by the build environment's proxy as `403 to CONNECT (policy denial)`:
+This table describes the machine this was **built** on, not the one it is being
+picked up on. Verified 2026-09-04 from a host with normal egress: Base Sepolia,
+`acpx.virtuals.gg` and Netlify are all reachable, and the ERC-8004 registry was
+read live. Check before assuming a block — what is actually missing is
+credentials.
+
+Confirmed by the original build environment's proxy as `403 to CONNECT (policy denial)`:
 
 | Host | Blocked |
 |---|---|
