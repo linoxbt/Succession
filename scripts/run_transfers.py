@@ -36,7 +36,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "packages" / "succession" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from succession.chain import ChainSettlement  # noqa: E402
+from succession.chain import ChainSettlement
+from succession.erc8004 import (
+    AgentRegistration,
+    IdentityRegistry,
+    agent_identity,
+)  # noqa: E402
 from succession.envelope import seal_package  # noqa: E402
 from succession.memory.sibyl import open_tenant  # noqa: E402
 from succession.seal import SealRegistry  # noqa: E402
@@ -123,25 +128,7 @@ def main() -> int:
         buyer_key=buyer_key,
     )
 
-    registry = w3.eth.contract(
-        address=Web3.to_checksum_address(deployment["identity_registry"]),
-        abi=[
-            {
-                "name": "register", "type": "function", "stateMutability": "nonpayable",
-                "inputs": [
-                    {"name": "to", "type": "address"},
-                    {"name": "agentId", "type": "uint256"},
-                    {"name": "uri", "type": "string"},
-                ],
-                "outputs": [],
-            },
-            {
-                "name": "ownerOf", "type": "function", "stateMutability": "view",
-                "inputs": [{"name": "agentId", "type": "uint256"}],
-                "outputs": [{"name": "", "type": "address"}],
-            },
-        ],
-    )
+    registry = IdentityRegistry(w3, address=deployment["identity_registry"])
 
     if args.workdir.exists():
         shutil.rmtree(args.workdir)
@@ -172,26 +159,41 @@ def main() -> int:
 
     results = []
     for i in range(1, args.count + 1):
-        token_id = args.first_token_id + i
-        agent_id = f"erc8004:{deployment['chain_id']}:{token_id}"
-        listing_id = f"listing-{token_id}"
         corrupt = i == args.corrupt
+
+        # Each sale gets its own identity, minted for real. ERC-8004
+        # registration is permissionless, so the seller mints its own agent
+        # rather than being handed a token id it does not own — which is what
+        # the previous mock-only path silently assumed, and what would have
+        # failed on the first real run against a public registry.
+        token_id = registry.register(
+            AgentRegistration(
+                name=f"Succession origin agent {i}",
+                description=(
+                    "A seeded freight-brokerage memory, listed for transfer "
+                    "through Succession."
+                ),
+                wallet=seller_addr,
+            ),
+            seller_key,
+        )
+        # The successor is its own registered agent, not a reused id. The
+        # certificate names an origin and a successor, and a run where those
+        # two were the same identity would be recording a sale to oneself.
+        successor_token = registry.register(
+            AgentRegistration(
+                name=f"Succession successor agent {i}",
+                description="The acquiring agent, booted against the transferred memory.",
+                wallet=buyer_addr,
+            ),
+            buyer_key,
+        )
+        agent_id = agent_identity(deployment["chain_id"], token_id)
+        successor_id = agent_identity(deployment["chain_id"], successor_token)
+        listing_id = f"listing-{token_id}"
         print(f"\n[{i}/{args.count}] {agent_id}{'  (corrupted on purpose)' if corrupt else ''}")
 
-        # Each sale gets its own identity and its own pair of stores.
-        if deployment["identity_registry_is_mock"]:
-            try:
-                registry.functions.ownerOf(token_id).call()
-            except Exception:
-                settlement._send(
-                    registry.functions.register(
-                        seller_addr, token_id, f"ipfs://succession/{token_id}.json"
-                    ),
-                    seller_addr,
-                )
-        settlement.approve_identity(
-            deployment["identity_registry"], seller_addr, token_id
-        )
+        registry.approve(deployment["listing_contract"], token_id, seller_key)
 
         seller = open_tenant(args.workdir / f"seller-{i}.db", f"tenant-seller-{i}")
         seed_seller(seller, agent_identity=agent_id)
@@ -221,7 +223,7 @@ def main() -> int:
             seals=SealRegistry(args.workdir / "seals.db"),
             envelope=envelope, content_key=listed.content_key,
             seller_tenant_id=seller.tenant_id, buyer_sink=buyer,
-            buyer_identity=f"erc8004:{deployment['chain_id']}:{token_id + 1000}",
+            buyer_identity=successor_id,
             buyer_address=buyer_addr, expected_signer=seller_addr,
         )
 
