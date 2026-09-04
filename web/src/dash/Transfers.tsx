@@ -6,7 +6,7 @@
  * page, and the refund path is the half that protects the buyer.
  */
 import type { Outcome } from "../api";
-import { Badge, Empty, Hash, Panel, Table, Td } from "../ui";
+import { Badge, Empty, Hash, Section, Table, Td } from "../ui";
 
 export interface TransferRow {
   index: number;
@@ -44,28 +44,29 @@ export function Transfers({
 
   if (!all.length) {
     return (
-      <Panel title="Settlement ledger">
+      <Section title="Settlement ledger">
         <Empty>No transfers yet.</Empty>
-      </Panel>
+      </Section>
     );
   }
 
   return (
-    <Panel
+    <Section
       title="Settlement ledger"
       action={
-        <span className="text-xs text-faint tnum">
+        <span className="text-[0.8125rem] text-muted tnum">
           {verified} verified · {all.length - verified} refunded
         </span>
       }
     >
+      <div className="mt-4" />
       <Table head={["Agent", "Committed", "Delivered", "Outcome", "Transaction"]}>
         {all.map((row) => (
-          <tr key={`${row.listing_id}-${row.index}`} className="hover:bg-raised/40">
+          <tr key={`${row.listing_id}-${row.index}`}>
             <Td>
               <span className="font-mono text-[0.8125rem]">{row.agent_id}</span>
               {row.intentionally_corrupted ? (
-                <span className="ml-2 text-xs text-faint">corrupted on purpose</span>
+                <span className="ml-2 text-[0.75rem] text-muted">corrupted on purpose</span>
               ) : null}
             </Td>
             <Td>
@@ -75,7 +76,7 @@ export function Transfers({
               <Hash value={row.delivered_root} chars={6} />
             </Td>
             <Td>
-              <Badge tone={row.outcome === "verified" ? "good" : "bad"}>
+              <Badge tone={row.outcome === "verified" ? "closed" : "void"}>
                 {row.outcome === "verified" ? "Released" : "Refunded"}
               </Badge>
             </Td>
@@ -85,7 +86,7 @@ export function Transfers({
                   href={row.explorer}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-accent hover:underline"
+                  className="underline underline-offset-4 hover:text-escrow"
                 >
                   <Hash value={row.tx} chars={6} />
                 </a>
@@ -96,6 +97,6 @@ export function Transfers({
           </tr>
         ))}
       </Table>
-    </Panel>
+    </Section>
   );
 }

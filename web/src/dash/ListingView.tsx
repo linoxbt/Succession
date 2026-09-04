@@ -1,14 +1,36 @@
 /**
- * Listing, escrow, and settlement — one workflow, one screen.
+ * Listing, escrow, and settlement — the three key screens of Part 9's brief.
  *
- * The hash comparison is not tucked behind a success banner. It is the product's
- * credibility, so it renders as two monospace blocks a person can actually read
- * against each other.
+ * The listing reads like a one-page teaser in a data room: agent identity,
+ * tenure, and aggregate stats as a definition list, then a clearly separated
+ * "verified on-chain" strip carrying the hash commitment and a link to the
+ * contract. That strip is set apart with a hairline border and never a shadow,
+ * because it is the element that should feel most official.
+ *
+ * The post-purchase screen is intentionally anticlimactic — a confirmation
+ * line, a hash-match checkmark, and the certificate. The real climax happens
+ * inside the agent's own conversation view, not in the chrome around it. What
+ * it does *not* do is hide the hash comparison behind a generic success
+ * banner: the comparison is the product's credibility, so it renders as two
+ * full monospace blocks a person can read against each other.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Listing, Outcome, Preview } from "../api";
 import { formatAmount } from "../api";
-import { Badge, Button, Field, Hash, Panel, Rule, Table, Td } from "../ui";
+import {
+  Badge,
+  Button,
+  Evidence,
+  Field,
+  FieldList,
+  FullHash,
+  Hash,
+  Note,
+  Section,
+  Table,
+  Td,
+  VerifyMark,
+} from "../ui";
 
 const CATEGORIES: { id: string; description: string }[] = [
   { id: "identity", description: "The agent's own registration record" },
@@ -18,6 +40,13 @@ const CATEGORIES: { id: string; description: string }[] = [
   { id: "commitments", description: "Open quotes, agreed terms, live working state" },
   { id: "learned-behaviors", description: "Adapted patterns and encoded playbooks" },
 ];
+
+/** Basescan, when the settlement reference is a real transaction hash. */
+function explorerFor(reference: string): string | null {
+  return /^0x[0-9a-fA-F]{64}$/.test(reference)
+    ? `https://sepolia.basescan.org/tx/${reference}`
+    : null;
+}
 
 export function ListingView({
   listing,
@@ -36,189 +65,374 @@ export function ListingView({
   onBuy: () => void;
   onSettle: () => void;
 }) {
-  const [selected, setSelected] = useState<string[]>(CATEGORIES.map((c) => c.id));
-  const all = selected.length === CATEGORIES.length;
-
   if (!listing) {
-    return (
-      <Panel title="Scope of transfer" action={<span className="text-xs text-faint">Step 1 of 3</span>}>
-        <div className="divide-y divide-hairline">
-          {CATEGORIES.map(({ id, description }) => (
-            <label key={id} className="flex cursor-pointer items-start gap-3 px-5 py-3">
-              <input
-                type="checkbox"
-                checked={selected.includes(id)}
-                onChange={() =>
-                  setSelected((c) =>
-                    c.includes(id) ? c.filter((x) => x !== id) : [...c, id],
-                  )
-                }
-                className="mt-0.5 h-4 w-4 accent-accent"
-              />
-              <span>
-                <span className="block text-[0.8125rem] font-medium">{id}</span>
-                <span className="block text-[0.8125rem] text-secondary">{description}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-        <Rule />
-        <div className="flex flex-wrap items-center gap-3 px-5 py-4">
-          <Button onClick={() => onList(all ? null : selected)} disabled={busy || !selected.length}>
-            {busy ? "Posting…" : all ? "Post full succession" : `Post ${selected.length} categories`}
-          </Button>
-          <span className="text-xs text-faint">
-            A partial sale commits its own hash, over exactly what is sold.
-          </span>
-        </div>
-      </Panel>
-    );
+    return <ScopeSelector preview={preview} busy={busy} onList={onList} />;
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       {preview ? <DataRoom preview={preview} listing={listing} /> : null}
-
-      {listing.state === "open" ? (
-        <Panel title="Escrow" action={<span className="text-xs text-faint">Step 2 of 3</span>}>
-          <div className="flex flex-wrap items-center gap-3 px-5 py-4">
-            <Button onClick={onBuy} disabled={busy}>
-              {busy ? "Funding…" : `Fund escrow — ${formatAmount(listing.price, listing.currency)}`}
-            </Button>
-            <span className="text-xs text-faint">
-              The content key is released only against funded escrow.
-            </span>
-          </div>
-        </Panel>
-      ) : null}
-
+      {listing.state === "open" ? <OpenEscrow listing={listing} busy={busy} onBuy={onBuy} /> : null}
       {listing.state === "escrowed" ? (
-        <Panel title="Escrow funded" action={<Badge tone="accent">Funds held</Badge>}>
-          <dl>
-            <Field label="Held">{formatAmount(listing.escrow_balance, listing.currency)}</Field>
-            <Field label="Buyer">
-              <Hash value={listing.buyer} chars={8} />
-            </Field>
-            <Field label="Released on">A delivered hash matching the commitment.</Field>
-          </dl>
-          <div className="flex flex-wrap items-center gap-3 px-5 py-4">
-            <Button onClick={onSettle} disabled={busy}>
-              {busy ? "Settling…" : "Deliver and settle"}
-            </Button>
-            <span className="text-xs text-faint">
-              Payment, identity and the seal move together, or not at all.
-            </span>
-          </div>
-        </Panel>
+        <EscrowHeld listing={listing} busy={busy} onSettle={onSettle} />
       ) : null}
-
       {outcome ? <Settlement outcome={outcome} /> : null}
     </div>
   );
 }
 
+/* -- 1. scope ----------------------------------------------------------- */
+
+/**
+ * The partial-succession selector.
+ *
+ * Categories the seller marked non-transferable are greyed out and genuinely
+ * unselectable — disabled, not merely unchecked — exactly as the brief
+ * specifies. The distinction matters: an unchecked box invites a click, and
+ * the answer to that click would have to be a refusal.
+ *
+ * This sits *before* the listing rather than between listing and escrow,
+ * because a partial sale commits its own root over exactly what is sold. The
+ * scope has to be settled before there is a hash to commit to.
+ */
+function ScopeSelector({
+  preview,
+  busy,
+  onList,
+}: {
+  preview: Preview | null;
+  busy: boolean;
+  onList: (categories: string[] | null) => void;
+}) {
+  const transferability = preview?.category_transferability ?? {};
+  const locked = (id: string) => {
+    const row = transferability[id];
+    return row !== undefined && row.sellable === 0;
+  };
+  const selectable = CATEGORIES.filter((c) => !locked(c.id)).map((c) => c.id);
+  const [selected, setSelected] = useState<string[]>(selectable);
+
+  // Keep the selection honest if the preview arrives after first paint.
+  useEffect(() => {
+    setSelected((current) => current.filter((id) => !locked(id)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preview]);
+
+  const all = selected.length === selectable.length && selectable.length === CATEGORIES.length;
+
+  return (
+    <Section title="Scope of transfer">
+      <FieldList className="mt-4">
+        {CATEGORIES.map(({ id, description }) => {
+          const isLocked = locked(id);
+          const row = transferability[id];
+          return (
+            <label
+              key={id}
+              className={`flex items-start gap-3 border-b border-hairline py-3 ${
+                isLocked ? "cursor-not-allowed opacity-45" : "cursor-pointer"
+              }`}
+            >
+              <input
+                type="checkbox"
+                disabled={isLocked}
+                checked={!isLocked && selected.includes(id)}
+                onChange={() =>
+                  setSelected((c) =>
+                    c.includes(id) ? c.filter((x) => x !== id) : [...c, id],
+                  )
+                }
+                className="mt-1 h-4 w-4 accent-escrow disabled:cursor-not-allowed"
+              />
+              <span className="min-w-0">
+                <span className="block text-[0.9375rem] text-ink">{id}</span>
+                <span className="block text-[0.8125rem] text-muted">{description}</span>
+                {isLocked ? (
+                  <span className="mt-1 block text-[0.8125rem] text-void">
+                    Marked non-transferable. Not available in any sale.
+                  </span>
+                ) : row ? (
+                  <span className="mt-1 block text-[0.8125rem] text-faint tnum">
+                    {row.sellable} records
+                    {row.withheld > 0 ? ` · ${row.withheld} withheld as non-transferable` : ""}
+                  </span>
+                ) : null}
+              </span>
+            </label>
+          );
+        })}
+      </FieldList>
+
+      <div className="mt-6 flex flex-wrap items-center gap-5">
+        <Button onClick={() => onList(all ? null : selected)} disabled={busy || !selected.length}>
+          {busy ? "Posting…" : all ? "Post full succession" : `Post ${selected.length} categories`}
+        </Button>
+        <Note>A partial sale commits its own hash, over exactly what is sold.</Note>
+      </div>
+    </Section>
+  );
+}
+
+/* -- 2. the data-room teaser -------------------------------------------- */
+
 function DataRoom({ preview, listing }: { preview: Preview; listing: Listing }) {
   const acp = preview.acp;
+  const counterparties = preview.category_breakdown.relationship ?? 0;
+
   return (
-    <Panel
-      title="Data room"
-      action={<span className="text-xs text-faint">Aggregate only until settlement</span>}
-    >
-      <dl>
-        <Field label="Agent">
+    <Section>
+      <header className="border-b border-rule pb-3">
+        <h1 className="font-serif text-document text-ink">
+          Agent {listing.agent_id.split(":").pop()}
+        </h1>
+        <p className="mt-1 text-[0.875rem] text-muted">
           <span className="font-mono text-[0.8125rem]">{listing.agent_id}</span>
+          {" · registered "}
+          <span className="tnum">{preview.tenure_days}</span> days
+        </p>
+      </header>
+
+      <FieldList className="mt-6">
+        <Field label="Records in transfer">
+          <span className="tnum">{(preview.counts.total_records ?? 0).toLocaleString()}</span>
         </Field>
-        <Field label="Categories in transfer">{listing.categories.join(", ")}</Field>
-        <Field label="Records">{preview.counts.total_records}</Field>
-        <Field label="Journal events">{preview.counts.journal_events}</Field>
-        <Field label="Counterparties">{preview.category_breakdown.relationship ?? 0}</Field>
-        <Field label="Memory size">{(preview.memory_size_bytes / 1024).toFixed(1)} KB</Field>
-        <Field label="Withheld as non-transferable">
-          {preview.withheld_non_transferable} — excluded before hashing
+        <Field label="Journal events">
+          <span className="tnum">{(preview.counts.journal_events ?? 0).toLocaleString()}</span>
         </Field>
-        {acp?.registered ? (
-          <Field label="ACP job history">
-            <span className="flex flex-wrap items-center gap-2">
-              <Badge tone="good">Verifiable</Badge>
-              <span className="text-secondary">
-                {acp.completed_jobs} completed, {acp.failed_jobs} failed, {acp.gross_volume} gross
+        <Field label="Counterparties">
+          <span className="tnum">{counterparties}</span>
+        </Field>
+        <Field label="Memory size">
+          <span className="tnum">{(preview.memory_size_bytes / 1024).toFixed(1)} KB</span>
+        </Field>
+        {acp ? (
+          <Field label="Completed jobs (ACP)">
+            {acp.registered ? (
+              <span className="flex flex-wrap items-baseline gap-3">
+                <span className="tnum">{acp.completed_jobs}</span>
+                <Badge tone="closed">Independently verifiable</Badge>
               </span>
-            </span>
+            ) : (
+              <span className="text-muted">
+                Not registered on the ACP service registry — figures self-reported.
+              </span>
+            )}
           </Field>
         ) : null}
-        <Field label="Committed hash">
-          <Hash value={listing.hash_commitment} chars={12} />
+        {acp?.registered && acp.success_rate ? (
+          <Field label="Success rate (verified)">
+            <span className="tnum">{acp.success_rate}</span>
+          </Field>
+        ) : null}
+        <Field label="Categories in transfer">{listing.categories.join(", ")}</Field>
+        <Field label="Withheld as non-transferable">
+          <span className="tnum">{preview.withheld_non_transferable}</span>
+          <span className="text-muted"> — excluded before hashing</span>
         </Field>
-        <Field label="Seller signature">
-          <Hash value={listing.seller_signature} chars={10} />
+        {preview.valuation ? (
+          <Field label="Valuation (reference)" emphasis>
+            ${preview.valuation.amount}
+          </Field>
+        ) : null}
+        <Field label="Asking price" emphasis>
+          {formatAmount(listing.price, listing.currency)}
         </Field>
-      </dl>
+      </FieldList>
+
+      <Evidence>
+        <dl className="space-y-2">
+          <EvidenceRow label="Committed hash" value={listing.hash_commitment} />
+          <EvidenceRow label="Seller signature" value={listing.seller_signature} />
+          <EvidenceRow label="Listing contract" value={listing.listing_id} />
+        </dl>
+      </Evidence>
+
+      <p className="mt-3 text-[0.8125rem] text-muted">{preview.disclosure}</p>
+
       {preview.valuation ? <Valuation valuation={preview.valuation} /> : null}
-    </Panel>
+    </Section>
+  );
+}
+
+function EvidenceRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-6">
+      <dt className="w-full shrink-0 text-[0.8125rem] text-muted sm:w-64">{label}</dt>
+      <dd className="min-w-0">
+        <Hash value={value} chars={10} />
+      </dd>
+    </div>
   );
 }
 
 function Valuation({ valuation }: { valuation: NonNullable<Preview["valuation"]> }) {
   const [open, setOpen] = useState(false);
   return (
-    <>
-      <Rule />
-      <div className="flex items-center justify-between gap-4 px-5 py-3">
-        <span className="text-[0.8125rem] text-secondary">Reference valuation</span>
-        <span className="flex items-center gap-4">
-          <span className="tnum text-lg font-semibold">${valuation.amount}</span>
-          <button
-            onClick={() => setOpen((v) => !v)}
-            aria-expanded={open}
-            className="text-[0.8125rem] text-accent hover:underline"
-          >
-            {open ? "Hide" : "Derivation"}
-          </button>
-        </span>
+    <div className="mt-8">
+      <div className="flex items-baseline justify-between gap-4 border-b border-rule pb-2">
+        <h3 className="font-serif text-heading text-ink">Reference valuation</h3>
+        <button
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="text-[0.8125rem] text-muted underline underline-offset-4 hover:text-ink"
+        >
+          {open ? "Hide derivation" : "Show derivation"}
+        </button>
       </div>
       {open ? (
-        <>
+        <div className="mt-4">
           <Table head={["Factor", "Value", "Basis"]}>
             {valuation.factors.map((f) => (
               <tr key={f.name}>
-                <Td className="font-mono text-faint">{f.name}</Td>
+                <Td className="text-muted">{f.name}</Td>
                 <Td className="tnum">× {f.value}</Td>
-                <Td className="text-secondary">{f.explanation}</Td>
+                <Td className="text-muted">{f.explanation}</Td>
               </tr>
             ))}
           </Table>
-          <p className="border-t border-hairline px-5 py-3 text-xs text-faint">
+          <p className="mt-3 text-[0.8125rem] text-faint">
             Not included: {Object.keys(valuation.excluded).join(", ")}. A single
             listing has no marketplace to compute them from.
           </p>
-        </>
+        </div>
       ) : null}
-    </>
+    </div>
   );
 }
 
+/* -- 3. escrow ---------------------------------------------------------- */
+
+function OpenEscrow({
+  listing,
+  busy,
+  onBuy,
+}: {
+  listing: Listing;
+  busy: boolean;
+  onBuy: () => void;
+}) {
+  return (
+    <Section title="Request transfer">
+      <div className="mt-4 flex flex-wrap items-center gap-5">
+        <Button onClick={onBuy} disabled={busy}>
+          {busy ? "Funding…" : `Fund escrow — ${formatAmount(listing.price, listing.currency)}`}
+        </Button>
+        <Note>The content key is released only against funded escrow.</Note>
+      </div>
+    </Section>
+  );
+}
+
+function EscrowHeld({
+  listing,
+  busy,
+  onSettle,
+}: {
+  listing: Listing;
+  busy: boolean;
+  onSettle: () => void;
+}) {
+  return (
+    <Section
+      title="Escrow in progress"
+      action={<Badge tone="escrow">Escrow: funds held</Badge>}
+    >
+      <FieldList className="mt-4">
+        <Field label="Held in escrow" emphasis>
+          {formatAmount(listing.escrow_balance, listing.currency)}
+        </Field>
+        <Field label="Buyer">
+          <Hash value={listing.buyer} chars={8} />
+        </Field>
+        <Field label="Hash commitment">
+          <Hash value={listing.hash_commitment} chars={10} />
+          <span className="text-muted"> — fixed at listing, unchangeable</span>
+        </Field>
+        <Field label="Released on">A delivered hash matching that commitment.</Field>
+      </FieldList>
+      <div className="mt-6 flex flex-wrap items-center gap-5">
+        <Button onClick={onSettle} disabled={busy}>
+          {busy ? "Settling…" : "Deliver and settle"}
+        </Button>
+        <Note>Payment, identity and the seal move together, or not at all.</Note>
+      </div>
+    </Section>
+  );
+}
+
+/* -- 4. transfer confirmation ------------------------------------------- */
+
 function Settlement({ outcome }: { outcome: Outcome }) {
   const verified = outcome.outcome === "verified";
+
+  // The pulse fires once, when verification completes — not on every re-render
+  // of an already-settled transaction. An animation that replays on reload is
+  // decoration, and this product has exactly one animated moment.
+  const seen = useRef<string | null>(null);
+  const [pulse, setPulse] = useState(false);
+  useEffect(() => {
+    const key = `${outcome.listing_id}:${outcome.outcome}`;
+    if (seen.current !== key) {
+      seen.current = key;
+      setPulse(true);
+      const t = window.setTimeout(() => setPulse(false), 500);
+      return () => window.clearTimeout(t);
+    }
+  }, [outcome.listing_id, outcome.outcome]);
+
+  const short = outcome.committed_root.slice(0, 6) + "…" + outcome.committed_root.slice(-4);
+
   return (
-    <Panel
-      title={verified ? "Hash verified" : "Hash mismatch"}
-      action={
-        <Badge tone={verified ? "good" : "bad"}>
-          {verified ? "Escrow released" : "Escrow refunded"}
+    <Section>
+      <header className="flex flex-wrap items-center gap-3 border-b border-rule pb-3">
+        <VerifyMark matched={verified} pulse={pulse} />
+        <h2 className="font-serif text-heading text-ink">
+          {verified ? "Transfer confirmed" : "Hash mismatch"}
+        </h2>
+        <Badge tone={verified ? "closed" : "void"}>
+          {verified ? "Escrow released to seller" : "Escrow refunded to buyer"}
         </Badge>
-      }
-    >
-      <div className="grid gap-px bg-line sm:grid-cols-2">
-        <HashBlock label="Committed at listing" value={outcome.committed_root} />
-        <HashBlock
-          label="Re-hashed on the buyer's store"
-          value={outcome.delivered_root}
-          tone={verified ? "good" : "bad"}
-        />
+      </header>
+
+      {/* Copy voice: formal and precise, like a closing document. Errors state
+          exactly what happened and what it means for the money. */}
+      <p className="mt-4 max-w-document text-[0.9375rem] leading-relaxed text-ink">
+        {verified ? (
+          <>
+            Hash verified: <span className="font-mono text-[0.875rem]">{short}</span>.
+            Funds released to seller.
+          </>
+        ) : (
+          <>
+            Delivered memory does not match the committed hash. Escrow
+            automatically refunded to buyer.
+          </>
+        )}
+      </p>
+
+      <div className="mt-6 grid gap-6 sm:grid-cols-2">
+        <div>
+          <p className="mb-2 text-[0.75rem] uppercase tracking-[0.06em] text-faint">
+            Committed at listing
+          </p>
+          <FullHash value={outcome.committed_root} />
+        </div>
+        <div>
+          <p className="mb-2 text-[0.75rem] uppercase tracking-[0.06em] text-faint">
+            Re-hashed on the buyer's store
+          </p>
+          <FullHash value={outcome.delivered_root} tone={verified ? "closed" : "void"} />
+        </div>
       </div>
 
+      {outcome.failure_reason ? (
+        <p className="mt-4 max-w-document text-[0.875rem] text-void">
+          {outcome.failure_reason}
+        </p>
+      ) : null}
+
       {outcome.receipt ? (
-        <dl className="border-t border-line">
+        <FieldList className="mt-8">
           <Field label="Paid to">
             <Hash value={outcome.receipt.paid_to} chars={8} />
           </Field>
@@ -227,34 +441,37 @@ function Settlement({ outcome }: { outcome: Outcome }) {
               <Hash value={outcome.receipt.identity_transferred_to} chars={8} />
             </Field>
           ) : null}
-          <Field label="Transaction">
-            <Hash value={outcome.receipt.reference} chars={12} />
+          <Field label="Confirmed by">
+            {outcome.receipt.confirmed_by === "arbiter" ? (
+              <span className="flex flex-wrap items-baseline gap-2">
+                <span>Evaluator (arbiter)</span>
+                <Badge tone="closed">Independently re-derived</Badge>
+              </span>
+            ) : (
+              <span>
+                Buyer <span className="text-muted">— self-reported delivery hash</span>
+              </span>
+            )}
           </Field>
-        </dl>
+          <Field label="Settlement">
+            {explorerFor(outcome.receipt.reference) ? (
+              <a
+                className="underline underline-offset-4 hover:text-escrow"
+                href={explorerFor(outcome.receipt.reference)!}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Hash value={outcome.receipt.reference} chars={10} />
+              </a>
+            ) : (
+              <Hash value={outcome.receipt.reference} chars={10} />
+            )}
+          </Field>
+        </FieldList>
       ) : null}
 
       {outcome.certificate ? <Certificate outcome={outcome} /> : null}
-    </Panel>
-  );
-}
-
-function HashBlock({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  tone?: "neutral" | "good" | "bad";
-}) {
-  const colour = { neutral: "text-primary", good: "text-good", bad: "text-bad" }[tone];
-  return (
-    <div className="bg-panel p-5">
-      <p className="mb-3 text-[0.6875rem] uppercase tracking-[0.08em] text-faint">{label}</p>
-      <p className={`break-all font-mono text-[0.8125rem] leading-relaxed ${colour}`}>
-        {value.replace(/^0x/, "").match(/.{1,8}/g)?.join(" ") ?? value}
-      </p>
-    </div>
+    </Section>
   );
 }
 
@@ -269,42 +486,41 @@ function Certificate({ outcome }: { outcome: Outcome }) {
     a.click();
     URL.revokeObjectURL(url);
   }
+
   return (
-    <>
-      <Rule />
-      <Table head={["Certificate", ""]}>
-        <tr>
-          <Td className="text-secondary">Memory asset</Td>
-          <Td>{cert.memory_asset}</Td>
-        </tr>
-        <tr>
-          <Td className="text-secondary">Origin → successor</Td>
-          <Td className="font-mono">
-            {cert.origin_agent} → {cert.successor_agent}
-          </Td>
-        </tr>
-        <tr>
-          <Td className="text-secondary">Records transferred</Td>
-          <Td className="tnum">{cert.records_transferred.toLocaleString()}</Td>
-        </tr>
-        <tr>
-          <Td className="text-secondary">Memory version</Td>
-          <Td className="tnum">{cert.memory_version}</Td>
-        </tr>
-        <tr>
-          <Td className="text-secondary">Status</Td>
-          <Td>
-            <Badge tone={cert.transfer_status === "VERIFIED" ? "good" : "bad"}>
-              {cert.transfer_status}
-            </Badge>
-          </Td>
-        </tr>
-      </Table>
-      <div className="px-5 py-4">
+    <div className="mt-10">
+      <h3 className="border-b border-rule pb-2 font-serif text-heading text-ink">
+        Succession Certificate
+      </h3>
+      <FieldList className="mt-4">
+        <Field label="Memory asset">{cert.memory_asset}</Field>
+        <Field label="Origin agent">
+          <span className="font-mono text-[0.8125rem]">{cert.origin_agent}</span>
+        </Field>
+        <Field label="Successor agent">
+          <span className="font-mono text-[0.8125rem]">{cert.successor_agent}</span>
+        </Field>
+        <Field label="Memory version">
+          <span className="tnum">{cert.memory_version}</span>
+        </Field>
+        <Field label="Records transferred">
+          <span className="tnum">{cert.records_transferred.toLocaleString()}</span>
+        </Field>
+        <Field label="Integrity hash">
+          <Hash value={cert.integrity_hash} chars={10} />
+        </Field>
+        <Field label="Transfer date">{cert.transfer_date}</Field>
+        <Field label="Transfer status">
+          <Badge tone={cert.transfer_status === "VERIFIED" ? "closed" : "void"}>
+            {cert.transfer_status}
+          </Badge>
+        </Field>
+      </FieldList>
+      <div className="mt-5">
         <Button variant="ghost" size="sm" onClick={download}>
           Download certificate
         </Button>
       </div>
-    </>
+    </div>
   );
 }

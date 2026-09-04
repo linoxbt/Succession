@@ -1,23 +1,28 @@
 /**
  * The operations overview: state of the current sale, at a glance.
+ *
+ * A definition list, not a row of stat tiles. Tiles are a dashboard idiom that
+ * makes every figure look equally important and equally decorative; a closing
+ * statement puts its figures in a column with their labels, where the reader
+ * can compare them and see which are load-bearing.
  */
 import type { Listing, Outcome, Preview } from "../api";
 import { formatAmount } from "../api";
-import { Badge, Empty, Field, Hash, Panel, Stat, StatRow } from "../ui";
+import { Badge, Empty, Field, FieldList, Hash, Section, type Tone } from "../ui";
 
-const STATE_TONE = {
+const STATE_TONE: Record<Listing["state"], Tone> = {
   open: "neutral",
-  escrowed: "accent",
-  confirmed: "good",
-  refunded: "bad",
-} as const;
+  escrowed: "escrow",
+  confirmed: "closed",
+  refunded: "void",
+};
 
-const STATE_LABEL = {
+const STATE_LABEL: Record<Listing["state"], string> = {
   open: "Listed",
-  escrowed: "Escrow funded",
+  escrowed: "Escrow: funds held",
   confirmed: "Settled",
   refunded: "Refunded",
-} as const;
+};
 
 export function Overview({
   listing,
@@ -32,45 +37,33 @@ export function Overview({
 }) {
   if (!listing || !preview) {
     return (
-      <Panel title="No listing">
+      <Section title="No listing">
         <Empty>Post a listing from the Listing tab to begin.</Empty>
-      </Panel>
+      </Section>
     );
   }
 
   const acp = preview.acp;
 
   return (
-    <div className="space-y-6">
-      <Panel>
-        <StatRow>
-          <Stat
-            label="Asking price"
-            value={formatAmount(listing.price, listing.currency).replace(" USDC", "")}
-            sub={listing.currency}
-          />
-          <Stat
-            label="Reference valuation"
-            value={preview.valuation ? `$${preview.valuation.amount}` : "—"}
-            sub="Not enforced by the contract"
-          />
-          <Stat label="Records in transfer" value={preview.counts.total_records ?? 0} />
-          <Stat
-            label="Verified ACP jobs"
-            value={acp?.completed_jobs ?? "—"}
-            sub={acp ? "On-chain job ids" : "No ACP history"}
-            tone={acp?.completed_jobs ? "good" : "neutral"}
-          />
-        </StatRow>
-      </Panel>
-
-      <Panel title="Transaction">
-        <dl>
+    <div className="space-y-10">
+      <Section title="Transaction">
+        <FieldList className="mt-4">
           <Field label="State">
             <Badge tone={STATE_TONE[listing.state]}>{STATE_LABEL[listing.state]}</Badge>
           </Field>
           <Field label="Agent">
             <span className="font-mono text-[0.8125rem]">{listing.agent_id}</span>
+          </Field>
+          <Field label="Asking price" emphasis>
+            {formatAmount(listing.price, listing.currency)}
+          </Field>
+          <Field label="Reference valuation">
+            {preview.valuation ? `$${preview.valuation.amount}` : "—"}
+            <span className="text-muted"> — not enforced by the contract</span>
+          </Field>
+          <Field label="Records in transfer">
+            <span className="tnum">{preview.counts.total_records ?? 0}</span>
           </Field>
           <Field label="Committed hash">
             <Hash value={listing.hash_commitment} chars={10} />
@@ -79,7 +72,7 @@ export function Overview({
             <Field label="Delivered hash">
               <span className="flex flex-wrap items-center gap-2">
                 <Hash value={outcome.delivered_root} chars={10} />
-                <Badge tone={outcome.outcome === "verified" ? "good" : "bad"}>
+                <Badge tone={outcome.outcome === "verified" ? "closed" : "void"}>
                   {outcome.outcome === "verified" ? "Match" : "Mismatch"}
                 </Badge>
               </span>
@@ -93,37 +86,37 @@ export function Overview({
           <Field label="Origin tenant">
             {sealed?.sealed ? (
               <span className="flex flex-wrap items-center gap-2">
-                <Badge tone="good">Sealed</Badge>
-                <span className="text-secondary">{sealed.at}</span>
+                <Badge tone="closed">Sealed</Badge>
+                <span className="text-muted">{sealed.at}</span>
               </span>
             ) : (
               <Badge>Live</Badge>
             )}
           </Field>
-        </dl>
-      </Panel>
+        </FieldList>
+      </Section>
 
-      <Panel title="Where each figure comes from">
-        <dl>
+      <Section title="Where each figure comes from">
+        <FieldList className="mt-4">
           <Field label="Independently verifiable">
             {acp?.registered ? (
               <span className="flex flex-wrap items-center gap-2">
-                <Badge tone="good">Virtuals ACP</Badge>
-                <span className="text-secondary">
+                <Badge tone="closed">Virtuals ACP</Badge>
+                <span className="text-muted">
                   {acp.completed_jobs} completed · {acp.gross_volume} gross
                 </span>
               </span>
             ) : (
-              <span className="text-faint">None — agent not registered on ACP</span>
+              <span className="text-muted">None — agent not registered on ACP</span>
             )}
           </Field>
           <Field label="Self-reported">
-            <span className="text-secondary">
+            <span className="text-muted">
               Record counts, memory size, tenure — computed from the seller's own store
             </span>
           </Field>
-        </dl>
-      </Panel>
+        </FieldList>
+      </Section>
     </div>
   );
 }

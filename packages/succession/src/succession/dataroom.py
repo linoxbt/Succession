@@ -37,6 +37,7 @@ from typing import Any
 from .canonical import canonical_bytes
 from .memory.base import MemorySource
 from .redaction import Sensitivity, read_disclosure
+from .smp import DATA_CATEGORIES, route
 from .valuation import Valuation, value_tenant
 
 __all__ = ["DataRoomPreview", "build_preview"]
@@ -51,6 +52,15 @@ class DataRoomPreview:
     category_breakdown: dict[str, int]
     public_counterparties: tuple[str, ...]
     withheld_non_transferable: int
+    #: Per SMP directory: how many records it holds that are for sale, and how
+    #: many the seller marked non-transferable. A directory with nothing
+    #: sellable in it cannot be part of a partial sale, and the listing flow
+    #: needs to know that *before* the seller picks a scope — offering a
+    #: category that would export empty is offering something that is not
+    #: there.
+    category_transferability: dict[str, dict[str, int]] = field(
+        default_factory=dict
+    )
     valuation: Valuation | None = None
     committed_root: str | None = None
     acp: dict[str, Any] | None = None
@@ -64,6 +74,9 @@ class DataRoomPreview:
             "category_breakdown": dict(self.category_breakdown),
             "public_counterparties": list(self.public_counterparties),
             "withheld_non_transferable": self.withheld_non_transferable,
+            "category_transferability": {
+                k: dict(v) for k, v in self.category_transferability.items()
+            },
             "disclosure": (
                 "Aggregate statistics only. Record contents are released after "
                 "purchase and hash verification."
@@ -149,6 +162,30 @@ def build_preview(
     for entity in entities:
         breakdown[entity["category"]] = breakdown.get(entity["category"], 0) + 1
 
+    # Per-directory transferability, routed through the same map the export
+    # uses — so what the seller is offered here is exactly what a package
+    # would carry, rather than a second opinion about it.
+    transferability: dict[str, dict[str, int]] = {
+        category: {"sellable": 0, "withheld": 0} for category in DATA_CATEGORIES
+    }
+    for record in (
+        *source.entities(),
+        *source.archived(),
+        *source.events(),
+        *source.states(),
+        *source.references(),
+        *source.relations(),
+    ):
+        bucket = transferability.setdefault(
+            route(record), {"sellable": 0, "withheld": 0}
+        )
+        key = (
+            "sellable"
+            if read_disclosure(record.get("body")).transferable
+            else "withheld"
+        )
+        bucket[key] += 1
+
     public_names = tuple(
         sorted(
             e["name"]
@@ -186,6 +223,7 @@ def build_preview(
         category_breakdown=dict(sorted(breakdown.items())),
         public_counterparties=public_names,
         withheld_non_transferable=withheld,
+        category_transferability=transferability,
         valuation=valuation,
         committed_root=committed_root,
         acp=acp_history.to_dict() if acp_history is not None else None,

@@ -56,6 +56,10 @@ export interface Preview {
   category_breakdown: Record<string, number>;
   public_counterparties: string[];
   withheld_non_transferable: number;
+  /** Per SMP directory: how much is for sale, and how much the seller withheld.
+   *  A directory with `sellable: 0` cannot form part of any transfer, which is
+   *  what the scope selector greys out. */
+  category_transferability?: Record<string, { sellable: number; withheld: number }>;
   disclosure: string;
   committed_root?: string;
   acp: AcpHistory | null;
@@ -101,6 +105,9 @@ export interface Outcome {
     identity_transferred_to: string;
     reference: string;
     settled_at: string;
+    /** "buyer" or "arbiter". A buyer vouching for their own delivery and a
+     *  disinterested evaluator that re-derived it are not the same evidence. */
+    confirmed_by?: string;
   } | null;
   certificate: Certificate | null;
   certificate_text?: string;

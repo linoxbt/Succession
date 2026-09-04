@@ -181,8 +181,8 @@ function RecordedBanner({ run }: { run: RecordedRun }) {
   return (
     <div className="border-b border-warn/30 bg-warn/[0.07] px-5 py-2.5">
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.75rem] text-warn">
-        <Badge tone="warn">Recorded</Badge>
-        <span className="text-secondary">
+        <Badge tone="escrow">Recorded</Badge>
+        <span className="text-muted">
           No service running. Replaying one real transfer captured {run.recorded_at}.
           Every hash and reply is genuine output — reproduce it with{" "}
           <code className="font-mono">python -m succession.demo</code>.

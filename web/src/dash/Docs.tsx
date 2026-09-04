@@ -7,7 +7,7 @@
  * are addressable, so a link into a specific answer works.
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Badge, Panel, Rule, Table, Td } from "../ui";
+import { Badge, Section, Rule, Table, Td } from "../ui";
 
 interface Doc {
   id: string;
@@ -90,8 +90,8 @@ const DOCS: Doc[] = [
             ["integrity-proof/", "Merkle root and per-category subroots"],
           ].map(([dir, carries]) => (
             <tr key={dir}>
-              <Td className="font-mono text-accent">{dir}</Td>
-              <Td className="text-secondary">{carries}</Td>
+              <Td className="font-mono text-escrow">{dir}</Td>
+              <Td className="text-muted">{carries}</Td>
             </tr>
           ))}
         </Table>
@@ -127,7 +127,7 @@ const DOCS: Doc[] = [
           ].map(([d, why]) => (
             <tr key={d}>
               <Td>{d}</Td>
-              <Td className="text-secondary">{why}</Td>
+              <Td className="text-muted">{why}</Td>
             </tr>
           ))}
         </Table>
@@ -154,8 +154,8 @@ const DOCS: Doc[] = [
             ["transferable: false", "Absolute. Outranks every tier, buyer and category selection, permanently"],
           ].map(([flag, meaning]) => (
             <tr key={flag}>
-              <Td className="font-mono text-accent">{flag}</Td>
-              <Td className="text-secondary">{meaning}</Td>
+              <Td className="font-mono text-escrow">{flag}</Td>
+              <Td className="text-muted">{meaning}</Td>
             </tr>
           ))}
         </Table>
@@ -193,7 +193,7 @@ const DOCS: Doc[] = [
           seller's own journal. It falls back on a thin sample rather than
           treating two-for-two as a perfect record.
         </P>
-        <Callout tone="warn">
+        <Callout tone="escrow">
           There is no buyer-demand term and no memory-reputation score. Those are
           real inputs at protocol scale and meaningless in a single-listing demo,
           and a hardcoded "12 buyers watching" is exactly the pattern a technical
@@ -214,7 +214,7 @@ const DOCS: Doc[] = [
             ["Service-level", "The seller's credentials for that tenant are revoked, and every write path — the adapter and the underlying client — checks the seal first and rejects unconditionally."],
           ]}
         />
-        <Callout tone="warn">
+        <Callout tone="escrow">
           What sealing does not claim: the seller's database file still exists on
           their disk, and nothing reaches onto their machine. The guarantee is
           narrower and actually enforceable — that copy can no longer
@@ -274,7 +274,7 @@ export function Docs() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Filter"
           aria-label="Filter documentation"
-          className="mb-3 w-full rounded-md border border-line bg-panel px-3 py-2 text-[0.8125rem] placeholder:text-faint"
+          className="mb-3 w-full rounded-md border border-rule bg-parchment px-3 py-2 text-[0.8125rem] placeholder:text-faint"
         />
         <ul className="space-y-0.5">
           {filtered.map((d) => (
@@ -287,8 +287,8 @@ export function Docs() {
                 aria-current={active === d.id ? "page" : undefined}
                 className={`w-full rounded-md px-3 py-2 text-left text-[0.8125rem] transition-colors ${
                   active === d.id
-                    ? "bg-raised text-primary"
-                    : "text-secondary hover:bg-raised/60 hover:text-primary"
+                    ? "bg-parchment text-ink"
+                    : "text-muted hover:bg-parchment/60 hover:text-ink"
                 }`}
               >
                 {d.title}
@@ -301,31 +301,31 @@ export function Docs() {
         </ul>
       </nav>
 
-      <Panel title={doc.title}>
+      <Section title={doc.title}>
         <article className="px-6 py-6">{doc.body}</article>
         <Rule />
         <div className="flex flex-wrap items-center gap-3 px-6 py-4 text-xs text-faint">
           <span>Full specifications in the repository:</span>
           <a
             href="https://github.com/linoxbt/Succession/blob/main/docs/smp-format.md"
-            className="text-accent hover:underline"
+            className="text-escrow hover:underline"
           >
             SMP format
           </a>
           <a
             href="https://github.com/linoxbt/Succession/blob/main/docs/sibyl-setup.md"
-            className="text-accent hover:underline"
+            className="text-escrow hover:underline"
           >
             Memory brief
           </a>
           <a
             href="https://github.com/linoxbt/Succession/blob/main/docs/ROADMAP.md"
-            className="text-accent hover:underline"
+            className="text-escrow hover:underline"
           >
             Roadmap
           </a>
         </div>
-      </Panel>
+      </Section>
     </div>
   );
 }
@@ -334,7 +334,7 @@ export function Docs() {
 
 function P({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <p className={`max-w-[70ch] text-[0.9375rem] leading-relaxed text-secondary ${className}`}>
+    <p className={`max-w-[70ch] text-[0.9375rem] leading-relaxed text-muted ${className}`}>
       {children}
     </p>
   );
@@ -342,7 +342,7 @@ function P({ children, className = "" }: { children: ReactNode; className?: stri
 
 function Code({ children }: { children: ReactNode }) {
   return (
-    <code className="rounded bg-raised px-1.5 py-0.5 font-mono text-[0.8125rem] text-primary">
+    <code className="rounded bg-parchment px-1.5 py-0.5 font-mono text-[0.8125rem] text-ink">
       {children}
     </code>
   );
@@ -350,17 +350,17 @@ function Code({ children }: { children: ReactNode }) {
 
 function Pre({ children }: { children: string }) {
   return (
-    <pre className="mt-5 overflow-x-auto rounded-lg border border-line bg-panel p-4 font-mono text-[0.8125rem] leading-relaxed text-secondary">
+    <pre className="mt-5 overflow-x-auto rounded-lg border border-rule bg-parchment p-4 font-mono text-[0.8125rem] leading-relaxed text-muted">
       {children}
     </pre>
   );
 }
 
-function Callout({ children, tone = "accent" }: { children: ReactNode; tone?: "accent" | "warn" }) {
-  const border = tone === "warn" ? "border-warn/40" : "border-accent/40";
+function Callout({ children, tone = "escrow" }: { children: ReactNode; tone?: "escrow" | "void" }) {
+  const border = tone === "void" ? "border-void/40" : "border-escrow/40";
   return (
     <div className={`mt-6 border-l-2 ${border} pl-4`}>
-      <p className="max-w-[68ch] text-[0.9375rem] leading-relaxed text-secondary">{children}</p>
+      <p className="max-w-[68ch] text-[0.9375rem] leading-relaxed text-muted">{children}</p>
     </div>
   );
 }
@@ -372,8 +372,8 @@ function Ol({ items }: { items: [string, string][] }) {
         <li key={term} className="flex gap-4">
           <span className="tnum w-5 shrink-0 pt-0.5 text-xs text-faint">{i + 1}</span>
           <span className="max-w-[66ch] text-[0.9375rem] leading-relaxed">
-            <span className="font-medium text-primary">{term}. </span>
-            <span className="text-secondary">{line}</span>
+            <span className="font-medium text-ink">{term}. </span>
+            <span className="text-muted">{line}</span>
           </span>
         </li>
       ))}
@@ -389,7 +389,7 @@ function Ul({ items }: { items: string[] }) {
           <span className="pt-2 text-faint" aria-hidden>
             <Badge>·</Badge>
           </span>
-          <span className="max-w-[68ch] text-[0.9375rem] leading-relaxed text-secondary">
+          <span className="max-w-[68ch] text-[0.9375rem] leading-relaxed text-muted">
             {line}
           </span>
         </li>

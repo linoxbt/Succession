@@ -23,15 +23,7 @@ const SPINE = "M23.5 10.5C23.5 5.5 8.5 5.5 8.5 12.5C8.5 19.5 23.5 12.5 23.5 19.5
 const SEAM_START = 46;
 const SEAM_END = 54;
 
-export function Mark({
-  size = 32,
-  animate = false,
-  className = "",
-}: {
-  size?: number;
-  animate?: boolean;
-  className?: string;
-}) {
+export function Mark({ size = 32, className = "" }: { size?: number; className?: string }) {
   return (
     <svg
       width={size}
@@ -55,32 +47,23 @@ export function Mark({
       <path
         d={SPINE}
         pathLength={100}
-        stroke="var(--mark-accent, #1D9BF0)"
+        stroke="var(--mark-accent, #2E4A6B)"
         strokeWidth={3}
         strokeLinecap="round"
         strokeDasharray={`${100 - SEAM_END} 100`}
         strokeDashoffset={-SEAM_END}
-        className={animate ? "mark-successor" : undefined}
       />
     </svg>
   );
 }
 
 /** Mark plus name, for the header and the console rail. */
-export function Wordmark({
-  size = 22,
-  animate = false,
-  className = "",
-}: {
-  size?: number;
-  animate?: boolean;
-  className?: string;
-}) {
+export function Wordmark({ size = 22, className = "" }: { size?: number; className?: string }) {
   return (
     <span className={`inline-flex items-center gap-2.5 ${className}`}>
-      <Mark size={size} animate={animate} />
+      <Mark size={size} />
       <span
-        className="font-semibold tracking-[-0.02em]"
+        className="font-serif tracking-[-0.01em]"
         style={{ fontSize: size * 0.72 }}
       >
         Succession
@@ -106,13 +89,13 @@ export function Seal({ size = 32, className = "" }: { size?: number; className?:
       aria-label="Succession"
       className={className}
     >
-      <rect width="32" height="32" rx="8" fill="#0A0A0B" />
-      <rect x="0.5" y="0.5" width="31" height="31" rx="7.5" stroke="#22262B" />
+      <rect width="32" height="32" rx="8" fill="#F1EDE3" />
+      <rect x="0.5" y="0.5" width="31" height="31" rx="7.5" stroke="#CFC8B8" />
       <g transform="translate(3.2 3.2) scale(0.8)">
         <path
           d={SPINE}
           pathLength={100}
-          stroke="#E7E9EA"
+          stroke="#23272B"
           strokeWidth={3.4}
           strokeLinecap="round"
           strokeDasharray={`${SEAM_START} 100`}
@@ -120,7 +103,7 @@ export function Seal({ size = 32, className = "" }: { size?: number; className?:
         <path
           d={SPINE}
           pathLength={100}
-          stroke="#1D9BF0"
+          stroke="#2E4A6B"
           strokeWidth={3.4}
           strokeLinecap="round"
           strokeDasharray={`${100 - SEAM_END} 100`}

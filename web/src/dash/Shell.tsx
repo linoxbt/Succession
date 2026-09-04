@@ -1,5 +1,10 @@
 /**
- * The console shell: left rail, dense content, no chrome that does not work.
+ * The console shell.
+ *
+ * A masthead and a rule, not an application chrome. The reference is a data
+ * room's own navigation: quiet, textual, and never competing with the document
+ * it frames. Nothing here is sticky-blurred or elevated — the page is flat
+ * paper, and the navigation sits on it rather than floating above it.
  */
 import type { ReactNode } from "react";
 import { Wordmark } from "../brand/Logo";
@@ -30,69 +35,38 @@ export function Shell({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-base">
-      <div className="flex">
-        {/* Left rail. Collapses to a horizontal strip rather than a hamburger:
-            five destinations do not need to be hidden behind a tap. */}
-        <aside className="sticky top-0 hidden h-screen w-56 shrink-0 border-r border-line bg-panel md:block">
-          <button
-            onClick={onHome}
-            className="flex w-full items-center px-5 py-5 text-left transition-colors hover:text-white"
-            aria-label="Succession home"
-          >
+    <div className="min-h-screen bg-vellum">
+      <header className="border-b border-rule">
+        <div className="mx-auto flex max-w-document items-center justify-between gap-6 px-6 py-5">
+          <button onClick={onHome} className="text-left" aria-label="Succession home">
             <Wordmark size={20} />
           </button>
-          <nav className="px-2">
+        </div>
+        {/* Horizontal, scrollable on narrow screens rather than hidden behind a
+            hamburger: seven destinations do not need to be concealed. */}
+        <nav className="mx-auto max-w-document overflow-x-auto px-6">
+          <div className="flex gap-6">
             {NAV.map((item) => (
               <button
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
                 aria-current={view === item.id ? "page" : undefined}
-                className={`mb-0.5 flex w-full items-center rounded-md px-3 py-2 text-left text-[0.8125rem] font-medium transition-colors ${
+                className={`-mb-px whitespace-nowrap border-b-2 py-2.5 text-[0.875rem] transition-colors ${
                   view === item.id
-                    ? "bg-raised text-primary"
-                    : "text-secondary hover:bg-raised/60 hover:text-primary"
+                    ? "border-ink text-ink"
+                    : "border-transparent text-muted hover:text-ink"
                 }`}
               >
                 {item.label}
               </button>
             ))}
-          </nav>
-        </aside>
+          </div>
+        </nav>
+      </header>
 
-        <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-10 border-b border-line bg-base/85 backdrop-blur">
-            <div className="flex items-center justify-between gap-4 px-5 py-3.5">
-              <h1 className="text-[0.9375rem] font-semibold capitalize tracking-tight">
-                {view === "market" ? "Marketplace" : view}
-              </h1>
-              <button
-                onClick={onHome}
-                className="text-[0.8125rem] text-secondary hover:text-primary md:hidden"
-              >
-                Succession
-              </button>
-            </div>
-            <nav className="flex gap-1 overflow-x-auto px-3 pb-2 md:hidden">
-              {NAV.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => onNavigate(item.id)}
-                  className={`whitespace-nowrap rounded-md px-3 py-1.5 text-[0.8125rem] font-medium ${
-                    view === item.id ? "bg-raised text-primary" : "text-secondary"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </nav>
-          </header>
+      {banner}
 
-          {banner}
-
-          <main className="mx-auto max-w-5xl px-5 py-6">{children}</main>
-        </div>
-      </div>
+      <main className="mx-auto max-w-document px-6 py-10">{children}</main>
     </div>
   );
 }

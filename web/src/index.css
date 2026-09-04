@@ -4,123 +4,59 @@
 
 @layer base {
   html {
-    color-scheme: dark;
+    color-scheme: light;
     -webkit-font-smoothing: antialiased;
-    scroll-behavior: smooth;
   }
 
   body {
-    @apply bg-base font-sans text-primary;
+    @apply bg-vellum font-sans text-ink;
   }
 
-  /* Numerals must line up column to column. */
+  /* Numerals must line up column to column — a definition list of figures
+     that jitters between rows reads as sloppy bookkeeping. */
   .tnum {
     font-variant-numeric: tabular-nums;
   }
 
+  /* Part 9's accessibility floor: a visible keyboard focus ring on every
+     interactive element. Built to, not announced. */
   :focus-visible {
-    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-base;
+    @apply outline-none ring-2 ring-escrow ring-offset-2 ring-offset-vellum;
   }
 
   ::selection {
-    @apply bg-accent/30;
+    @apply bg-escrow/15;
   }
 }
 
 @layer components {
-  /* --- Scroll reveal -------------------------------------------------- */
+  /* --- The hash-match pulse ------------------------------------------
 
-  /* Gated on `.js`, which main.tsx sets on the first line it runs. Without
-     scripting the page renders complete rather than blank — the animation is
-     an enhancement, and an enhancement must never be load-bearing for reading
-     the content. */
-  .js .reveal {
-    opacity: 0;
-    transform: translateY(16px);
-    transition:
-      opacity 720ms cubic-bezier(0.22, 0.7, 0.25, 1),
-      transform 720ms cubic-bezier(0.22, 0.7, 0.25, 1);
-    will-change: opacity, transform;
+     The only animation in the product. It fires once, when verification
+     completes, on the checkmark itself. Everything else on every screen is
+     static by design: this product's credibility comes from restraint, not
+     liveliness, so there is no loading shimmer, no card entrance, and no
+     hover lift anywhere in this file.
+
+     Respects prefers-reduced-motion by simply not animating — the checkmark
+     is still there, and it was never the animation that carried the meaning. */
+  .verify-pulse {
+    @apply animate-verify;
   }
 
-  .js .reveal.is-in {
-    opacity: 1;
-    transform: none;
-  }
-
-  /* --- The logo's successor half draws itself in ---------------------- */
-
-  .mark-successor {
-    animation: mark-draw 900ms cubic-bezier(0.22, 0.7, 0.25, 1) both;
-  }
-
-  @keyframes mark-draw {
-    from {
-      stroke-dasharray: 0 100;
-      stroke-dashoffset: -54;
+  @media (prefers-reduced-motion: reduce) {
+    .verify-pulse {
+      animation: none;
     }
   }
 
-  /* --- Transfer diagram ----------------------------------------------- */
+  /* --- The evidentiary strip -----------------------------------------
 
-  .packet {
-    opacity: 0;
-  }
-
-  .diagram-in .packet {
-    animation: packet-travel 2.1s cubic-bezier(0.5, 0, 0.5, 1) infinite;
-  }
-
-  @keyframes packet-travel {
-    0% { transform: translateX(244px); opacity: 0; }
-    12% { opacity: 1; }
-    46% { transform: translateX(438px); opacity: 1; }
-    54% { transform: translateX(516px); opacity: 1; }
-    88% { opacity: 1; }
-    100% { transform: translateX(648px); opacity: 0; }
-  }
-
-  .diagram-in .wire-pulse {
-    animation: wire-sweep 2.1s linear infinite;
-  }
-
-  @keyframes wire-sweep {
-    from { opacity: 0.25; }
-    50% { opacity: 0.85; }
-    to { opacity: 0.25; }
-  }
-
-  /* --- Hero grain, so the black is not flat --------------------------- */
-
-  .grid-field {
-    background-image:
-      linear-gradient(to right, #101317 1px, transparent 1px),
-      linear-gradient(to bottom, #101317 1px, transparent 1px);
-    background-size: 72px 72px;
-    mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 20%, transparent 75%);
-  }
-}
-
-/* Motion is an enhancement. Asking for less returns the whole page at once —
-   never an empty one. */
-@media (prefers-reduced-motion: reduce) {
-  .reveal {
-    opacity: 1 !important;
-    transform: none !important;
-    transition: none !important;
-  }
-
-  .packet,
-  .wire-pulse,
-  .mark-successor {
-    animation: none !important;
-  }
-
-  .packet {
-    opacity: 0.5;
-  }
-
-  html {
-    scroll-behavior: auto;
+     The "verified on-chain" region of the listing page. The single element
+     that should feel most official: set apart with a hairline border, never
+     a shadow. Shadows imply depth and depth is a marketing device; a closing
+     document is flat. */
+  .evidence {
+    @apply border-y border-rule py-4;
   }
 }

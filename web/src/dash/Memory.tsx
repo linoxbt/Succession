@@ -8,7 +8,7 @@
  */
 import { useState } from "react";
 import type { Reply } from "../api";
-import { Badge, Button, Panel, Rule } from "../ui";
+import { Badge, Button, Section, Rule } from "../ui";
 
 interface Backend {
   message(side: "seller" | "buyer", message: string): Promise<Reply>;
@@ -56,7 +56,7 @@ export function Memory({
 
   return (
     <div className="space-y-6">
-      <Panel
+      <Section
         title="Successor agent"
         action={<span className="text-xs text-faint">Cold session, new tenant</span>}
       >
@@ -73,7 +73,7 @@ export function Memory({
               </p>
               <p className="text-[0.9375rem] leading-relaxed">{turn.text}</p>
               {turn.citations?.length ? (
-                <p className="pt-1 font-mono text-[0.75rem] text-accent/80">
+                <p className="pt-1 font-mono text-[0.75rem] text-escrow/80">
                   recalled from {turn.citations.map((c) => `${c.tier}/${c.key}`).join(" · ")}
                 </p>
               ) : null}
@@ -96,7 +96,7 @@ export function Memory({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Message the agent as a returning customer"
-            className="flex-1 rounded-md border border-line bg-base px-3 py-2 text-[0.8125rem] placeholder:text-faint"
+            className="flex-1 rounded-md border border-rule bg-vellum px-3 py-2 text-[0.8125rem] placeholder:text-faint"
           />
           <Button type="submit" disabled={busy}>
             {busy ? "…" : "Send"}
@@ -108,25 +108,25 @@ export function Memory({
               key={opener}
               onClick={() => void send(opener)}
               disabled={busy}
-              className="rounded-md border border-line px-2.5 py-1 text-left text-xs text-secondary hover:border-secondary hover:text-primary disabled:opacity-40"
+              className="rounded-md border border-rule px-2.5 py-1 text-left text-xs text-muted hover:border-secondary hover:text-ink disabled:opacity-40"
             >
               {opener}
             </button>
           ))}
         </div>
-      </Panel>
+      </Section>
 
-      <Panel title="Origin tenant">
+      <Section title="Origin tenant">
         <div className="space-y-4 px-5 py-4">
           {sealed?.sealed ? (
             <span className="flex flex-wrap items-center gap-2">
-              <Badge tone="good">Sealed</Badge>
-              <span className="text-[0.8125rem] text-secondary">{sealed.at}</span>
+              <Badge tone="closed">Sealed</Badge>
+              <span className="text-[0.8125rem] text-muted">{sealed.at}</span>
             </span>
           ) : (
             <Badge>Live</Badge>
           )}
-          <p className="max-w-[62ch] text-[0.8125rem] leading-relaxed text-secondary">
+          <p className="max-w-[62ch] text-[0.8125rem] leading-relaxed text-muted">
             The seller's database file still exists on their machine. What it can
             no longer do is authenticate, sync, or be represented anywhere in this
             system as the live agent.
@@ -141,7 +141,7 @@ export function Memory({
           {attempt ? (
             <p
               className={`border-l-2 pl-3 text-[0.8125rem] ${
-                attempt.accepted ? "border-bad text-bad" : "border-good text-secondary"
+                attempt.accepted ? "border-bad text-bad" : "border-good text-muted"
               }`}
             >
               {attempt.accepted ? "Write accepted — " : "Write rejected. "}
@@ -149,7 +149,7 @@ export function Memory({
             </p>
           ) : null}
         </div>
-      </Panel>
+      </Section>
     </div>
   );
 }

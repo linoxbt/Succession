@@ -6,41 +6,50 @@
  * the seller's memory and therefore self-reported.
  */
 import type { Preview } from "../api";
-import { Badge, Empty, Field, Panel, Stat, StatRow } from "../ui";
+import { Badge, Empty, Field, FieldList, Section } from "../ui";
 
 export function Agents({ preview }: { preview: Preview | null }) {
   const acp = preview?.acp;
 
   if (!acp) {
     return (
-      <Panel title="Virtuals ACP">
+      <Section title="Virtuals ACP">
         <Empty>
           No ACP job history on this agent. Register it through the ACP Tech
           Playbook, then run <code className="font-mono">succession-acp sync</code>.
         </Empty>
-      </Panel>
+      </Section>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <Panel>
-        <StatRow>
-          <Stat label="Completed jobs" value={acp.completed_jobs} tone="good" />
-          <Stat label="Failed or expired" value={acp.failed_jobs} />
-          <Stat label="Gross volume" value={acp.gross_volume} sub="USDC" />
-          <Stat
-            label="Success rate"
-            value={acp.success_rate ? `${(Number(acp.success_rate) * 100).toFixed(0)}%` : "—"}
-            sub={acp.success_rate ? "Feeds the valuation" : "Sample too small"}
-          />
-        </StatRow>
-      </Panel>
+    <div className="space-y-10">
+      <Section title="Job history">
+        <FieldList className="mt-4">
+          <Field label="Completed jobs">
+            <span className="tnum">{acp.completed_jobs}</span>
+          </Field>
+          <Field label="Failed or expired">
+            <span className="tnum">{acp.failed_jobs}</span>
+          </Field>
+          <Field label="Gross volume">
+            <span className="tnum">{acp.gross_volume}</span> USDC
+          </Field>
+          <Field label="Success rate">
+            <span className="tnum">
+              {acp.success_rate ? `${(Number(acp.success_rate) * 100).toFixed(0)}%` : "—"}
+            </span>
+            <span className="text-muted">
+              {acp.success_rate ? " — feeds the valuation" : " — sample too small to score"}
+            </span>
+          </Field>
+        </FieldList>
+      </Section>
 
-      <Panel title="Registration">
-        <dl>
+      <Section title="Registration">
+        <FieldList className="mt-4">
           <Field label="Status">
-            <Badge tone={acp.registered ? "good" : "bad"}>
+            <Badge tone={acp.registered ? "closed" : "void"}>
               {acp.registered ? "On the service registry" : "Not registered"}
             </Badge>
           </Field>
@@ -51,31 +60,33 @@ export function Agents({ preview }: { preview: Preview | null }) {
           <Field label="Wallet">
             <span className="font-mono break-all">{acp.agent_address || "—"}</span>
           </Field>
-          <Field label="Counterparties">{acp.distinct_counterparties}</Field>
-          <Field label="Source">
-            <Badge tone={acp.source === "live" ? "good" : "neutral"}>{acp.source}</Badge>
+          <Field label="Counterparties">
+            <span className="tnum">{acp.distinct_counterparties}</span>
           </Field>
-        </dl>
-      </Panel>
+          <Field label="Source">
+            <Badge tone={acp.source === "live" ? "closed" : "neutral"}>{acp.source}</Badge>
+          </Field>
+        </FieldList>
+      </Section>
 
-      <Panel
+      <Section
         title="Verifiable job ids"
-        action={<span className="text-xs text-faint">Resolve against the ACP contract</span>}
+        action={
+          <span className="text-[0.8125rem] text-muted">Resolve against the ACP contract</span>
+        }
       >
-        <div className="flex flex-wrap gap-1.5 px-5 py-4">
+        <div className="mt-4 flex flex-wrap gap-1.5">
           {acp.verifiable_job_ids.map((id) => (
             <span
               key={id}
-              className="rounded border border-line px-2 py-0.5 font-mono text-[0.75rem] tnum text-secondary"
+              className="border border-hairline px-2 py-0.5 font-mono text-[0.75rem] tnum text-muted"
             >
               #{id}
             </span>
           ))}
         </div>
-        <p className="border-t border-hairline px-5 py-3 text-xs text-faint">
-          {acp.verification}
-        </p>
-      </Panel>
+        <p className="mt-4 text-[0.8125rem] text-muted">{acp.verification}</p>
+      </Section>
     </div>
   );
 }
