@@ -8,10 +8,11 @@
 Writes ``deployments/base-sepolia.json`` with every address and transaction
 hash, which is what ``run_transfers.py`` and the UI read afterwards.
 
-On the identity registry: ERC-8004 is a draft, and there is no single canonical
-Identity Registry deployment to hardcode. Point ``IDENTITY_REGISTRY_ADDRESS`` at
-the one you are using. Without it this deploys ``MockIdentityRegistry`` — a
-plain ERC-721 with the same surface — and labels the deployment
+On the identity registry: a real ERC-8004 registry is deployed on Base Sepolia
+and this script points at it by default — see ``succession.erc8004`` for what
+was verified against that address. ``IDENTITY_REGISTRY_ADDRESS`` overrides it.
+The ERC-721 stand-in is now used only for ``--local``, where the real registry
+does not exist, and any deployment that falls back to it is still labelled
 ``identity_registry_is_mock: true`` so nothing downstream can quietly claim
 otherwise.
 """
@@ -31,12 +32,22 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "packages" / "succession" / "src"))
 
 from succession.chain import load_artifact  # noqa: E402
+from succession.erc8004 import (  # noqa: E402
+    BASE_SEPOLIA_IDENTITY_REGISTRY,
+    IdentityRegistry,
+)
 
 CHAIN_ID = 84532
 
 #: Circle's USDC on Base Sepolia — the same token Virtuals ACP uses for fares,
 #: so a Succession sale settles in the currency the agent already earns in.
+#: Verified on chain: symbol() == "USDC", decimals() == 6.
 DEFAULT_PAYMENT_TOKEN = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+
+#: The ERC-8004 Identity Registry on Base Sepolia. Verified on chain: it is
+#: ERC-721 (supportsInterface(0x80ac58cd)), holds live agents, and implements
+#: every function ListingContract calls. See succession/erc8004.py.
+DEFAULT_IDENTITY_REGISTRY = BASE_SEPOLIA_IDENTITY_REGISTRY
 
 
 def require(name: str) -> str:
@@ -96,6 +107,37 @@ def connect_local():
     return w3, account
 
 
+def _verify_registry(w3: Web3, address: str) -> bool:
+    """Check the registry is real before building a deployment on top of it.
+
+    Returns True if it should still be recorded as a stand-in. The check is
+    deliberately performed here rather than trusted from a constant: an address
+    that holds no code, or that does not answer the ERC-721 interface probe, is
+    not an identity registry, and discovering that at ``confirmTransfer`` time
+    would mean a buyer's funds sat in escrow against a sale that could never
+    settle.
+    """
+    registry = IdentityRegistry(w3, address=address)
+    if not registry.is_contract():
+        sys.exit(
+            f"IDENTITY_REGISTRY_ADDRESS {address} holds no code on chain "
+            f"{w3.eth.chain_id}. Identity cannot transfer against an address "
+            "that is not a contract."
+        )
+    caps = registry.capabilities()
+    required = ("transfer_from", "get_approved", "is_approved_for_all")
+    missing = [name for name in required if not caps.get(name)]
+    if missing:
+        sys.exit(
+            f"registry {address} is missing {missing}, which ListingContract "
+            "calls during settlement."
+        )
+    print(f"  identity registry     {address} (ERC-8004, verified on chain)")
+    if not caps.get("register"):
+        print("    note: no register(string) — agents must be minted elsewhere")
+    return False
+
+
 def deploy_all(w3: Web3, account, *, local: bool = False) -> dict:
     """Deploy the contract set and return the deployment record.
 
@@ -105,15 +147,18 @@ def deploy_all(w3: Web3, account, *, local: bool = False) -> dict:
     """
     payment_token = os.environ.get("PAYMENT_TOKEN_ADDRESS", DEFAULT_PAYMENT_TOKEN)
     registry = os.environ.get("IDENTITY_REGISTRY_ADDRESS")
-    registry_is_mock = registry is None
 
     print("deploying:")
     if local:
-        # Circle's USDC does not exist on an in-process chain.
+        # Neither Circle's USDC nor the ERC-8004 registry exists on an
+        # in-process chain, so both are stood up here. This is the only path
+        # that is allowed to use the stand-in.
         payment_token = deploy(w3, account, "MockERC20")
-    if registry_is_mock:
-        print("  (no IDENTITY_REGISTRY_ADDRESS — deploying the ERC-721 stand-in)")
         registry = deploy(w3, account, "MockIdentityRegistry")
+        registry_is_mock = True
+    else:
+        registry = registry or DEFAULT_IDENTITY_REGISTRY
+        registry_is_mock = _verify_registry(w3, registry)
 
     arbiter = os.environ.get("ARBITER_ADDRESS", account.address)
     listings = deploy(w3, account, "ListingContract", payment_token, registry, arbiter)
@@ -176,8 +221,7 @@ def main() -> int:
     if registry_is_mock:
         print(
             "\nnote: the identity registry is a stand-in, recorded as such in the "
-            "deployment file. Set IDENTITY_REGISTRY_ADDRESS to use a real "
-            "ERC-8004 registry."
+            "deployment file. This is expected for --local and nowhere else."
         )
     return 0
 

@@ -27,8 +27,10 @@ jobs:
           npm install
           npm run build
 
+      # The `test` extra declares every dependency the suite needs, so CI and a
+      # contributor on a fresh clone install exactly the same set.
       - name: Install the package
-        run: pip install -e "packages/succession[dev,service]" web3 py-evm==0.12.1b1 eth-tester
+        run: pip install -e "packages/succession[test,service,chain]"
 
       - name: Test
         run: pytest packages/succession/tests -p no:warnings

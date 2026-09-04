@@ -240,26 +240,54 @@ class ChainSettlement:
         return self.get(listing_id)
 
     def confirm_transfer(
-        self, listing_id: str, *, delivered_hash: str, buyer_identity: str
+        self,
+        listing_id: str,
+        *,
+        delivered_hash: str,
+        buyer_identity: str,
+        caller: str | None = None,
     ) -> SettlementReceipt:
         """Submit the re-derived root; the contract releases or refunds.
 
         The outcome is read from the emitted event rather than assumed. A hash
         mismatch refunds instead of reverting, so the transaction succeeds
         either way and only the log distinguishes them.
+
+        ``caller`` selects who submits. It defaults to the buyer, which is the
+        self-reported path the contract's own docstring calls out as the known
+        adversarial edge; passing the arbiter is what closes it, and the
+        contract already accepts either. The receipt records which one it was.
         """
         listing = self.get(listing_id)
         if listing.state is not ListingState.ESCROWED:
             raise SettlementError(
                 f"listing {listing_id!r} is {listing.state.value}; nothing is escrowed"
             )
+        sender = caller or listing.buyer
+        confirmed_by = self._role_of(listing, sender)
         receipt = self._send(
             self.contract.functions.confirmTransfer(
                 listing_id_to_bytes32(listing_id), from_hex(delivered_hash)
             ),
-            listing.buyer,
+            sender,
         )
-        return self._receipt_from_logs(listing, receipt)
+        return self._receipt_from_logs(listing, receipt, confirmed_by=confirmed_by)
+
+    @property
+    def arbiter(self) -> str:
+        """The address the deployed contract accepts alongside the buyer."""
+        return self.contract.functions.arbiter().call()
+
+    def _role_of(self, listing: Listing, caller: str) -> str:
+        """Mirror the contract's ``NotAuthorised`` check, before spending gas."""
+        if listing.buyer and caller.lower() == listing.buyer.lower():
+            return "buyer"
+        if caller.lower() == self.arbiter.lower():
+            return "arbiter"
+        raise SettlementError(
+            f"{caller} is neither the buyer nor the arbiter of listing "
+            f"{listing.listing_id!r}; confirmTransfer would revert with NotAuthorised"
+        )
 
     def refund(
         self, listing_id: str, *, reason: str, delivered_hash: str = ""
@@ -273,7 +301,9 @@ class ChainSettlement:
         )
         return self._receipt_from_logs(listing, receipt)
 
-    def _receipt_from_logs(self, listing: Listing, receipt: Any) -> SettlementReceipt:
+    def _receipt_from_logs(
+        self, listing: Listing, receipt: Any, *, confirmed_by: str = "buyer"
+    ) -> SettlementReceipt:
         from web3.logs import DISCARD
 
         tx_hash = receipt["transactionHash"].hex()
@@ -296,6 +326,7 @@ class ChainSettlement:
                 sealed_agent=str(args["agentId"]),
                 reference=tx_hash,
                 settled_at=settled_at,
+                confirmed_by=confirmed_by,
             )
 
         refunded = self.contract.events.Refunded().process_receipt(
@@ -312,6 +343,7 @@ class ChainSettlement:
                 sealed_agent="",
                 reference=tx_hash,
                 settled_at=settled_at,
+                confirmed_by=confirmed_by,
             )
 
         raise SettlementError(

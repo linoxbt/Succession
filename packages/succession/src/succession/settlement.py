@@ -121,6 +121,12 @@ class SettlementReceipt:
     sealed_agent: str
     reference: str               # tx hash on-chain; a synthetic id locally
     settled_at: str
+    #: Who submitted the delivered hash — the buyer, or the arbiter acting as an
+    #: independent Evaluator. Recorded because the two carry very different
+    #: weight: a buyer asserting their own delivery is self-reported, and an
+    #: arbiter that re-derived the root itself is not. A certificate that did
+    #: not say which one settled it would be flattening that distinction.
+    confirmed_by: str = "buyer"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -132,6 +138,7 @@ class SettlementReceipt:
             "sealed_agent": self.sealed_agent,
             "reference": self.reference,
             "settled_at": self.settled_at,
+            "confirmed_by": self.confirmed_by,
         }
 
 
@@ -141,7 +148,12 @@ class SettlementBackend(Protocol):
     def get(self, listing_id: str) -> Listing: ...
     def buy(self, listing_id: str, *, buyer: str, amount: int) -> Listing: ...
     def confirm_transfer(
-        self, listing_id: str, *, delivered_hash: str, buyer_identity: str
+        self,
+        listing_id: str,
+        *,
+        delivered_hash: str,
+        buyer_identity: str,
+        caller: str | None = None,
     ) -> SettlementReceipt: ...
     def refund(self, listing_id: str, *, reason: str) -> SettlementReceipt: ...
 
@@ -189,8 +201,13 @@ class LocalSettlement:
     dishonesty the spec warns against.
     """
 
-    def __init__(self, db_path: str | Path) -> None:
+    def __init__(self, db_path: str | Path, *, arbiter: str = "") -> None:
         self.db_path = Path(db_path)
+        #: The address permitted to confirm alongside the buyer, mirroring
+        #: ``ListingContract``'s immutable ``arbiter``. Empty means no arbiter is
+        #: configured, and only the buyer may confirm — the same posture the
+        #: contract has when it is deployed with the zero address.
+        self.arbiter = arbiter
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._conn() as conn:
             conn.executescript(_SCHEMA)
@@ -323,19 +340,30 @@ class LocalSettlement:
     # -- settlement ----------------------------------------------------
 
     def confirm_transfer(
-        self, listing_id: str, *, delivered_hash: str, buyer_identity: str
+        self,
+        listing_id: str,
+        *,
+        delivered_hash: str,
+        buyer_identity: str,
+        caller: str | None = None,
     ) -> SettlementReceipt:
         """Release payment, move the identity, and seal — together or not at all.
 
         A mismatch does not raise: it refunds. The refund *is* the specified
         behaviour on a bad delivery, and making the caller catch an exception to
         trigger it would leave the money stuck if they forgot.
+
+        ``caller`` mirrors the contract's authorisation: the buyer, or the
+        arbiter. It is recorded on the receipt rather than merely permitted,
+        because who asserted the delivered hash is exactly what a later reader
+        needs in order to know how much the assertion is worth.
         """
         listing = self.get(listing_id)
         if listing.state is not ListingState.ESCROWED:
             raise SettlementError(
                 f"listing {listing_id!r} is {listing.state.value}; nothing is escrowed"
             )
+        confirmed_by = self._role_of(listing, caller)
 
         if from_hex(delivered_hash) != from_hex(listing.hash_commitment):
             return self.refund(
@@ -345,6 +373,7 @@ class LocalSettlement:
                     "committed hash."
                 ),
                 delivered_hash=delivered_hash,
+                confirmed_by=confirmed_by,
             )
 
         reference = _reference("confirm", listing_id, delivered_hash)
@@ -375,12 +404,35 @@ class LocalSettlement:
             sealed_agent=listing.agent_id,
             reference=reference,
             settled_at=settled_at,
+            confirmed_by=confirmed_by,
         )
         self._record(receipt)
         return receipt
 
+    def _role_of(self, listing: Listing, caller: str | None) -> str:
+        """Which authorised role ``caller`` is acting as.
+
+        The contract accepts the buyer or the arbiter and nobody else; this
+        mirrors that rather than trusting the caller's own account of itself.
+        """
+        if caller is None:
+            return "buyer"
+        if listing.buyer and caller.lower() == listing.buyer.lower():
+            return "buyer"
+        if self.arbiter and caller.lower() == self.arbiter.lower():
+            return "arbiter"
+        raise SettlementError(
+            f"{caller} is neither the buyer nor the arbiter of listing "
+            f"{listing.listing_id!r}; the contract would reject this call"
+        )
+
     def refund(
-        self, listing_id: str, *, reason: str, delivered_hash: str = ""
+        self,
+        listing_id: str,
+        *,
+        reason: str,
+        delivered_hash: str = "",
+        confirmed_by: str = "buyer",
     ) -> SettlementReceipt:
         listing = self.get(listing_id)
         if listing.state is not ListingState.ESCROWED:
@@ -410,6 +462,7 @@ class LocalSettlement:
             sealed_agent="",
             reference=reference,
             settled_at=settled_at,
+            confirmed_by=confirmed_by,
         )
         self._record(receipt)
         return receipt
