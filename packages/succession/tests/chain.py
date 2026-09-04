@@ -19,10 +19,32 @@ CONTRACTS = Path(__file__).resolve().parents[3] / "contracts"
 ARTIFACTS = CONTRACTS / "out" / "artifacts.json"
 
 
-def load_artifacts() -> dict:
+def _sources_newer_than_artifacts() -> bool:
+    """True if any .sol has been touched since the artifacts were compiled.
+
+    Missing artifacts are obvious; *stale* ones are not. They produce failures
+    that read as contract bugs — a call reverting for a rule the source no
+    longer contains — and the only clue is that the source was edited, or a
+    branch switched, since the last build. Cheaper to detect than to debug.
+    """
     if not ARTIFACTS.exists():
-        # One attempt to build, so a fresh clone that has run `npm install`
-        # does not need a separate manual step.
+        return True
+    built = ARTIFACTS.stat().st_mtime
+    # Only this project's own sources: `contracts/lib` holds forge-std, whose
+    # thousands of files are not what compile.js builds and whose checkout
+    # mtimes would trigger a rebuild on every run.
+    return any(
+        sol.stat().st_mtime > built
+        for directory in ("src", "test")
+        for sol in (CONTRACTS / directory).rglob("*.sol")
+    )
+
+
+def load_artifacts() -> dict:
+    if _sources_newer_than_artifacts():
+        # One attempt to build, so a fresh clone that has run `npm install` — or
+        # a checkout that moved the contracts under a stale build — does not
+        # need a separate manual step.
         try:
             subprocess.run(
                 ["node", "compile.js"],

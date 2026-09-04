@@ -160,6 +160,23 @@ def test_a_tampered_verdict_fails_recovery(evaluator, sale, buyer):
         verify_verdict(forged, expected_evaluator=ARBITER)
 
 
+def test_a_verdict_that_checked_nothing_is_not_verified():
+    """``all(())`` is True, which would make an empty verdict claim success.
+
+    A verdict is evidence a buyer is meant to be able to act on, so "no checks
+    ran" must never read the same as "every check passed".
+    """
+    empty = Verdict(
+        listing_id="l",
+        committed_root="0x" + "aa" * 32,
+        evaluator_root="0x" + "aa" * 32,
+        findings=(),
+        evaluator=ARBITER,
+        evaluated_at="2026-09-04T00:00:00Z",
+    )
+    assert empty.verified is False
+
+
 def test_unsigned_verdict_is_refused(evaluator):
     bare = Verdict(
         listing_id="l",

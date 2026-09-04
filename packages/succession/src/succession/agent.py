@@ -115,11 +115,6 @@ class Agent:
         # — the lane, or a detail from the notes. Take its top-ranked hit.
         return hits[0] if hits else None
 
-    # -- description --------------------------------------------------
-
-    def _noop(self) -> None:  # pragma: no cover - placeholder anchor
-        return None
-
     def _search_relationships(self, text: str) -> list[dict[str, Any]]:
         """FTS over the relationship category, one distinctive term at a time.
 

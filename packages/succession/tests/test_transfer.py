@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 
 import pytest
+from eth_utils import to_checksum_address
 
 from succession.demokeys import BUYER, SELLER
 from succession.envelope import EnvelopeError, open_envelope, seal_package
@@ -210,6 +211,61 @@ def test_a_listing_cannot_be_bought_twice(listed, settlement):
 def test_a_seller_cannot_buy_their_own_listing(listed, settlement):
     with pytest.raises(SettlementError, match="own listing"):
         settlement.buy(LISTING, buyer=SELLER.address, amount=PRICE)
+
+
+def test_a_race_for_one_listing_does_not_report_two_winners(listed, settlement):
+    """The loser of a concurrent buy is told so, rather than handed the winner's row.
+
+    ``buy`` guards its UPDATE on the OPEN state, but until it checked
+    ``rowcount`` a losing writer fell through to a read that returned the
+    listing as the *other* buyer had left it — a success response for a purchase
+    that never happened. Simulated here by taking the listing between the check
+    and the write, which is exactly the window a second process occupies.
+    """
+    other = "0x000000000000000000000000000000000000b0b2"
+    real_get = settlement.get
+    taken = {"done": False}
+
+    def get_then_take(listing_id):
+        row = real_get(listing_id)
+        if not taken["done"]:
+            taken["done"] = True
+            real_buy_conn = settlement._conn
+            with real_buy_conn() as conn:
+                conn.execute(
+                    "UPDATE listings SET state='escrowed', buyer=?, escrow_balance=? "
+                    "WHERE listing_id=?",
+                    (to_checksum_address(other), PRICE, listing_id),
+                )
+        return row
+
+    settlement.get = get_then_take
+    try:
+        with pytest.raises(SettlementError, match="taken during the purchase"):
+            settlement.buy(LISTING, buyer=BUYER.address, amount=PRICE)
+    finally:
+        settlement.get = real_get
+
+    # And the listing still belongs to whoever actually got there first.
+    assert settlement.get(LISTING).buyer == to_checksum_address(other)
+
+
+def test_cancel_withdraws_an_unfunded_listing(listed, settlement):
+    assert settlement.get(LISTING).state is ListingState.OPEN
+    settlement.cancel(LISTING, seller=SELLER.address)
+    assert settlement.get(LISTING).state is ListingState.REFUNDED
+
+
+def test_only_the_seller_may_cancel(listed, settlement):
+    with pytest.raises(SettlementError, match="only the seller"):
+        settlement.cancel(LISTING, seller=BUYER.address)
+
+
+def test_a_funded_listing_cannot_be_cancelled(listed, settlement):
+    """Once the buyer's money is in, abandoning the sale is a refund, not a cancel."""
+    settlement.buy(LISTING, buyer=BUYER.address, amount=PRICE)
+    with pytest.raises(SettlementError, match="not open"):
+        settlement.cancel(LISTING, seller=SELLER.address)
 
 
 def test_settlement_cannot_be_confirmed_twice(listed, settlement, seals, seller, buyer):

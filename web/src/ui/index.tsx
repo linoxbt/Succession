@@ -261,41 +261,6 @@ export function Empty({ children }: { children: ReactNode }) {
   return <div className="py-10 text-center text-[0.875rem] text-faint">{children}</div>;
 }
 
-/* -- navigation --------------------------------------------------------- */
-
-export function Tabs<T extends string>({
-  tabs,
-  active,
-  onChange,
-}: {
-  tabs: { id: T; label: string; count?: number }[];
-  active: T;
-  onChange: (id: T) => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-6 border-b border-rule" role="tablist">
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          role="tab"
-          aria-selected={active === tab.id}
-          onClick={() => onChange(tab.id)}
-          className={`relative -mb-px border-b-2 py-2.5 text-[0.875rem] transition-colors ${
-            active === tab.id
-              ? "border-ink text-ink"
-              : "border-transparent text-muted hover:text-ink"
-          }`}
-        >
-          {tab.label}
-          {tab.count !== undefined ? (
-            <span className="ml-1.5 tnum text-faint">{tab.count}</span>
-          ) : null}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 /** A short note in the document's own voice — formal, precise, not a callout box. */
 export function Note({ children }: { children: ReactNode }) {
   return (

@@ -14,7 +14,7 @@
  * generated ABI carries them, so a failure reads as the sentence the contract
  * meant rather than as a hex selector.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   useAccount,
   useChainId,
@@ -264,12 +264,25 @@ export function FundEscrow({
   const approved = (allowance ?? 0n) >= price;
   const funded = (balance ?? 0n) >= price;
 
+  // Which transaction hash has already been acted on. `isSuccess` and `txHash`
+  // stay set after a receipt lands, so without this the effect re-runs on any
+  // dependency change — including a parent re-render — and calls `onFunded`
+  // again for a transaction that was already handled.
+  const handled = useRef<string | null>(null);
+
   useEffect(() => {
     if (!isSuccess || !txHash) return;
+    if (handled.current === txHash) return;
+    handled.current = txHash;
     if (stage === "approve") {
-      void refetchAllowance();
-      setStage("buy");
-      reset();
+      // Await the refetch before leaving the approve stage. Firing it and
+      // moving on leaves `allowance` stale for a beat, during which the button
+      // still reads "Approve the payment token" against a granted allowance —
+      // and a user who takes it at its word signs a second, pointless approval.
+      void refetchAllowance().finally(() => {
+        setStage("buy");
+        reset();
+      });
     } else {
       onFunded(txHash);
     }
@@ -361,8 +374,15 @@ export function ConfirmOnChain({
   const { writeContract, data: txHash, isPending, error } = useWriteContract();
   const { isLoading: mining, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
 
+  // See FundEscrow: the receipt state is sticky, so the effect must remember
+  // which hash it has already reported rather than firing on every re-render.
+  const handled = useRef<string | null>(null);
+
   useEffect(() => {
-    if (isSuccess && txHash) onConfirmed(txHash);
+    if (!isSuccess || !txHash) return;
+    if (handled.current === txHash) return;
+    handled.current = txHash;
+    onConfirmed(txHash);
   }, [isSuccess, txHash, onConfirmed]);
 
   return (

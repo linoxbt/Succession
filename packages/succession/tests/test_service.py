@@ -21,16 +21,47 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
+#: The token the fixture configures. Mutating routes are gated, so the suite
+#: exercises the same authenticated path a deployed service uses rather than
+#: relying on the localhost exemption — TestClient is not on loopback anyway.
+TOKEN = "test-token-not-a-secret"
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("SUCCESSION_WORKDIR", str(tmp_path / "state"))
+    monkeypatch.setenv("SUCCESSION_API_TOKEN", TOKEN)
     for module in [m for m in list(sys.modules) if m.startswith("service")]:
         del sys.modules[module]
     from service.app import app
 
-    with TestClient(app) as c:
+    with TestClient(app, headers={"Authorization": f"Bearer {TOKEN}"}) as c:
         c.post("/api/demo/reset", json={}).raise_for_status()
         yield c
+
+
+def test_a_write_without_a_token_is_refused(client):
+    """The gate is real: same client, same route, no credential."""
+    response = client.post("/api/demo/reset", json={}, headers={"Authorization": ""})
+    assert response.status_code == 401
+
+
+def test_a_write_with_the_wrong_token_is_refused(client):
+    response = client.post(
+        "/api/demo/reset", json={}, headers={"Authorization": "Bearer wrong"}
+    )
+    assert response.status_code == 401
+
+
+def test_reads_do_not_require_a_token(client):
+    """The data room is public by design; only writes are gated."""
+    response = client.get("/api/listing/preview", headers={"Authorization": ""})
+    assert response.status_code == 200
+
+
+def test_a_malformed_buyer_address_is_rejected(client):
+    response = client.post("/api/listing/buy", json={"buyer_address": "not-an-address"})
+    assert response.status_code == 422
 
 
 def test_health(client):

@@ -13,7 +13,7 @@ and verified by the buyer re-hashing their own store.
 [Overview](#overview) · [How it works](#how-a-sale-works) · [Quick start](#quick-start) ·
 [Architecture](#architecture) · [Security](#security-model) · [Roadmap](docs/ROADMAP.md)
 
-`235 tests` · `Python 3.11+` · `Solidity 0.8.28` · `React 18`
+`248 tests` · `Python 3.11+` · `Solidity 0.8.28` · `React 18`
 
 </div>
 
@@ -86,7 +86,7 @@ git clone https://github.com/linoxbt/Succession && cd Succession
 
 python -m venv .venv
 .venv/bin/pip install -e "packages/succession[test,service,acp,chain]"
-.venv/bin/python -m pytest packages/succession/tests        # 235 tests
+.venv/bin/python -m pytest packages/succession/tests        # 248 tests
 
 ( cd contracts && npm install && npm run build )            # solc → artifacts
 .venv/bin/python -m succession.demo                         # the whole workflow
@@ -141,6 +141,7 @@ packages/succession/src/succession/
 └── memory/          the engine adapter — Sibyl is the reference implementation
 
 contracts/src/ListingContract.sol    escrow, atomic settlement, the sealed flag
+                                     one live listing per agent; cancel before escrow
 scripts/                             deploy, run N transfers, record a run
 service/                             FastAPI over the pipeline
 web/                                 landing page and operations console
@@ -303,6 +304,12 @@ bytes; it was the right to *be* that agent.
 - **`LocalSettlement` is not the contract.** It mirrors the state machine so the
   pipeline runs without a funded wallet. Substituting it for the chain in a demo
   would be exactly the dishonesty this project exists to avoid.
+- **The service gates writes, and that is all it gates.** With
+  `SUCCESSION_API_TOKEN` set, every mutating route needs a bearer token; unset,
+  it accepts writes from localhost and refuses them from anywhere else. Reads —
+  the data room, the marketplace — stay open, because they are meant to be. This
+  is an access gate, not accounts: there is still no notion of a *user*, which
+  is a P1 item and not a solved problem.
 - **Counterparty data is a real legal question.** Relationship records describe
   real people and companies, and a production version needs an actual answer to
   what terms let that data move with a sale, grounded in the operator's own
@@ -313,8 +320,8 @@ bytes; it was the right to *be* that agent.
 ## Testing
 
 ```bash
-.venv/bin/python -m pytest packages/succession/tests   # 235
-( cd contracts && forge test )                         # mirrored Foundry suite
+.venv/bin/python -m pytest packages/succession/tests   # 248
+( cd contracts && forge test )                         # 28, the mirrored Foundry suite
 ```
 
 | Suite | Covers |
@@ -325,7 +332,7 @@ bytes; it was the right to *be* that agent.
 | `test_seal` | Every write path gated; sealing is permanent and idempotent |
 | `test_dataroom` | The preview swept against every private string in the tenant |
 | `test_transfer` | Both refund paths; nothing half-written; the envelope |
-| `test_contract` | 23 tests against real compiled bytecode in py-evm |
+| `test_contract` | 27 tests against real compiled bytecode in py-evm |
 | `test_chain_transfer` | The whole pipeline settled on chain |
 | `test_acp` | Job history maths, memory sync, the valuation switch, the registration gate |
 | `test_agent` | Recall by name, by lane, and after a transfer |
@@ -336,7 +343,13 @@ bytes; it was the right to *be* that agent.
 
 Foundry is the contract toolchain; where `forge` cannot be installed,
 `contracts/compile.js` drives solc and the Python suite executes the same
-compiled bytecode.
+compiled bytecode. The Python suite rebuilds the artifacts itself when a `.sol`
+file is newer than the last build, so a stale `contracts/out` cannot make the
+contract look broken.
+
+Both suites cover the same scenarios and both are green. They are worth keeping
+that way in opposite directions: the Foundry suite catches what only a cheatcode
+can reach, and the py-evm suite is what runs where Foundry cannot be installed.
 
 ---
 

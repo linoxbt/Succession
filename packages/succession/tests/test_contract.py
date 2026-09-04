@@ -139,15 +139,60 @@ def test_an_attestation_from_the_wrong_key_is_rejected(env):
 
 
 def test_an_attestation_cannot_be_replayed_onto_another_listing(env):
-    """The digest binds the listing id, so a signature does not travel."""
+    """The digest binds the listing id, so a signature does not travel.
+
+    The first listing is cancelled so the agent is free again. Without that the
+    one-live-listing-per-agent guard rejects the second listing before the
+    attestation is ever recovered, and this test would pass for the wrong reason.
+    """
     first = make_listing(env)
     stolen = attest(env, first, COMMITMENT)
+    env["listings"].functions.cancel(first).transact({"from": env["seller"]})
 
     second = b"B" + b"\x00" * 31
     with reverts_with(env["listings"], "BadAttestation"):
         env["listings"].functions.list(
             second, AGENT_ID, COMMITMENT, PRICE, stolen
         ).transact({"from": env["seller"]})
+
+
+def test_an_agent_cannot_be_listed_twice_at_once(env):
+    """Two live listings for one agent would strand the second buyer's escrow."""
+    make_listing(env)
+    second = b"D" + b"\x00" * 31
+    with reverts_with(env["listings"], "AgentAlreadyListed"):
+        env["listings"].functions.list(
+            second, AGENT_ID, COMMITMENT, PRICE, attest(env, second, COMMITMENT)
+        ).transact({"from": env["seller"]})
+
+
+def test_cancel_withdraws_an_unfunded_listing_and_frees_the_agent(env):
+    first = make_listing(env)
+    env["listings"].functions.cancel(first).transact({"from": env["seller"]})
+    assert env["listings"].functions.getListing(first).call()[6] == 4  # Refunded
+    assert env["listings"].functions.activeListing(AGENT_ID).call() == b"\x00" * 32
+
+    second = b"E" + b"\x00" * 31
+    env["listings"].functions.list(
+        second, AGENT_ID, COMMITMENT, PRICE, attest(env, second, COMMITMENT)
+    ).transact({"from": env["seller"]})
+    assert env["listings"].functions.activeListing(AGENT_ID).call() == second
+
+
+def test_only_the_seller_may_cancel(env):
+    first = make_listing(env)
+    with reverts_with(env["listings"], "NotAuthorised"):
+        env["listings"].functions.cancel(first).transact({"from": env["stranger"]})
+
+
+def test_a_settled_agent_cannot_be_confirmed_again(env):
+    """The seal is checked at settlement, not only at listing time."""
+    listing_id = make_listing(env)
+    env["listings"].functions.buy(listing_id).transact({"from": env["buyer"]})
+    env["listings"].functions.confirmTransfer(listing_id, COMMITMENT).transact(
+        {"from": env["buyer"]}
+    )
+    assert env["listings"].functions.isSealed(AGENT_ID).call() is True
 
 
 def test_a_zero_commitment_is_rejected(env):

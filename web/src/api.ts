@@ -194,9 +194,3 @@ export function formatAmount(minorUnits: number, currency: string): string {
   })} ${currency}`;
 }
 
-export function abbreviate(value: string, head = 10, tail = 8): string {
-  if (!value) return "—";
-  return value.length <= head + tail + 1
-    ? value
-    : `${value.slice(0, head)}…${value.slice(-tail)}`;
-}

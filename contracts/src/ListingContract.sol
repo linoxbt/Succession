@@ -63,6 +63,11 @@ contract ListingContract {
         uint64 escrowDeadline;
         State state;
         bytes32 deliveredHash;
+        /// @dev What this listing's escrow actually received, measured as a
+        ///      balance delta rather than assumed from `price`. Payouts draw on
+        ///      this and never on the contract's total balance, so one listing
+        ///      can never be settled out of another listing's escrow.
+        uint256 escrowed;
     }
 
     struct Seal {
@@ -90,6 +95,14 @@ contract ListingContract {
     /// @notice Sealed agents, readable by the ACP registry or any future buyer.
     mapping(uint256 agentId => Seal) public seals;
 
+    /// @notice The open or escrowed listing for an agent, if it has one.
+    /// @dev Without this an agent could sit in two Open listings at once. Both
+    ///      buyers would fund escrow, the first to confirm would take the
+    ///      identity, and the second would revert inside the registry with their
+    ///      money stuck until the confirmation window elapsed. One live listing
+    ///      per agent makes that state unreachable rather than merely unlikely.
+    mapping(uint256 agentId => bytes32 listingId) public activeListing;
+
     // -----------------------------------------------------------------
     // Events
     // -----------------------------------------------------------------
@@ -111,6 +124,7 @@ contract ListingContract {
     );
     event Refunded(bytes32 indexed listingId, address indexed buyer, uint256 amount, string reason);
     event AgentSealed(uint256 indexed agentId, address indexed formerOwner, bytes32 verifiedHash);
+    event Cancelled(bytes32 indexed listingId, address indexed seller);
 
     // -----------------------------------------------------------------
     // Errors
@@ -129,6 +143,8 @@ contract ListingContract {
     error TransferFailed();
     error WindowNotElapsed();
     error AgentAlreadySealed();
+    error AgentAlreadyListed(bytes32 listingId);
+    error EscrowShortfall(uint256 expected, uint256 received);
 
     // -----------------------------------------------------------------
 
@@ -169,6 +185,9 @@ contract ListingContract {
         if (hashCommitment == bytes32(0)) revert ZeroCommitment();
         if (seals[agentId].sealed_) revert AgentAlreadySealed();
 
+        bytes32 live = activeListing[agentId];
+        if (live != bytes32(0)) revert AgentAlreadyListed(live);
+
         if (identityRegistry.ownerOf(agentId) != msg.sender) revert NotAgentOwner();
         if (
             identityRegistry.getApproved(agentId) != address(this)
@@ -187,10 +206,30 @@ contract ListingContract {
             price: price,
             escrowDeadline: 0,
             state: State.Open,
-            deliveredHash: bytes32(0)
+            deliveredHash: bytes32(0),
+            escrowed: 0
         });
+        activeListing[agentId] = listingId;
 
         emit Listed(listingId, msg.sender, agentId, hashCommitment, price);
+    }
+
+    /// @notice Withdraw a listing nobody has funded.
+    /// @dev Without this an Open listing is permanent: `refund` and
+    ///      `reclaimExpired` both require `Escrowed`, so a seller who changed
+    ///      their mind had no exit and the agent stayed locked out of any future
+    ///      listing. Only the seller may cancel, and only before escrow — once a
+    ///      buyer's money is in, abandoning the sale is `refund`, which pays them
+    ///      back.
+    function cancel(bytes32 listingId) external {
+        Listing storage listing = _get(listingId);
+        if (listing.state != State.Open) revert WrongState(State.Open, listing.state);
+        if (msg.sender != listing.seller) revert NotAuthorised();
+
+        listing.state = State.Refunded;
+        delete activeListing[listing.agentId];
+
+        emit Cancelled(listingId, msg.sender);
     }
 
     // -----------------------------------------------------------------
@@ -207,11 +246,21 @@ contract ListingContract {
         listing.state = State.Escrowed;
         listing.escrowDeadline = uint64(block.timestamp) + CONFIRMATION_WINDOW;
 
+        // Measure what actually arrived rather than trusting `price`. A
+        // fee-on-transfer or rebasing token delivers less than it is asked for,
+        // and a contract that assumed otherwise would later pay a seller out of
+        // some other listing's escrow. Rejecting the shortfall is the honest
+        // outcome: this contract promises the buyer pays exactly the asking
+        // price, and a token that cannot do that does not belong in a sale.
+        uint256 balanceBefore = paymentToken.balanceOf(address(this));
         if (!paymentToken.transferFrom(msg.sender, address(this), listing.price)) {
             revert TransferFailed();
         }
+        uint256 received = paymentToken.balanceOf(address(this)) - balanceBefore;
+        if (received != listing.price) revert EscrowShortfall(listing.price, received);
+        listing.escrowed = received;
 
-        emit Escrowed(listingId, msg.sender, listing.price);
+        emit Escrowed(listingId, msg.sender, received);
     }
 
     // -----------------------------------------------------------------
@@ -230,6 +279,10 @@ contract ListingContract {
         Listing storage listing = _get(listingId);
         if (listing.state != State.Escrowed) revert WrongState(State.Escrowed, listing.state);
         if (msg.sender != listing.buyer && msg.sender != arbiter) revert NotAuthorised();
+        // Defence in depth behind `activeListing`: an agent that is already
+        // sealed cannot be settled again, so a second sale fails here with a
+        // named error rather than deep inside the registry's `transferFrom`.
+        if (seals[listing.agentId].sealed_) revert AgentAlreadySealed();
 
         listing.deliveredHash = deliveredHash;
 
@@ -246,7 +299,11 @@ contract ListingContract {
         address seller = listing.seller;
         address buyer = listing.buyer;
         uint256 agentId = listing.agentId;
-        uint256 amount = listing.price;
+        // Pay out of this listing's own measured escrow, never the contract's
+        // pooled balance.
+        uint256 amount = listing.escrowed;
+        listing.escrowed = 0;
+        delete activeListing[agentId];
 
         seals[agentId] = Seal({
             sealed_: true,
@@ -294,7 +351,11 @@ contract ListingContract {
     function _refund(bytes32 listingId, Listing storage listing, string memory reason) private {
         listing.state = State.Refunded;
         address buyer = listing.buyer;
-        uint256 amount = listing.price;
+        // Return this listing's own escrow, and zero it before the transfer so a
+        // hostile token cannot re-enter into a second refund of the same money.
+        uint256 amount = listing.escrowed;
+        listing.escrowed = 0;
+        delete activeListing[listing.agentId];
         if (!paymentToken.transfer(buyer, amount)) revert TransferFailed();
         emit Refunded(listingId, buyer, amount, reason);
     }
@@ -353,7 +414,11 @@ contract ListingContract {
             s := calldataload(add(signature.offset, 32))
             v := byte(0, calldataload(add(signature.offset, 64)))
         }
-        if (v < 27) v += 27;
+        // One attestation, one byte encoding. Normalising a 0/1 `v` into 27/28
+        // would undo exactly what the low-s rule below buys: it would let the
+        // same signature be presented two ways. Every library that signs for
+        // this contract — eth-account, viem, and forge's `vm.sign` — already
+        // emits 27 or 28, so strictness costs nothing and closes the gap.
         if (v != 27 && v != 28) return address(0);
         // Reject the high-s half of the curve: every signature has a second,
         // equally valid encoding, and accepting both means one attestation has

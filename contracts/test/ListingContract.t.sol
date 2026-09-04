@@ -7,6 +7,7 @@ import {IERC20} from "../src/interfaces/IERC20.sol";
 import {IIdentityRegistry} from "../src/interfaces/IIdentityRegistry.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockIdentityRegistry} from "./mocks/MockIdentityRegistry.sol";
+import {FeeOnTransferToken} from "./mocks/FeeOnTransferToken.sol";
 
 /// @notice The Foundry suite. Mirrors packages/succession/tests/test_contract.py,
 ///         which executes the same compiled bytecode through py-evm where forge
@@ -57,9 +58,16 @@ contract ListingContractTest is Test {
         return abi.encodePacked(r, s, v);
     }
 
+    /// @dev Every attestation is built into a local *before* the cheatcode that
+    ///      follows it. `_attest` calls `listings.attestationDigest`, and an
+    ///      external call in an argument list is evaluated before the call it is
+    ///      an argument to — so building it inline would spend the `vm.prank` on
+    ///      the digest staticcall and leave `list` running as this test contract,
+    ///      or bind the `vm.expectRevert` to the staticcall instead of `list`.
     function _list() internal {
+        bytes memory attestation = _attest(LISTING_ID, COMMITMENT, sellerKey);
         vm.prank(seller);
-        listings.list(LISTING_ID, AGENT_ID, COMMITMENT, PRICE, _attest(LISTING_ID, COMMITMENT, sellerKey));
+        listings.list(LISTING_ID, AGENT_ID, COMMITMENT, PRICE, attestation);
     }
 
     function _escrow() internal {
@@ -81,44 +89,122 @@ contract ListingContractTest is Test {
     }
 
     function test_listRejectsANonOwner() public {
+        bytes memory attestation = _attest(LISTING_ID, COMMITMENT, sellerKey);
         vm.prank(stranger);
         vm.expectRevert(ListingContract.NotAgentOwner.selector);
-        listings.list(LISTING_ID, AGENT_ID, COMMITMENT, PRICE, _attest(LISTING_ID, COMMITMENT, sellerKey));
+        listings.list(LISTING_ID, AGENT_ID, COMMITMENT, PRICE, attestation);
     }
 
     function test_listRequiresRegistryApproval() public {
+        bytes memory attestation = _attest(LISTING_ID, COMMITMENT, sellerKey);
         vm.prank(seller);
         registry.approve(address(0), AGENT_ID);
         vm.prank(seller);
         vm.expectRevert(ListingContract.RegistryNotApproved.selector);
-        listings.list(LISTING_ID, AGENT_ID, COMMITMENT, PRICE, _attest(LISTING_ID, COMMITMENT, sellerKey));
+        listings.list(LISTING_ID, AGENT_ID, COMMITMENT, PRICE, attestation);
     }
 
     function test_listRejectsAForeignAttestation() public {
+        bytes memory attestation = _attest(LISTING_ID, COMMITMENT, 0xBADBAD);
         vm.prank(seller);
         vm.expectRevert(ListingContract.BadAttestation.selector);
-        listings.list(LISTING_ID, AGENT_ID, COMMITMENT, PRICE, _attest(LISTING_ID, COMMITMENT, 0xBADBAD));
+        listings.list(LISTING_ID, AGENT_ID, COMMITMENT, PRICE, attestation);
     }
 
+    /// @dev The first listing is cancelled so the agent is free again; without
+    ///      that, `AgentAlreadyListed` fires first and the attestation check —
+    ///      the thing this test exists to cover — is never reached.
     function test_anAttestationDoesNotReplayOntoAnotherListing() public {
         _list();
+        vm.prank(seller);
+        listings.cancel(LISTING_ID);
+
         bytes32 second = bytes32("listing-second");
+        bytes memory attestation = _attest(LISTING_ID, COMMITMENT, sellerKey);
         vm.prank(seller);
         vm.expectRevert(ListingContract.BadAttestation.selector);
-        listings.list(second, AGENT_ID, COMMITMENT, PRICE, _attest(LISTING_ID, COMMITMENT, sellerKey));
+        listings.list(second, AGENT_ID, COMMITMENT, PRICE, attestation);
     }
 
     function test_listRejectsAZeroCommitment() public {
+        bytes memory attestation = _attest(LISTING_ID, bytes32(0), sellerKey);
         vm.prank(seller);
         vm.expectRevert(ListingContract.ZeroCommitment.selector);
-        listings.list(LISTING_ID, AGENT_ID, bytes32(0), PRICE, _attest(LISTING_ID, bytes32(0), sellerKey));
+        listings.list(LISTING_ID, AGENT_ID, bytes32(0), PRICE, attestation);
     }
 
     function test_listRejectsADuplicateId() public {
         _list();
+        bytes memory attestation = _attest(LISTING_ID, COMMITMENT, sellerKey);
         vm.prank(seller);
         vm.expectRevert(ListingContract.ListingExists.selector);
-        listings.list(LISTING_ID, AGENT_ID, COMMITMENT, PRICE, _attest(LISTING_ID, COMMITMENT, sellerKey));
+        listings.list(LISTING_ID, AGENT_ID, COMMITMENT, PRICE, attestation);
+    }
+
+    function test_anAgentCannotBeListedTwiceAtOnce() public {
+        _list();
+        bytes32 second = bytes32("listing-second");
+        bytes memory attestation = _attest(second, COMMITMENT, sellerKey);
+        vm.prank(seller);
+        vm.expectRevert(
+            abi.encodeWithSelector(ListingContract.AgentAlreadyListed.selector, LISTING_ID)
+        );
+        listings.list(second, AGENT_ID, COMMITMENT, PRICE, attestation);
+    }
+
+    function test_theSellerCanCancelAnUnfundedListing() public {
+        _list();
+        vm.prank(seller);
+        listings.cancel(LISTING_ID);
+        assertEq(
+            uint8(listings.getListing(LISTING_ID).state), uint8(ListingContract.State.Refunded)
+        );
+        assertEq(listings.activeListing(AGENT_ID), bytes32(0));
+    }
+
+    function test_cancellingFreesTheAgentToBeRelisted() public {
+        _list();
+        vm.prank(seller);
+        listings.cancel(LISTING_ID);
+
+        bytes32 second = bytes32("listing-second");
+        bytes memory attestation = _attest(second, COMMITMENT, sellerKey);
+        vm.prank(seller);
+        listings.list(second, AGENT_ID, COMMITMENT, PRICE, attestation);
+        assertEq(listings.activeListing(AGENT_ID), second);
+    }
+
+    function test_onlyTheSellerMayCancel() public {
+        _list();
+        vm.prank(stranger);
+        vm.expectRevert(ListingContract.NotAuthorised.selector);
+        listings.cancel(LISTING_ID);
+    }
+
+    function test_aFundedListingCannotBeCancelled() public {
+        _escrow();
+        vm.prank(seller);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ListingContract.WrongState.selector,
+                ListingContract.State.Open,
+                ListingContract.State.Escrowed
+            )
+        );
+        listings.cancel(LISTING_ID);
+    }
+
+    function test_aRefundFreesTheAgentToBeRelisted() public {
+        _escrow();
+        vm.prank(seller);
+        listings.refund(LISTING_ID, "seller withdrew");
+        assertEq(listings.activeListing(AGENT_ID), bytes32(0));
+
+        bytes32 second = bytes32("listing-second");
+        bytes memory attestation = _attest(second, COMMITMENT, sellerKey);
+        vm.prank(seller);
+        listings.list(second, AGENT_ID, COMMITMENT, PRICE, attestation);
+        assertEq(listings.activeListing(AGENT_ID), second);
     }
 
     // -- escrow -----------------------------------------------------------
@@ -140,6 +226,73 @@ contract ListingContractTest is Test {
         vm.prank(seller);
         vm.expectRevert(ListingContract.SelfPurchase.selector);
         listings.buy(LISTING_ID);
+    }
+
+    function test_aFeeTakingTokenIsRejectedRatherThanShortingTheSeller() public {
+        FeeOnTransferToken fee = new FeeOnTransferToken();
+        MockIdentityRegistry reg = new MockIdentityRegistry();
+        ListingContract lc = new ListingContract(
+            IERC20(address(fee)), IIdentityRegistry(address(reg)), arbiter
+        );
+        reg.register(seller, AGENT_ID, AGENT_URI);
+        vm.prank(seller);
+        reg.approve(address(lc), AGENT_ID);
+        fee.mint(buyer, PRICE * 2);
+        vm.prank(buyer);
+        fee.approve(address(lc), PRICE * 2);
+
+        bytes32 digest = lc.attestationDigest(LISTING_ID, AGENT_ID, COMMITMENT);
+        bytes32 prefixed =
+            keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", digest));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(sellerKey, prefixed);
+        vm.prank(seller);
+        lc.list(LISTING_ID, AGENT_ID, COMMITMENT, PRICE, abi.encodePacked(r, s, v));
+
+        vm.prank(buyer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ListingContract.EscrowShortfall.selector, PRICE, PRICE - (PRICE / 100)
+            )
+        );
+        lc.buy(LISTING_ID);
+    }
+
+    function test_oneListingIsNeverSettledOutOfAnothersEscrow() public {
+        // A second agent, a second buyer, a second escrow — settling the first
+        // must leave the second's money untouched.
+        uint256 otherAgent = 999;
+        address otherBuyer = address(0xB0B2);
+        registry.register(seller, otherAgent, AGENT_URI);
+        vm.prank(seller);
+        registry.approve(address(listings), otherAgent);
+        token.mint(otherBuyer, PRICE);
+        vm.prank(otherBuyer);
+        token.approve(address(listings), PRICE);
+
+        _escrow();
+
+        bytes32 second = bytes32("listing-other");
+        bytes32 digest = listings.attestationDigest(second, otherAgent, COMMITMENT);
+        bytes32 prefixed =
+            keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", digest));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(sellerKey, prefixed);
+        vm.prank(seller);
+        listings.list(second, otherAgent, COMMITMENT, PRICE, abi.encodePacked(r, s, v));
+        vm.prank(otherBuyer);
+        listings.buy(second);
+
+        assertEq(token.balanceOf(address(listings)), PRICE * 2);
+
+        vm.prank(buyer);
+        listings.confirmTransfer(LISTING_ID, COMMITMENT);
+
+        // The other listing's escrow is still whole and still refundable.
+        assertEq(token.balanceOf(address(listings)), PRICE);
+        uint256 before = token.balanceOf(otherBuyer);
+        vm.prank(otherBuyer);
+        listings.refund(second, "changed my mind");
+        assertEq(token.balanceOf(otherBuyer), before + PRICE);
+        assertEq(token.balanceOf(address(listings)), 0);
     }
 
     // -- settlement -------------------------------------------------------
@@ -211,9 +364,10 @@ contract ListingContractTest is Test {
         vm.prank(buyer);
         registry.approve(address(listings), AGENT_ID);
         bytes32 second = bytes32("listing-second");
+        bytes memory attestation = _attest(second, COMMITMENT, sellerKey);
         vm.prank(buyer);
         vm.expectRevert(ListingContract.AgentAlreadySealed.selector);
-        listings.list(second, AGENT_ID, COMMITMENT, PRICE, _attest(second, COMMITMENT, sellerKey));
+        listings.list(second, AGENT_ID, COMMITMENT, PRICE, attestation);
     }
 
     // -- refunds ----------------------------------------------------------

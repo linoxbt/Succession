@@ -23,10 +23,11 @@ never the bytes; it was the right to *be* that agent, and that is what moves.
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 __all__ = ["TenantSealed", "SealRegistry", "GuardedMemory", "guard"]
 
@@ -92,10 +93,20 @@ class SealRegistry:
         with self._conn() as conn:
             conn.executescript(_SCHEMA)
 
-    def _conn(self) -> sqlite3.Connection:
+    @contextmanager
+    def _conn(self) -> Iterator[sqlite3.Connection]:
+        """A connection that is closed when the block ends, not merely committed.
+
+        ``with sqlite3.connect(...)`` commits on exit and leaves the handle open;
+        the seal registry is read on every guarded write, so leaking one per call
+        is a steady drip. Autocommit mode means nothing is lost by closing.
+        """
         conn = sqlite3.connect(self.db_path, isolation_level=None)
         conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def seal(
         self,

@@ -73,8 +73,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: foundry-rs/foundry-toolchain@v1
+      # `--no-commit` was removed in Foundry 1.x, so this call had been failing
+      # and `|| true` was swallowing it — forge-std never installed, and the
+      # build that followed could not have compiled. Let it fail loudly instead.
       - name: Install forge-std
-        run: forge install foundry-rs/forge-std --no-git --no-commit || true
+        run: forge install foundry-rs/forge-std --no-git
         working-directory: contracts
       - name: Build and test
         working-directory: contracts

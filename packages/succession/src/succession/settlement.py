@@ -40,11 +40,12 @@ and the identity on different sides, because they moved together.
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Iterator, Protocol, runtime_checkable
 
 from eth_utils import to_checksum_address
 
@@ -156,6 +157,7 @@ class SettlementBackend(Protocol):
         caller: str | None = None,
     ) -> SettlementReceipt: ...
     def refund(self, listing_id: str, *, reason: str) -> SettlementReceipt: ...
+    def cancel(self, listing_id: str, *, seller: str | None = None) -> Listing: ...
 
 
 def _now() -> str:
@@ -212,10 +214,23 @@ class LocalSettlement:
         with self._conn() as conn:
             conn.executescript(_SCHEMA)
 
-    def _conn(self) -> sqlite3.Connection:
+    @contextmanager
+    def _conn(self) -> Iterator[sqlite3.Connection]:
+        """A connection that is actually closed when the block ends.
+
+        ``with sqlite3.connect(...) as conn`` commits; it does *not* close. Every
+        call here opens a file handle, and returning the bare connection left
+        them to accumulate until the garbage collector happened to run — fine in
+        a test, an fd leak in a long-lived service. The connection is in
+        autocommit mode (``isolation_level=None``), so each statement is durable
+        on execution and there is no transaction for the close to discard.
+        """
         conn = sqlite3.connect(self.db_path, isolation_level=None)
         conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     # -- listing -------------------------------------------------------
 
@@ -279,6 +294,11 @@ class LocalSettlement:
             ).fetchone()
         if row is None:
             raise SettlementError(f"no such listing: {listing_id!r}")
+        return self._from_row(row)
+
+    @staticmethod
+    def _from_row(row: sqlite3.Row) -> Listing:
+        """One row to one Listing. Shared so ``get`` and ``list_all`` cannot drift."""
         return Listing(
             listing_id=row["listing_id"],
             agent_id=row["agent_id"],
@@ -299,14 +319,17 @@ class LocalSettlement:
         )
 
     def list_all(self) -> list[Listing]:
+        """Every listing, newest first.
+
+        One query and one connection. Selecting the ids and then calling
+        ``get`` per id was a query and a fresh connection per row — invisible at
+        six listings, and the marketplace route's whole cost at six hundred.
+        """
         with self._conn() as conn:
-            ids = [
-                r["listing_id"]
-                for r in conn.execute(
-                    "SELECT listing_id FROM listings ORDER BY created_at DESC"
-                ).fetchall()
-            ]
-        return [self.get(i) for i in ids]
+            rows = conn.execute(
+                "SELECT * FROM listings ORDER BY created_at DESC"
+            ).fetchall()
+        return [self._from_row(row) for row in rows]
 
     # -- escrow --------------------------------------------------------
 
@@ -324,7 +347,7 @@ class LocalSettlement:
         if buyer_addr == listing.seller:
             raise SettlementError("seller cannot buy their own listing")
         with self._conn() as conn:
-            conn.execute(
+            cur = conn.execute(
                 "UPDATE listings SET state = ?, buyer = ?, escrow_balance = ? "
                 "WHERE listing_id = ? AND state = ?",
                 (
@@ -335,6 +358,41 @@ class LocalSettlement:
                     ListingState.OPEN.value,
                 ),
             )
+            if cur.rowcount != 1:
+                # The state guard in the WHERE clause did the right thing, but
+                # saying nothing about it would be worse than not guarding: the
+                # read below would return the listing as *someone else* bought
+                # it, and this caller would be told their purchase succeeded.
+                # ``confirm_transfer`` has always checked this; ``buy`` did not.
+                raise SettlementError(
+                    f"listing {listing_id!r} was taken during the purchase"
+                )
+        return self.get(listing_id)
+
+    def cancel(self, listing_id: str, *, seller: str | None = None) -> Listing:
+        """Withdraw a listing nobody has funded. Mirrors ``ListingContract.cancel``.
+
+        Only from ``OPEN``: once escrow is funded, abandoning the sale is
+        ``refund``, which returns the buyer's money. ``seller`` is checked when
+        given, the way the contract checks ``msg.sender``.
+        """
+        listing = self.get(listing_id)
+        if listing.state is not ListingState.OPEN:
+            raise SettlementError(
+                f"listing {listing_id!r} is {listing.state.value}, not open"
+            )
+        if seller is not None and to_checksum_address(seller) != listing.seller:
+            raise SettlementError("only the seller may cancel a listing")
+
+        with self._conn() as conn:
+            cur = conn.execute(
+                "UPDATE listings SET state = ? WHERE listing_id = ? AND state = ?",
+                (ListingState.REFUNDED.value, listing_id, ListingState.OPEN.value),
+            )
+            if cur.rowcount != 1:
+                raise SettlementError(
+                    f"listing {listing_id!r} changed state during cancellation"
+                )
         return self.get(listing_id)
 
     # -- settlement ----------------------------------------------------

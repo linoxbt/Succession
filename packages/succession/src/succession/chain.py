@@ -137,7 +137,13 @@ class ChainSettlement:
         tx = fn.build_transaction(
             {
                 "from": sender,
-                "nonce": self.w3.eth.get_transaction_count(sender),
+                # "pending" counts transactions this sender has in the mempool
+                # as well as those already mined. Every send here waits for its
+                # receipt, so "latest" was correct in practice — but a second
+                # backend sharing this key, or any future concurrency, would
+                # build two transactions on the same nonce and one would be
+                # dropped. Asking for pending costs nothing and removes the trap.
+                "nonce": self.w3.eth.get_transaction_count(sender, "pending"),
                 "chainId": self.w3.eth.chain_id,
             }
         )
@@ -214,7 +220,20 @@ class ChainSettlement:
         except Exception as exc:  # noqa: BLE001 - the revert means "no such listing"
             raise SettlementError(f"no such listing: {listing_id!r} ({exc})") from exc
 
-        seller, buyer, agent_id, commitment, price, _deadline, state, delivered = raw
+        # Unpacked positionally, so the order here is the struct's order in
+        # ListingContract.sol. `escrowed` is last and was added after the rest;
+        # a field appended there is invisible to this line until it is named.
+        (
+            seller,
+            buyer,
+            agent_id,
+            commitment,
+            price,
+            _deadline,
+            state,
+            delivered,
+            escrowed,
+        ) = raw
         return Listing(
             listing_id=listing_id,
             agent_id=str(agent_id),
@@ -224,7 +243,9 @@ class ChainSettlement:
             price=int(price),
             state=_STATES[int(state)] or ListingState.OPEN,
             buyer="" if int(buyer, 16) == 0 else buyer,
-            escrow_balance=int(price) if _STATES[int(state)] is ListingState.ESCROWED else 0,
+            # What the contract actually holds for this listing, not what it was
+            # asked for — the two differ if a token ever shorts the transfer.
+            escrow_balance=int(escrowed),
             delivered_hash=to_hex(delivered) if int.from_bytes(delivered, "big") else "",
             sealed=bool(self.contract.functions.isSealed(int(agent_id)).call()),
         )
@@ -300,6 +321,19 @@ class ChainSettlement:
             listing.buyer or listing.seller,
         )
         return self._receipt_from_logs(listing, receipt)
+
+    def cancel(self, listing_id: str, *, seller: str | None = None) -> Listing:
+        """Withdraw an unfunded listing. Mirrors ``LocalSettlement.cancel``.
+
+        No receipt: nothing settled and no money moved, so there is nothing to
+        record beyond the listing's new state.
+        """
+        listing = self.get(listing_id)
+        self._send(
+            self.contract.functions.cancel(listing_id_to_bytes32(listing_id)),
+            seller or listing.seller,
+        )
+        return self.get(listing_id)
 
     def _receipt_from_logs(
         self, listing: Listing, receipt: Any, *, confirmed_by: str = "buyer"

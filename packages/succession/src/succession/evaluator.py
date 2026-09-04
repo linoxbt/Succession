@@ -130,7 +130,14 @@ class Verdict:
 
     @property
     def verified(self) -> bool:
-        return all(f.passed for f in self.findings)
+        """True only when checks were actually run and all of them passed.
+
+        ``all(())`` is ``True``, so without the emptiness test a verdict that
+        checked nothing would report itself verified — the single most dangerous
+        default available to this class, since a verdict is evidence a buyer is
+        meant to be able to rely on.
+        """
+        return bool(self.findings) and all(f.passed for f in self.findings)
 
     @property
     def failures(self) -> tuple[Finding, ...]:

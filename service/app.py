@@ -17,9 +17,13 @@ import os
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from secrets import compare_digest
+
+from eth_utils import to_checksum_address
+from sibyl_memory_client import NotFoundError
 
 from succession.agent import Agent
 from succession.catalog import CATALOG, NOW, seed_archetype
@@ -33,6 +37,29 @@ from succession.valuation import value_tenant
 
 WORKDIR = Path(os.environ.get("SUCCESSION_WORKDIR", "demo-state"))
 LISTING_ID = os.environ.get("SUCCESSION_LISTING_ID", "listing-0417")
+
+def api_token() -> str:
+    """Bearer token for every route that changes state, read per request.
+
+    Read at call time rather than captured at import, for the same reason
+    :func:`_deployment` is: configuration can arrive after the module loads, and
+    a value frozen at import would keep reporting whatever was true then.
+    """
+    return os.environ.get("SUCCESSION_API_TOKEN", "")
+
+#: Origins allowed to call this service cross-origin, comma-separated. The Vite
+#: dev server is always allowed; a deployed frontend has to name itself, because
+#: a wildcard here would let any page drive someone else's running service.
+ALLOWED_ORIGINS = tuple(
+    o.strip()
+    for o in os.environ.get(
+        "SUCCESSION_ALLOWED_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if o.strip()
+)
+
+_LOOPBACK = frozenset({"127.0.0.1", "::1", "localhost"})
 
 #: What the featured seller asks against their own reference valuation.
 FEATURED_ASK_RATIO = os.environ.get("SUCCESSION_ASK_RATIO", "1.12")
@@ -51,10 +78,49 @@ BUYER_TENANT = "tenant-buyer"
 app = FastAPI(title="Succession", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=list(ALLOWED_ORIGINS),
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def require_write_access(request: Request) -> None:
+    """Gate every route that changes state.
+
+    ``POST /api/demo/reset`` deletes the working directory, and the transfer
+    routes move an asset. Leaving them open was survivable only because nothing
+    was ever deployed; the moment this runs anywhere reachable, anyone can wipe
+    it. The rule:
+
+    * ``SUCCESSION_API_TOKEN`` set — a matching bearer token is required, from
+      anywhere, including localhost.
+    * Unset, request from loopback — allowed, so ``uvicorn`` plus the Vite dev
+      server keeps working with no configuration.
+    * Unset, request from anywhere else — refused, with the fix in the message.
+
+    The default is the safe one, which is the point: a service deployed without
+    a token does not quietly accept writes from the internet.
+    """
+    token = api_token()
+    if token:
+        header = request.headers.get("authorization", "")
+        scheme, _, presented = header.partition(" ")
+        if scheme.lower() != "bearer" or not compare_digest(presented, token):
+            raise HTTPException(401, "a valid bearer token is required")
+        return
+
+    client = request.client.host if request.client else ""
+    if client not in _LOOPBACK:
+        raise HTTPException(
+            403,
+            "this service accepts writes from localhost only; set "
+            "SUCCESSION_API_TOKEN and send it as a bearer token to allow "
+            "remote access",
+        )
+
+
+#: Applied to every mutating route.
+WRITE = [Depends(require_write_access)]
 
 
 # --- state ---------------------------------------------------------------
@@ -72,6 +138,8 @@ class Store:
         self.listed: dict[str, Any] = {}
         # Which tenant backs which listing, so a marketplace row can be opened.
         self.tenants: dict[str, str] = {}
+        self._settlement: LocalSettlement | None = None
+        self._seals: SealRegistry | None = None
 
     @property
     def featured(self) -> Any:
@@ -80,11 +148,28 @@ class Store:
 
     @property
     def settlement(self) -> LocalSettlement:
-        return LocalSettlement(self.workdir / "settlement.db")
+        """The settlement store, built once.
+
+        Constructing one runs ``CREATE TABLE IF NOT EXISTS`` over the whole
+        schema, and this was a property that built a fresh instance on every
+        access — twice in a single expression on the buy route. The object holds
+        a path and opens a connection per call, so one instance is safe to keep;
+        ``reset`` drops it because it deletes the file underneath.
+        """
+        if self._settlement is None:
+            self._settlement = LocalSettlement(self.workdir / "settlement.db")
+        return self._settlement
 
     @property
     def seals(self) -> SealRegistry:
-        return SealRegistry(self.workdir / "seals.db")
+        if self._seals is None:
+            self._seals = SealRegistry(self.workdir / "seals.db")
+        return self._seals
+
+    def forget(self) -> None:
+        """Drop cached handles whose backing files have been removed."""
+        self._settlement = None
+        self._seals = None
 
     def seller(self):
         return open_tenant(self.workdir / "seller.db", SELLER_TENANT)
@@ -119,6 +204,19 @@ class ResetRequest(BaseModel):
 class BuyRequest(BaseModel):
     buyer_address: str = BUYER.address
 
+    @field_validator("buyer_address")
+    @classmethod
+    def _must_be_an_address(cls, value: str) -> str:
+        """Reject a non-address here rather than 500 deep in the settlement layer.
+
+        ``to_checksum_address`` raises on anything malformed, which surfaced as
+        an unhandled server error. A 422 naming the field is the honest answer.
+        """
+        try:
+            return to_checksum_address(value)
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f"not a valid EVM address: {value!r}") from exc
+
 
 class MessageRequest(BaseModel):
     message: str
@@ -133,7 +231,7 @@ class WriteAttemptRequest(BaseModel):
 # --- routes --------------------------------------------------------------
 
 
-@app.post("/api/demo/reset")
+@app.post("/api/demo/reset", dependencies=WRITE)
 def reset(request: ResetRequest) -> dict[str, Any]:
     """Wipe state, seed every agent, and post the whole marketplace.
 
@@ -152,6 +250,10 @@ def reset(request: ResetRequest) -> dict[str, Any]:
         shutil.rmtree(STORE.workdir)
     STORE.workdir.mkdir(parents=True, exist_ok=True)
     STORE.listed, STORE.tenants = {}, {}
+    # The settlement and seal databases were just deleted with the workdir; the
+    # cached handles point at files that no longer exist and no longer carry a
+    # schema, so they have to be rebuilt rather than reused.
+    STORE.forget()
 
     # The featured listing — the one the transfer walkthrough acts on.
     seller = STORE.seller()
@@ -197,6 +299,22 @@ def reset(request: ResetRequest) -> dict[str, Any]:
     }
 
 
+def _featured_identity() -> tuple[str, str]:
+    """The featured agent's ``(vertical, name)``, from its own identity record.
+
+    Falls back to empty strings rather than inventing a label: a missing record
+    means the tenant was not seeded, and a placeholder would misreport that as a
+    real agent.
+    """
+    try:
+        body = STORE.seller().client.get_entity("identity", SELLER.agent_id)["body"]
+    except (NotFoundError, KeyError):
+        return "", ""
+    role = str(body.get("role", ""))
+    # "Freight brokerage agent" -> "Freight"; the vertical is the leading word.
+    return role.split(" ")[0] if role else "", str(body.get("name", ""))
+
+
 @app.get("/api/marketplace")
 def marketplace() -> dict[str, Any]:
     """Every listing, with its computed preview.
@@ -212,9 +330,15 @@ def marketplace() -> dict[str, Any]:
         held = STORE.listed.get(listing.listing_id)
         if held is None:
             continue
-        vertical, name = "Freight", "Meridian Logistics Co."
         tenant = STORE.tenants.get(listing.listing_id, "")
-        if tenant.startswith("tenant-") and tenant != SELLER_TENANT:
+        if tenant == SELLER_TENANT:
+            # Read the featured agent's name and role out of its own identity
+            # record rather than writing them down here. Every other row on this
+            # screen is computed from the store it describes, and a hardcoded
+            # pair would be the one line on the marketplace that is not.
+            vertical, name = _featured_identity()
+        else:
+            vertical, name = "", ""
             try:
                 a = archetype_by_slug(tenant.removeprefix("tenant-"))
                 vertical, name = a.vertical, a.name
@@ -250,7 +374,7 @@ def preview() -> dict[str, Any]:
     return STORE.featured.preview.to_dict()
 
 
-@app.post("/api/listing/buy")
+@app.post("/api/listing/buy", dependencies=WRITE)
 def buy(request: BuyRequest) -> dict[str, Any]:
     try:
         record = STORE.settlement.buy(
@@ -261,7 +385,7 @@ def buy(request: BuyRequest) -> dict[str, Any]:
     return record.to_dict()
 
 
-@app.post("/api/listing/transfer")
+@app.post("/api/listing/transfer", dependencies=WRITE)
 def transfer() -> dict[str, Any]:
     """Deliver, re-key, verify, settle, seal, and record."""
     if STORE.featured is None:
@@ -334,7 +458,7 @@ def seal_status(tenant_id: str) -> dict[str, Any]:
             "record": record.to_dict() if record else None}
 
 
-@app.post("/api/seller/write-attempt")
+@app.post("/api/seller/write-attempt", dependencies=WRITE)
 def seller_write_attempt(request: WriteAttemptRequest) -> dict[str, Any]:
     """Try to write to the seller's tenant. After a sale this must be rejected.
 
@@ -353,7 +477,7 @@ def seller_write_attempt(request: WriteAttemptRequest) -> dict[str, Any]:
     }
 
 
-@app.post("/api/agent/{side}/message")
+@app.post("/api/agent/{side}/message", dependencies=WRITE)
 def agent_message(side: str, request: MessageRequest) -> dict[str, Any]:
     """The chat view, for either agent."""
     if side == "seller":
@@ -377,10 +501,20 @@ def agent_message(side: str, request: MessageRequest) -> dict[str, Any]:
 
 @app.get("/api/agent/{side}/provenance")
 def agent_provenance(side: str) -> dict[str, Any]:
+    """The acquisition record, if this agent was bought.
+
+    Absence is a 404 — an agent that was never acquired has no record, and that
+    is a real answer rather than a failure. Anything *other* than absence is a
+    500: catching every exception here meant a locked database, a corrupt store
+    or a plain bug all reported as "no such record", which is the one shape of
+    error that looks like normal operation and so never gets investigated.
+    """
+    if side not in ("seller", "buyer"):
+        raise HTTPException(404, "side must be 'seller' or 'buyer'")
     memory = STORE.buyer() if side == "buyer" else STORE.seller()
     try:
         return memory.client.get_entity("provenance", "acquisition")["body"]
-    except Exception:  # noqa: BLE001 - absence is the meaningful answer here
+    except NotFoundError:
         raise HTTPException(404, "no acquisition record for this agent") from None
 
 

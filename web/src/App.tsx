@@ -137,19 +137,34 @@ function Surface() {
       setSealed(null);
     });
 
-  const onBuy = () =>
-    guard(async () => {
-      setListing(await backend.buy());
-    });
+  // Memoized because both are passed to wallet components that hold them in a
+  // useEffect dependency array. A fresh identity each render would re-fire that
+  // effect, which calls back into these, which set state, which renders again —
+  // an unbounded loop of settlement calls the moment a transaction confirms.
+  const onBuy = useCallback(
+    () =>
+      guard(async () => {
+        setListing(await backend.buy());
+      }),
+    [guard, backend],
+  );
 
-  const onSettle = () =>
-    guard(async () => {
-      const result = await backend.transfer();
-      setOutcome(result);
-      const seal = await backend.seal("tenant-seller");
-      setSealed({ sealed: seal.sealed, at: seal.record?.sealed_at ?? "" });
-      setListing(await backend.listing().catch(() => listing));
-    });
+  const onSettle = useCallback(
+    () =>
+      guard(async () => {
+        const result = await backend.transfer();
+        setOutcome(result);
+        const seal = await backend.seal("tenant-seller");
+        setSealed({ sealed: seal.sealed, at: seal.record?.sealed_at ?? "" });
+        // Keep whatever we already have if the re-read fails, rather than
+        // blanking a listing that just settled. Read through the setter so this
+        // does not close over `listing` — capturing it would put a
+        // render-changing value back in the dependency array.
+        const refreshed = await backend.listing().catch(() => null);
+        if (refreshed) setListing(refreshed);
+      }),
+    [guard, backend],
+  );
 
   if (route === "landing") {
     return (

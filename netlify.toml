@@ -40,8 +40,19 @@
     Permissions-Policy     = "camera=(), microphone=(), geolocation=(), payment=()"
     # The app loads its own bundle, Google Fonts, and its own JSON. Nothing
     # else, and no inline script — so a supply-chain injection has nowhere to
-    # call home. connect-src keeps 'self' for the /api proxy above.
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
+    # call home.
+    #
+    # connect-src is 'self' for the /api proxy above, plus the two things a
+    # browser wallet genuinely has to reach: the Base Sepolia JSON-RPC that
+    # wagmi's http() transport calls, and Base Account's key service. Without
+    # them every on-chain action fails silently in the console — the page looks
+    # fine and the button does nothing, which is the worst way for this to
+    # break. frame-src is listed for the same reason: Base Account signs in a
+    # popup, and default-src would otherwise block it.
+    #
+    # If VITE_BASE_SEPOLIA_RPC_URL points somewhere else, add that host here too
+    # — the allowlist has to name it, the build variable is not enough.
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://sepolia.base.org https://*.base.org https://keys.coinbase.com https://*.coinbase.com wss://*.coinbase.com; frame-src 'self' https://keys.coinbase.com; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
 
 # Hashed bundle filenames are content-addressed, so they can be cached forever.
 [[headers]]

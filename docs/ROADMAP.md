@@ -49,9 +49,9 @@ preflight checks.
 
 ### Security
 
-- [ ] **Third-party contract audit.** `ListingContract` has 23 EVM tests and a
-      fuzz case, which is not an audit. Custody code that has not been audited
-      should not hold anyone's money.
+- [ ] **Third-party contract audit.** `ListingContract` has 27 py-evm tests, 28
+      Foundry tests and a fuzz case, which is not an audit. Custody code that has
+      not been audited should not hold anyone's money.
 - [ ] **Key management.** Signing keys are read from the environment. Production
       needs a KMS or HSM, per-agent key isolation, and rotation without
       invalidating historical provenance signatures.
@@ -59,8 +59,15 @@ preflight checks.
       tests and offline development; a config that silently falls back to it
       would report settled sales that never touched a chain. Make the fallback
       impossible rather than discouraged.
-- [ ] **Rate-limit and authenticate the service.** `service/app.py` has no auth
-      at all — every route is open, including `POST /api/demo/reset`.
+- [x] **Authenticate the service.** Done, narrowly: every mutating route is
+      behind `require_write_access`. With `SUCCESSION_API_TOKEN` set it requires
+      a bearer token; unset, it serves writes to localhost only and refuses them
+      from anywhere else, so a deployed service cannot be written to by default.
+      Reads stay open by design.
+- [ ] **Rate-limit the service.** Still absent. The auth gate bounds *who* can
+      write, not how often, and `POST /api/demo/reset` is expensive.
+- [ ] **Real authentication and accounts.** The gate above is a shared secret,
+      not a user model — see Product below.
 - [ ] **Content-key custody.** The key currently lives in the listing process's
       memory. It needs escrowing somewhere durable that still cannot release it
       before escrow funds, and a defined recovery path when the seller's process
@@ -190,12 +197,29 @@ Small, specific, and worth writing down before it is forgotten.
       `GET /api/listing/outcome`.
 - [ ] The recorded-run artifact is regenerated manually. It should be a CI step,
       so it cannot drift from the pipeline it claims to record.
+- [ ] `npm audit` reports three findings in `web` and two in `contracts`, all in
+      build tooling (vite, esbuild, postcss, solc). `npm audit --omit=dev` is
+      clean, so none of them reach a browser. Clearing them needs
+      `npm audit fix --force`, which is a major version bump of the build chain;
+      deliberately deferred rather than done days before a deadline, and worth
+      doing immediately after.
+- [ ] The service must run with a single worker: envelopes and content keys are
+      held in process memory by design, so a second worker serves 409s for a
+      listing it cannot see. Documented in `service/README.md`; the real fix is
+      the durable envelope storage above.
 - [ ] `contracts/compile.js` exists because Foundry could not be installed in the
-      build environment. Once CI runs `forge`, one of the two paths should go.
+      build environment. Both toolchains now run green in CI, so one of the two
+      paths could go — but the py-evm suite is what executes where Foundry is
+      unavailable, and the Foundry suite reaches things only a cheatcode can, so
+      keeping both is a deliberate cost rather than an oversight.
 - [ ] The agent's stopword list is hand-maintained. It works for freight; another
       domain would want a different one, or none.
 - [ ] `_prune_dangling_relations` is O(n) per record against a set built each
       call. Fine at 49 records, not at 49,000.
+- [ ] The wallet stack is its own bundle chunk, but still ships on first load
+      because `WagmiProvider` wraps the whole app. Mounting it only in on-chain
+      mode would save ~85 KB gzipped for every visitor in recorded mode, at the
+      cost of remounting the tree when a deployment appears.
 - [ ] The web app's route handling is a single path check. A third destination
       justifies a router.
 - [ ] No E2E test drives the browser against the live service — the Playwright

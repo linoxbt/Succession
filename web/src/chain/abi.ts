@@ -13,6 +13,17 @@
 
 export const LISTING_ABI = [
   {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "listingId",
+        "type": "bytes32"
+      }
+    ],
+    "name": "AgentAlreadyListed",
+    "type": "error"
+  },
+  {
     "inputs": [],
     "name": "AgentAlreadySealed",
     "type": "error"
@@ -20,6 +31,22 @@ export const LISTING_ABI = [
   {
     "inputs": [],
     "name": "BadAttestation",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "expected",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "received",
+        "type": "uint256"
+      }
+    ],
+    "name": "EscrowShortfall",
     "type": "error"
   },
   {
@@ -314,6 +341,11 @@ export const LISTING_ABI = [
             "internalType": "bytes32",
             "name": "deliveredHash",
             "type": "bytes32"
+          },
+          {
+            "internalType": "uint256",
+            "name": "escrowed",
+            "type": "uint256"
           }
         ],
         "internalType": "struct ListingContract.Listing",
