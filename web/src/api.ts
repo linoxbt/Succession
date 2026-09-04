@@ -32,6 +32,22 @@ export interface ValuationFactor {
   explanation: string;
 }
 
+export interface AcpHistory {
+  agent_address: string;
+  agent_id: number | null;
+  agent_name: string;
+  registered: boolean;
+  source: "live" | "memory" | "recorded";
+  fetched_at: string;
+  completed_jobs: number;
+  failed_jobs: number;
+  gross_volume: string;
+  distinct_counterparties: number;
+  success_rate: string | null;
+  verifiable_job_ids: number[];
+  verification: string;
+}
+
 export interface Preview {
   agent_identity: string;
   tenure_days: number;
@@ -42,6 +58,11 @@ export interface Preview {
   withheld_non_transferable: number;
   disclosure: string;
   committed_root?: string;
+  acp: AcpHistory | null;
+  provenance_of_figures: {
+    self_reported: string[];
+    independently_verifiable: string[];
+  };
   valuation?: {
     currency: string;
     base_price: string;

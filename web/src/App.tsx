@@ -1,48 +1,53 @@
 /**
- * The transaction, as a sequence of four screens.
+ * Two surfaces: the landing page and the operations console.
  *
- * Step order follows Part 3's workflow, and the app holds no derived state of
- * its own: the listing's state field is the authority on where the transaction
- * has got to, so a reload lands in the right place rather than in whatever the
- * UI last believed.
+ * Routing is a single path check rather than a router dependency — there are
+ * exactly two destinations and five views, and a library for that is weight
+ * without benefit.
+ *
+ * The app holds no derived state about where the transaction has got to: the
+ * listing's own `state` field is the authority, so a reload lands where the
+ * transaction actually is rather than where the UI last believed it was.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, type Listing as ListingType, type Outcome, type Preview } from "./api";
+import { api, type Listing, type Outcome, type Preview } from "./api";
+import { Agents } from "./dash/Agents";
+import { ListingView } from "./dash/ListingView";
+import { Memory } from "./dash/Memory";
+import { Overview } from "./dash/Overview";
+import { Shell, type View } from "./dash/Shell";
+import { Transfers, type TransferRow } from "./dash/Transfers";
+import { Landing } from "./landing/Landing";
 import { loadRecordedRun, probeLiveApi, recordedApi, type RecordedRun } from "./recorded";
-import { CategorySelector } from "./components/CategorySelector";
-import { Confirmation } from "./components/Confirmation";
-import { Cutover } from "./components/Cutover";
-import { Escrow } from "./components/Escrow";
-import { Listing } from "./components/Listing";
-import { Notice, Rule } from "./components/primitives";
-
-type Screen = "scope" | "listing" | "escrow" | "confirmation" | "cutover";
-
-const STEPS: { id: Screen; label: string }[] = [
-  { id: "scope", label: "Scope" },
-  { id: "listing", label: "Listing" },
-  { id: "escrow", label: "Escrow" },
-  { id: "confirmation", label: "Confirmation" },
-  { id: "cutover", label: "Cutover" },
-];
+import { Badge } from "./ui";
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>("scope");
+  const [route, setRoute] = useState<"landing" | "console">(
+    window.location.pathname.startsWith("/app") ? "console" : "landing",
+  );
+  const [view, setView] = useState<View>("overview");
   const [recorded, setRecorded] = useState<RecordedRun | null>(null);
-  const [ready, setReady] = useState(false);
-  const [listing, setListing] = useState<ListingType | null>(null);
+  const [listing, setListing] = useState<Listing | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [sealed, setSealed] = useState<{ sealed: boolean; at: string } | null>(null);
+  const [ledger, setLedger] = useState<TransferRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // One backend, chosen once. Everything below calls `backend`, so no screen
-  // needs to know whether it is driving the live service or the recording.
-  const backend = useMemo(
-    () => (recorded ? recordedApi(recorded) : api),
-    [recorded],
-  );
+  const backend = useMemo(() => (recorded ? recordedApi(recorded) : api), [recorded]);
+
+  const navigate = useCallback((next: "landing" | "console") => {
+    window.history.pushState({}, "", next === "console" ? "/app" : "/");
+    setRoute(next);
+  }, []);
+
+  useEffect(() => {
+    const onPop = () =>
+      setRoute(window.location.pathname.startsWith("/app") ? "console" : "landing");
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   const guard = useCallback(async (work: () => Promise<void>) => {
     setBusy(true);
@@ -56,8 +61,7 @@ export default function App() {
     }
   }, []);
 
-  // Pick a backend, then recover the transaction's real position rather than
-  // assuming one — a reload lands where the transaction actually is.
+  // Pick a backend, then recover the transaction's real position.
   useEffect(() => {
     void (async () => {
       let source: RecordedRun | null = null;
@@ -66,18 +70,12 @@ export default function App() {
         setRecorded(source);
       }
       const client = source ? recordedApi(source) : api;
+      if (source?.transfers) setLedger(source.transfers);
 
       try {
         const current = await client.listing();
         setListing(current);
         setPreview(await client.preview().catch(() => null));
-        setScreen(
-          current.state === "open"
-            ? "listing"
-            : current.state === "escrowed"
-              ? "escrow"
-              : "cutover",
-        );
         setSealed(
           await client
             .seal("tenant-seller")
@@ -85,129 +83,94 @@ export default function App() {
             .catch(() => null),
         );
       } catch {
-        setScreen("scope");
-      } finally {
-        setReady(true);
+        setListing(null);
       }
     })();
   }, []);
 
-  const start = (categories: string[] | null) =>
+  const refresh = useCallback(
+    async (client: typeof api) => {
+      setListing(await client.listing());
+      setPreview(await client.preview().catch(() => null));
+    },
+    [],
+  );
+
+  const onList = (categories: string[] | null) =>
     guard(async () => {
       await backend.reset(categories ?? undefined);
-      setListing(await backend.listing());
-      setPreview(await backend.preview());
+      await refresh(backend as typeof api);
       setOutcome(null);
       setSealed(null);
-      setScreen("listing");
     });
 
-  const requestTransfer = () =>
+  const onBuy = () =>
     guard(async () => {
       setListing(await backend.buy());
-      setScreen("escrow");
     });
 
-  const execute = () =>
+  const onSettle = () =>
     guard(async () => {
       const result = await backend.transfer();
       setOutcome(result);
       const seal = await backend.seal("tenant-seller");
       setSealed({ sealed: seal.sealed, at: seal.record?.sealed_at ?? "" });
-      setScreen("confirmation");
+      setListing(await backend.listing().catch(() => listing));
     });
 
+  if (route === "landing") {
+    return <Landing onEnter={() => navigate("console")} />;
+  }
+
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-rule">
-        <div className="mx-auto flex max-w-3xl flex-col gap-4 px-6 py-5 sm:flex-row sm:items-baseline sm:justify-between">
-          <p className="font-serif text-lg">Succession</p>
-          <nav aria-label="Transaction progress">
-            <ol className="flex flex-wrap gap-x-5 gap-y-1 font-sans text-xs uppercase tracking-[0.1em]">
-              {STEPS.map((step) => (
-                <li
-                  key={step.id}
-                  aria-current={screen === step.id ? "step" : undefined}
-                  className={screen === step.id ? "text-ink" : "text-ink/35"}
-                >
-                  {step.label}
-                </li>
-              ))}
-            </ol>
-          </nav>
+    <Shell
+      view={view}
+      onNavigate={setView}
+      onHome={() => navigate("landing")}
+      banner={recorded ? <RecordedBanner run={recorded} /> : null}
+    >
+      {error ? (
+        <div className="mb-5 rounded-md border border-bad/40 bg-bad/10 px-4 py-3 text-[0.8125rem] text-bad">
+          {error}
         </div>
-      </header>
+      ) : null}
 
-      {recorded ? <RecordedBanner run={recorded} /> : null}
-
-      <main className="mx-auto max-w-3xl px-6 py-12">
-        {error ? (
-          <div className="mb-8">
-            <Notice tone="void">{error}</Notice>
-          </div>
-        ) : null}
-
-        {screen === "scope" ? (
-          <CategorySelector onConfirm={start} busy={busy} />
-        ) : screen === "listing" && listing && preview ? (
-          <Listing
-            listing={listing}
-            preview={preview}
-            onRequestTransfer={requestTransfer}
-            busy={busy}
-          />
-        ) : screen === "escrow" && listing ? (
-          <Escrow listing={listing} onExecute={execute} busy={busy} />
-        ) : screen === "confirmation" && outcome ? (
-          <Confirmation
-            outcome={outcome}
-            onContinue={() =>
-              setScreen(outcome.outcome === "verified" ? "cutover" : "scope")
-            }
-          />
-        ) : screen === "cutover" ? (
-          <Cutover sealed={sealed} backend={backend} />
-        ) : (
-          <p className="font-sans text-sm text-ink/50">
-            {ready ? "Loading…" : "Checking for a running service…"}
-          </p>
-        )}
-      </main>
-
-      <footer className="mx-auto max-w-3xl px-6 pb-12">
-        <Rule className="mb-5" />
-        <p className="font-sans text-xs leading-relaxed text-ink/45">
-          Demo identities and settlement run locally. All counterparties in the
-          seeded memory are invented.
-        </p>
-      </footer>
-    </div>
+      {view === "overview" ? (
+        <Overview listing={listing} preview={preview} outcome={outcome} sealed={sealed} />
+      ) : null}
+      {view === "listing" ? (
+        <ListingView
+          listing={listing}
+          preview={preview}
+          outcome={outcome}
+          busy={busy}
+          onList={onList}
+          onBuy={onBuy}
+          onSettle={onSettle}
+        />
+      ) : null}
+      {view === "transfers" ? <Transfers rows={ledger} current={outcome} /> : null}
+      {view === "agents" ? <Agents preview={preview} /> : null}
+      {view === "memory" ? <Memory backend={backend} sealed={sealed} /> : null}
+    </Shell>
   );
 }
 
-
 /**
- * Named on every screen, not dismissible.
- *
- * A recorded run presented as a live one is precisely the pattern this project
- * exists to argue against, so the mode is stated permanently and the banner
- * says how to reproduce the numbers rather than asking to be trusted.
+ * Named on every screen and not dismissible. A recorded run presented as a live
+ * one is exactly the pattern this project argues against.
  */
 function RecordedBanner({ run }: { run: RecordedRun }) {
   return (
-    <div className="border-b border-escrow/40 bg-escrow/[0.06]">
-      <div className="mx-auto max-w-3xl px-6 py-3">
-        <p className="font-sans text-xs leading-relaxed text-escrow">
-          <span className="font-semibold uppercase tracking-[0.08em]">
-            Recorded run
-          </span>{" "}
-          — no service is running, so this replays one real end-to-end transfer
-          captured on {run.recorded_at}. Every hash, signature and agent reply
-          below is genuine output, not a mock-up. Reproduce it with{" "}
-          <code className="font-mono">python -m succession.demo</code>: the
-          export is deterministic, so it prints the same root.
-        </p>
-      </div>
+    <div className="border-b border-warn/30 bg-warn/[0.07] px-5 py-2.5">
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.75rem] text-warn">
+        <Badge tone="warn">Recorded</Badge>
+        <span className="text-secondary">
+          No service running. Replaying one real transfer captured {run.recorded_at}.
+          Every hash and reply is genuine output — reproduce it with{" "}
+          <code className="font-mono">python -m succession.demo</code>.
+        </span>
+      </p>
     </div>
   );
 }

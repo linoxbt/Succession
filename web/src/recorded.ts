@@ -25,6 +25,19 @@
  */
 import type { Listing, Outcome, Preview, Reply } from "./api";
 
+/** One row of the settlement ledger, as `scripts/run_transfers.py` writes it. */
+export interface RecordedTransfer {
+  index: number;
+  agent_id: string;
+  listing_id: string;
+  outcome: "verified" | "refunded";
+  committed_root: string;
+  delivered_root: string;
+  tx: string;
+  explorer?: string;
+  intentionally_corrupted?: boolean;
+}
+
 export interface RecordedRun {
   recorded_at: string;
   source: string;
@@ -35,6 +48,8 @@ export interface RecordedRun {
   replies: Record<string, Reply>;
   write_attempt: { accepted: boolean; reason: string };
   seal: { sealed: boolean; at: string };
+  /** Present once a real run has been recorded against a deployment. */
+  transfers?: RecordedTransfer[];
 }
 
 let cached: Promise<RecordedRun> | null = null;
@@ -80,6 +95,25 @@ export async function probeLiveApi(): Promise<boolean> {
  * the categories are the one thing a viewer can change here.
  */
 export function recordedApi(run: RecordedRun) {
+  // The recording is a finished sale, but the UI walks through it a step at a
+  // time. Without a phase here `listing()` keeps answering "open" after
+  // settlement, so the escrow panel never advances and the console shows a
+  // "fund escrow" button beside a completed transfer.
+  let phase: "open" | "escrowed" | "confirmed" = "open";
+
+  const listingFor = (): Listing => {
+    if (phase === "open") return run.listing_open;
+    if (phase === "escrowed") return run.listing_escrowed;
+    return {
+      ...run.listing_escrowed,
+      state: run.outcome.outcome === "verified" ? "confirmed" : "refunded",
+      escrow_balance: 0,
+      delivered_hash: run.outcome.delivered_root,
+      sealed: run.outcome.outcome === "verified",
+      settled_at: run.outcome.receipt?.settled_at ?? "",
+    };
+  };
+
   return {
     reset: async (categories?: string[]) => {
       if (categories && categories.length < 6) {
@@ -89,18 +123,41 @@ export function recordedApi(run: RecordedRun) {
             "categories. Run the service locally to transfer a subset.",
         );
       }
+      phase = "open";
       return { listing_id: run.listing_open.listing_id, committed_root: run.outcome.committed_root };
     },
-    listing: async () => run.listing_open,
+    listing: async () => listingFor(),
     preview: async () => run.preview,
-    buy: async () => run.listing_escrowed,
-    transfer: async () => run.outcome,
+    buy: async () => {
+      phase = "escrowed";
+      return listingFor();
+    },
+    transfer: async () => {
+      phase = "confirmed";
+      return run.outcome;
+    },
+    // The seller is sealed by the sale, so before settlement it is not sealed.
     seal: async () => ({
-      sealed: run.seal.sealed,
-      record: { sealed_at: run.seal.at, reason: "memory asset sold" },
+      sealed: phase === "confirmed" && run.seal.sealed,
+      record:
+        phase === "confirmed" && run.seal.sealed
+          ? { sealed_at: run.seal.at, reason: "memory asset sold" }
+          : null,
     }),
-    writeAttempt: async () => run.write_attempt,
+    // Before the sale completes the seller can still write; the recorded
+    // rejection only becomes true once the tenant is sealed.
+    writeAttempt: async () =>
+      phase === "confirmed"
+        ? run.write_attempt
+        : { accepted: true, reason: "tenant is not sealed; the sale has not completed" },
     message: async (_side: "seller" | "buyer", message: string): Promise<Reply> => {
+      if (phase !== "confirmed") {
+        return {
+          text: "I have no memory yet. This agent has not been booted against a transferred store.",
+          recalled: false,
+          citations: [],
+        };
+      }
       const exact = run.replies[message];
       if (exact) return exact;
       // Match the recorded prompts by counterparty rather than by string, so a

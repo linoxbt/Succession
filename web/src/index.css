@@ -4,23 +4,29 @@
 
 @layer base {
   html {
-    color-scheme: light;
+    color-scheme: dark;
+    -webkit-font-smoothing: antialiased;
   }
 
   body {
-    @apply bg-vellum font-sans text-ink antialiased;
+    @apply bg-base font-sans text-primary;
   }
 
-  /* Visible keyboard focus on everything interactive, without announcing it. */
+  /* Numerals in tables must line up column to column. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
   :focus-visible {
-    @apply outline-none ring-2 ring-ink ring-offset-2 ring-offset-vellum;
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-base;
   }
 
-  /* Motion is one deliberate moment. Anyone who asks for less gets none. */
+  ::selection {
+    @apply bg-accent/30;
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
+    *, *::before, *::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
