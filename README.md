@@ -68,16 +68,78 @@ Anyone can build a UI that says "transfer complete". What is here instead:
 
 ---
 
+## Partner stacks, and exactly where they do work
+
+**Sibyl Memory** — the asset itself. All five tiers export, hash, transfer and
+re-key; the successor agent retrieves through the FTS5 index and keyed reads.
+Delete this layer and there is no product: no asset, no hash to commit, no data
+room, no cutover. Setup and the full memory walkthrough:
+[`docs/sibyl-setup.md`](docs/sibyl-setup.md).
+
+**Base** — `contracts/src/ListingContract.sol` holds escrow and, in one
+transaction, releases payment, transfers the ERC-8004 identity token, and sets
+the `sealed` flag. `succession/chain.py` drives it over web3 as a
+`SettlementBackend`, interchangeable with the local mirror.
+`scripts/deploy_base_sepolia.py` and `scripts/run_transfers.py` deploy it and
+run N real sales.
+
+**Virtuals ACP** — `succession/acp.py` reads the agent's job history through
+`virtuals-acp` and makes it the data room's quality-of-earnings signal, the
+valuation's `task_performance` input, and part of the transferred memory. Every
+figure resolves to an on-chain job id, so a buyer re-derives it without trusting
+the seller. Registration gates listing.
+
+### Status of each, honestly
+
+| Stack | Built | Executed |
+|---|---|---|
+| Sibyl Memory | Yes | Yes — 174 tests, the demo, the CLI |
+| Base | Yes | Contract executed against real bytecode in py-evm; **not yet deployed to Base Sepolia** |
+| Virtuals ACP | Yes | **Not yet registered** — needs a whitelisted wallet and entity id |
+
+Base Sepolia RPCs and `acpx.virtuals.gg` are both unreachable from the
+environment this was built in, and neither a funded wallet nor ACP credentials
+were available. The code paths are complete and tested; what is missing is the
+credentials and a network route, not the implementation. See **Finishing the
+integrations** below.
+
+---
+
 ## Repository layout
 
 ```
 packages/succession/   the pipeline: SMP format, Merkle tree, provenance,
-                       redaction, valuation, sealing, settlement, transfer
+                       redaction, valuation, sealing, settlement, transfer,
+                       the ACP client, and the web3 backend
 contracts/             ListingContract.sol and the ERC-8004 / ERC-20 interfaces
+scripts/               deploy to Base Sepolia; run N real transfers
 service/               a thin FastAPI layer over the pipeline
-web/                   the marketplace UI (React + Vite + Tailwind)
-docs/                  the SMP format spec and the threat model
+web/                   the landing page and the operations console
+docs/                  the SMP format spec and the Sibyl setup / memory brief
 ```
+
+## Finishing the integrations
+
+Both need credentials rather than code.
+
+```bash
+# Virtuals ACP — register through the ACP Tech Playbook first, then:
+export WHITELISTED_WALLET_PRIVATE_KEY=0x... AGENT_WALLET_ADDRESS=0x... ACP_ENTITY_ID=...
+succession-acp status
+succession-acp sync --db seller.db --tenant tenant-seller
+
+# Base Sepolia — fund a key at https://docs.base.org/get-started/get-funds
+export BASE_SEPOLIA_RPC_URL=https://sepolia.base.org DEPLOYER_PRIVATE_KEY=0x...
+python scripts/deploy_base_sepolia.py
+export SELLER_PRIVATE_KEY=0x... BUYER_PRIVATE_KEY=0x...
+python scripts/run_transfers.py --count 5
+```
+
+`run_transfers.py` gives each sale its own agent identity, seeded tenant and
+listing — five sales of one asset would only prove the contract can be called
+five times. One is corrupted on purpose, because five successes say nothing
+about whether the refund path works. Both scripts take `--local` to run the
+identical path against an in-process EVM first.
 
 ## Running it
 

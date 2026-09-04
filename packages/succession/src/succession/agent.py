@@ -23,6 +23,32 @@ from typing import Any
 
 __all__ = ["Agent", "Reply", "Citation"]
 
+#: Words too common to retrieve anything useful. Kept short on purpose: an
+#: aggressive list would strip the domain terms ("reefer", "flatbed", "lane")
+#: that are exactly what makes a message findable.
+_STOPWORDS = frozenset(
+    """a an and are as at be but by can could do for from has have hi hello
+    how i if in is it me my need of on or our out still that the their them
+    then there this to us we what when where which will with would you your
+    again about any anything back get got just like more not now one same
+    still than too very was were yes""".split()
+)
+
+
+def _terms(text: str) -> list[str]:
+    """The distinctive words in a message, in order, deduplicated."""
+    import re
+
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in re.findall(r"[A-Za-z][A-Za-z'-]+", text):
+        word = raw.lower().strip("'-")
+        if len(word) < 4 or word in _STOPWORDS or word in seen:
+            continue
+        seen.add(word)
+        out.append(raw)
+    return out[:8]
+
 
 @dataclass(frozen=True)
 class Citation:
@@ -58,20 +84,68 @@ class Agent:
     # -- retrieval -----------------------------------------------------
 
     def find_counterparty(self, text: str) -> dict[str, Any] | None:
-        """Match a message to a known counterparty by name or slug."""
+        """Match a message to a known counterparty.
+
+        Goes through Sibyl's FTS5 index (``search_entities``, anchored to the
+        ``relationship`` category) rather than scanning every entity in Python.
+        That matters for more than speed: the index covers the entity's name,
+        category and body, so a customer who mentions their lane or a detail
+        from the notes is matched even when they never say the company name —
+        which is the realistic case for a returning customer.
+
+        The scan is kept as a fallback. FTS returns nothing for a query whose
+        every token is a stopword or punctuation, and "recall failed" is the
+        wrong answer when the company name is sitting right there in the text.
+        """
+        hits = self._search_relationships(text)
+
         needle = text.lower()
-        best = None
-        for entity in self.memory.entities():
-            if entity["category"] != "relationship":
-                continue
+        best: tuple[int, dict[str, Any]] | None = None
+        for entity in hits or self._all_relationships():
             company = str(entity["body"].get("company", ""))
-            candidates = [company.lower(), entity["name"].replace("-", " ")]
-            for candidate in candidates:
+            for candidate in (company.lower(), entity["name"].replace("-", " ")):
                 if candidate and candidate in needle:
-                    # Prefer the longest match, so "Northwind Mills" beats "mills".
+                    # Longest literal match wins, so "Northwind Mills" beats "mills".
                     if best is None or len(candidate) > best[0]:
                         best = (len(candidate), entity)
-        return best[1] if best else None
+        if best is not None:
+            return best[1]
+
+        # No literal name in the message, but FTS matched something on the body
+        # — the lane, or a detail from the notes. Take its top-ranked hit.
+        return hits[0] if hits else None
+
+    def _search_relationships(self, text: str) -> list[dict[str, Any]]:
+        """FTS over the relationship category, one distinctive term at a time.
+
+        The SDK sanitizes a query into a single FTS5 *phrase*, so passing a
+        whole sentence asks the index for that exact sentence and finds
+        nothing. Searching the message's distinctive terms individually and
+        merging by how many of them hit is what actually retrieves a
+        counterparty from "we need a reefer from Yakima to Denver" — where the
+        company is never named and the match has to come from the lane and the
+        notes.
+        """
+        scored: dict[tuple[str, str], tuple[int, dict[str, Any]]] = {}
+        for term in _terms(text):
+            try:
+                results = self.memory.client.search_entities(
+                    term, limit=5, category="relationship"
+                )
+            except Exception:  # noqa: BLE001 - a search that errors is skipped
+                continue
+            for entity in results:
+                key = (entity["category"], entity["name"])
+                count, _ = scored.get(key, (0, entity))
+                scored[key] = (count + 1, entity)
+
+        return [
+            entity
+            for _, entity in sorted(scored.values(), key=lambda p: -p[0])
+        ]
+
+    def _all_relationships(self) -> list[dict[str, Any]]:
+        return [e for e in self.memory.entities() if e["category"] == "relationship"]
 
     def open_commitment_for(self, company: str) -> dict[str, Any] | None:
         for entity in self.memory.entities():
