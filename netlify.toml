@@ -1,5 +1,5 @@
 # Netlify hosts the marketplace UI. The pipeline itself is Python, so it is not
-# deployed here — see [context.production.environment] below for pointing this
+# deployed here, see [context.production.environment] below for pointing this
 # build at a running service.
 
 [build]
@@ -21,7 +21,7 @@
 
 # The service is a FastAPI process and cannot run on Netlify's function
 # runtimes. Deploy it to any always-on host (Railway, Render, Fly.io) and
-# uncomment this to proxy the API through the same origin — which also keeps
+# uncomment this to proxy the API through the same origin, which also keeps
 # the browser off cross-origin requests, so the service needs no CORS grant for
 # this domain.
 #
@@ -39,20 +39,20 @@
     Referrer-Policy        = "strict-origin-when-cross-origin"
     Permissions-Policy     = "camera=(), microphone=(), geolocation=(), payment=()"
     # The app loads its own bundle, Google Fonts, and its own JSON. Nothing
-    # else, and no inline script — so a supply-chain injection has nowhere to
+    # else, and no inline script, so a supply-chain injection has nowhere to
     # call home.
     #
     # connect-src is 'self' for the /api proxy above, plus the two things a
     # browser wallet genuinely has to reach: the Base Sepolia JSON-RPC that
     # wagmi's http() transport calls, and Base Account's key service. Without
-    # them every on-chain action fails silently in the console — the page looks
+    # them every on-chain action fails silently in the console, the page looks
     # fine and the button does nothing, which is the worst way for this to
     # break. frame-src is listed for the same reason: Base Account signs in a
     # popup, and default-src would otherwise block it.
     #
     # If VITE_BASE_SEPOLIA_RPC_URL points somewhere else, add that host here too
-    # — the allowlist has to name it, the build variable is not enough.
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://sepolia.base.org https://*.base.org https://keys.coinbase.com https://*.coinbase.com wss://*.coinbase.com; frame-src 'self' https://keys.coinbase.com; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
+    #, the allowlist has to name it, the build variable is not enough.
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://sepolia.base.org https://*.base.org https://keys.coinbase.com https://*.coinbase.com wss://*.coinbase.com https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.com wss://*.walletconnect.org https://*.reown.com; frame-src 'self' https://keys.coinbase.com https://verify.walletconnect.com https://verify.walletconnect.org; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
 
 # Hashed bundle filenames are content-addressed, so they can be cached forever.
 [[headers]]

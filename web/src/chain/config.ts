@@ -20,10 +20,21 @@
  */
 import { createConfig, http } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
-import { baseAccount, injected } from "wagmi/connectors";
+import { baseAccount, injected, walletConnect } from "wagmi/connectors";
 
 /** An RPC override, for anyone rate-limited off the public endpoint. */
 const RPC_URL = import.meta.env.VITE_BASE_SEPOLIA_RPC_URL as string | undefined;
+
+/**
+ * Reown (formerly WalletConnect) project id.
+ *
+ * Reown's relay refuses connections without one, and it is issued per project
+ * at cloud.reown.com rather than being something an app can generate. So the
+ * connector is added only when the id is present: an unset id means the button
+ * simply is not offered, which is better than offering one that fails on click
+ * with a relay error nobody can act on.
+ */
+const REOWN_PROJECT_ID = import.meta.env.VITE_REOWN_PROJECT_ID as string | undefined;
 
 export const CHAIN = baseSepolia;
 
@@ -32,6 +43,22 @@ export const config = createConfig({
   connectors: [
     baseAccount({ appName: "Succession" }),
     injected({ shimDisconnect: true }),
+    // Reown last: it opens a modal and reaches a relay, so a visitor who
+    // already has a browser wallet should meet the cheaper options first.
+    ...(REOWN_PROJECT_ID
+      ? [
+          walletConnect({
+            projectId: REOWN_PROJECT_ID,
+            showQrModal: true,
+            metadata: {
+              name: "Succession",
+              description: "The property layer for agent memory",
+              url: typeof window !== "undefined" ? window.location.origin : "",
+              icons: [],
+            },
+          }),
+        ]
+      : []),
   ],
   transports: {
     [baseSepolia.id]: http(RPC_URL || undefined),

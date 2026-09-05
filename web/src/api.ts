@@ -48,6 +48,23 @@ export interface AcpHistory {
   verification: string;
 }
 
+export interface AgentHolding {
+  agent_id: number;
+  identity: string;
+}
+
+export interface AgentsHeld {
+  owner: string;
+  agents: AgentHolding[];
+  /** Ground truth from balanceOf. */
+  balance: number;
+  found: number;
+  /** False means "there are more, scan deeper", not "this wallet holds none". */
+  complete: boolean;
+  scanned_from_block: number;
+  head_block: number;
+}
+
 export interface Reputation {
   score: string;
   grade: string;
@@ -199,6 +216,8 @@ export const market = {
   /** Ciphertext. Public on purpose, inert without the content key. */
   envelope: (id: string) => request<unknown>(`/api/listing/${id}/envelope`),
   chain: () => request<ChainStatus>("/api/chain"),
+  /** Which ERC-8004 agents a wallet holds, for choosing a successor. */
+  agents: (owner: string) => request<AgentsHeld>(`/api/agents/${owner}`),
 };
 
 export interface Simulated {

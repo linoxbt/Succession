@@ -89,7 +89,6 @@ export function useChainStatus(): ChainStatus | null {
 
 export function WalletBar({ status }: { status: ChainStatus | null }) {
   const { address, isConnected } = useAccount();
-  const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
@@ -129,20 +128,71 @@ export function WalletBar({ status }: { status: ChainStatus | null }) {
             </button>
           </>
         ) : (
-          <span className="flex flex-wrap items-center gap-3">
-            {connectors.map((c) => (
-              <button
-                key={c.uid}
-                onClick={() => connect({ connector: c })}
-                disabled={isPending}
-                className="text-micro underline underline-offset-4 hover:text-escrow disabled:opacity-40"
-              >
-                {c.name}
-              </button>
-            ))}
-          </span>
+          <ConnectButton />
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The connect control.
+ *
+ * One button rather than a row of connector names. A visitor who has not
+ * connected does not yet know which of Base Account, an injected wallet or
+ * Reown they want, and presenting three equal links asks them to choose before
+ * they have any reason to care. The button opens the choice; the choice is a
+ * short list because there are only ever a few.
+ *
+ * Reown appears only when a project id was built in, so the list never offers a
+ * route that would fail at the relay with an error nobody can act on.
+ */
+function ConnectButton() {
+  const { connect, connectors, isPending, error } = useConnect();
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement | null>(null);
+
+  // Click-away, so the list does not strand itself open over the page.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrap} className="relative">
+      <Button size="sm" onClick={() => setOpen((v) => !v)} disabled={isPending}>
+        {isPending ? "Connecting…" : "Connect wallet"}
+      </Button>
+
+      {open ? (
+        <div className="absolute right-0 top-full z-50 mt-2 min-w-[13rem] border border-rule bg-paper">
+          {connectors.map((c) => (
+            <button
+              key={c.uid}
+              onClick={() => {
+                setOpen(false);
+                connect({ connector: c });
+              }}
+              className="block w-full border-b border-hairline px-5 py-3 text-left text-micro text-ink transition-colors duration-400 last:border-b-0 hover:bg-shade"
+            >
+              {c.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {error ? (
+        <span className="ml-4 text-micro text-void">{error.message}</span>
+      ) : null}
     </div>
   );
 }

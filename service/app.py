@@ -410,6 +410,46 @@ def unpublish(listing_id: str) -> dict[str, Any]:
     return {"listing_id": listing_id, "unpublished": True}
 
 
+@app.get("/api/agents/{owner}")
+def agents_of(owner: str) -> dict[str, Any]:
+    """Which ERC-8004 agents an address holds.
+
+    A buyer usually has more than one, and the memory has to land in a specific
+    successor, so the console asks them to pick rather than guessing. This is
+    what populates that list.
+
+    The registry is not `ERC721Enumerable`, so holdings are reconstructed from
+    `Transfer` logs and confirmed against `ownerOf`. The result can therefore be
+    incomplete on a wallet whose agents were minted long ago, and `complete`
+    says so: a short list and an empty wallet are different answers and the UI
+    must not conflate them.
+    """
+    record = _deployment()
+    if record is None:
+        raise HTTPException(503, "no contract deployed; there is no registry to read")
+    try:
+        checked = to_checksum_address(owner)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(422, f"not a valid address: {owner!r}") from exc
+
+    from web3 import Web3
+    from web3.middleware import ExtraDataToPOAMiddleware
+
+    from succession.erc8004 import IdentityRegistry
+
+    rpc = os.environ.get("BASE_SEPOLIA_RPC_URL")
+    if not rpc:
+        raise HTTPException(503, "BASE_SEPOLIA_RPC_URL is not set")
+    w3 = Web3(Web3.HTTPProvider(rpc, request_kwargs={"timeout": 20}))
+    w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
+
+    registry = IdentityRegistry(w3, address=record["identity_registry"])
+    try:
+        return registry.agents_of(checked, lookback_blocks=60_000)
+    except Exception as exc:  # noqa: BLE001 - an RPC failure is a 503, not a 500
+        raise HTTPException(503, f"could not read the registry: {exc}") from exc
+
+
 @app.get("/api/chain")
 def chain_status() -> dict[str, Any]:
     """Which contract this marketplace is reading, if any.

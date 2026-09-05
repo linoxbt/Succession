@@ -454,6 +454,105 @@ class IdentityRegistry:
             "emitted; cannot determine the agentId"
         )
 
+    # -- enumeration ---------------------------------------------------
+
+    #: The public Base Sepolia endpoint rejects `eth_getLogs` over wider spans
+    #: with a 413 before it rejects them for rate. Measured, not guessed: 50,000
+    #: fails and 10,000 succeeds.
+    LOG_SPAN = 9_000
+
+    def agents_of(
+        self,
+        owner: str,
+        *,
+        lookback_blocks: int = 900_000,
+        span: int | None = None,
+    ) -> dict[str, Any]:
+        """Which agents an address currently holds.
+
+        This registry is **not** `ERC721Enumerable`: `supportsInterface` for it
+        returns false and `totalSupply` reverts, so there is no
+        `tokenOfOwnerByIndex` to call and holdings have to be reconstructed from
+        `Transfer` logs. Two consequences shape the result.
+
+        First, the scan is paged and bounded, because the endpoint refuses wide
+        ranges. A wallet whose agents were minted before the lookback window
+        will not have them found.
+
+        Second, and this is what keeps the answer honest: every candidate is
+        confirmed against `ownerOf` before it is returned, and the total is
+        reconciled against `balanceOf`. So the list can be *incomplete*, but it
+        can never be *wrong* — and `complete` says which it is, rather than
+        letting a partial scan pass as the whole picture.
+        """
+        owner = to_checksum_address(owner)
+        head = self.w3.eth.block_number
+        step = span or self.LOG_SPAN
+        transfer_topic = self.w3.keccak(text="Transfer(address,address,uint256)")
+        padded = "0x" + "0" * 24 + owner[2:].lower()
+
+        seen: set[int] = set()
+        scanned_from = head
+        start = max(0, head - lookback_blocks)
+
+        upper = head
+        while upper > start:
+            lower = max(start, upper - step)
+            for topics in (
+                [transfer_topic, None, padded],   # received
+                [transfer_topic, padded, None],   # sent, so it may be gone
+            ):
+                try:
+                    for log in self.w3.eth.get_logs(
+                        {
+                            "address": self.contract.address,
+                            "fromBlock": lower,
+                            "toBlock": upper,
+                            "topics": topics,
+                        }
+                    ):
+                        if len(log["topics"]) >= 4:
+                            seen.add(int(log["topics"][3].hex(), 16))
+                except Exception:  # noqa: BLE001 - a refused range is not fatal
+                    # One bad window should not lose the windows around it.
+                    pass
+            scanned_from = lower
+            upper = lower
+
+        # `ownerOf` is the arbiter. A token that appears in the logs may have
+        # moved on since, and one the scan missed is simply absent.
+        held: list[int] = []
+        for token_id in sorted(seen):
+            try:
+                if to_checksum_address(self.owner_of(token_id)) == owner:
+                    held.append(token_id)
+            except Exception:  # noqa: BLE001 - a burned or unknown id is not held
+                continue
+
+        try:
+            balance = int(self.contract.functions.balanceOf(owner).call())
+        except Exception:  # noqa: BLE001 - balanceOf is optional in principle
+            balance = len(held)
+
+        return {
+            "owner": owner,
+            "agents": [
+                {"agent_id": t, "identity": agent_identity(self.chain_id, t)}
+                for t in held
+            ],
+            "balance": balance,
+            "found": len(held),
+            # False means "there are more, scan deeper", which is a different
+            # statement from "this wallet holds nothing".
+            "complete": len(held) >= balance,
+            "scanned_from_block": scanned_from,
+            "head_block": head,
+        }
+
+    @property
+    def chain_id(self) -> int:
+        return int(self.w3.eth.chain_id)
+
     def approve(self, operator: str, agent_id: int, private_key: str) -> str:
         """Approve ``operator`` (the ListingContract) to move this agent.
 

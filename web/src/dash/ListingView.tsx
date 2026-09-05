@@ -8,7 +8,10 @@
  * terminal, and the page hands over the exact command rather than pretending
  * a web page could do it.
  */
+import { useState } from "react";
+
 import { formatAmount, type MarketRow } from "../api";
+import AgentPicker from "../chain/AgentPicker";
 import { ConfirmOnChain, FundEscrow, SettlementMode, type ChainStatus } from "../chain/Wallet";
 import {
   Badge,
@@ -35,12 +38,13 @@ export default function ListingView({
   onClaim: () => void;
   onRefresh: () => void;
 }) {
+  // Which of the buyer's agents inherits this memory. Empty until they pick,
+  // and the claim command says so rather than defaulting to a placeholder that
+  // would import into the wrong tenant if pasted unread.
+  const [successor, setSuccessor] = useState("");
+
   if (!row) {
-    return (
-      <Note>
-        No listing selected. Choose one from the Marketplace.
-      </Note>
-    );
+    return <Note>No listing selected. Choose one from the Marketplace.</Note>;
   }
 
   const { listing, preview } = row;
@@ -142,17 +146,23 @@ export default function ListingView({
 
       {listing.state === "escrowed" ? (
         <Section index="04" title="Claim what you paid for">
-          <p className="mb-4 max-w-measure text-body text-muted">
-            Your escrow is funded. Once the seller releases the key, collect and
-            import the package on your own machine, the import writes into your
-            Sibyl store, which this page cannot reach.
+          <p className="mb-8 max-w-measure text-body text-muted">
+            Your escrow is funded. Choose which of your agents inherits this
+            memory, then collect and import it on your own machine: the import
+            writes into your Sibyl store, which this page cannot reach.
           </p>
-          <Copyable
-            text={`succession claim \\
+
+          <p className="chapter-mark mb-5">Successor agent</p>
+          <AgentPicker selected={successor} onSelect={setSuccessor} />
+
+          <div className="mt-10">
+            <Copyable
+              text={`succession claim \\
     --listing ${listing.listing_id} \\
     --db ~/.sibyl-memory/memory.db \\
-    --tenant my-successor-agent`}
-          />
+    --tenant ${successor ? successor.replace(/[:]/g, "-") : "<pick an agent above>"}`}
+            />
+          </div>
           <div className="mt-4">
             <Button size="sm" variant="quiet" onClick={onClaim}>
               Full instructions

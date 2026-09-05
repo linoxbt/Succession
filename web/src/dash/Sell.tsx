@@ -28,6 +28,17 @@ const CATEGORIES = [
   "learned-behaviors",
 ] as const;
 
+/**
+ * The three generated directories. They ship with every package and describe
+ * it, rather than carrying memory of their own, so they are shown here as
+ * present-but-not-priced instead of being silently absent from the list.
+ */
+const GENERATED: readonly (readonly [string, string])[] = [
+  ["provenance", "origin, prior owners, signature"],
+  ["permissions", "redaction flags and consent basis"],
+  ["integrity-proof", "the Merkle root and its subroots"],
+] as const;
+
 export default function Sell({ chainStatus }: { chainStatus: ChainStatus | null }) {
   const [db, setDb] = useState("~/.sibyl-memory/memory.db");
   const [tenant, setTenant] = useState("");
@@ -111,6 +122,27 @@ export default function Sell({ chainStatus }: { chainStatus: ChainStatus | null 
                 </span>
               </div>
             ))}
+          </div>
+
+          <div className="mt-10 border-t border-hairline pt-6">
+            <p className="chapter-mark mb-5">Not yet sellable</p>
+            <div className="flex flex-col gap-3">
+              {GENERATED.map(([name, why]) => (
+                <div key={name} className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+                  <span className="w-56 shrink-0 text-body text-faint">{name}</span>
+                  <span className="text-micro uppercase tracking-[0.14em] text-faint">
+                    Coming soon
+                  </span>
+                  <span className="text-micro text-faint">{why}</span>
+                </div>
+              ))}
+            </div>
+            <Note>
+              These three describe the package rather than carry memory. They are
+              generated at export time and travel with every sale already, so
+              there is nothing to price separately yet. Selling them on their own
+              is a later question, not a missing feature.
+            </Note>
           </div>
 
           <Note>
