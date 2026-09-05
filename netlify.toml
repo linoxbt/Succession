@@ -12,24 +12,27 @@
   # Vite is a devDependency, so a production-only install would not build.
   NPM_FLAGS    = "--include=dev"
 
+# The service is a FastAPI process and cannot run on Netlify's function
+# runtimes, so it runs on Railway and is proxied through this origin. Same
+# origin on purpose: it keeps the browser off cross-origin requests, so the
+# CSP's connect-src 'self' already covers the API and the service needs no CORS
+# grant for this domain.
+#
+# `force = true` matters. Without it the SPA catch-all below wins and /api/*
+# returns the HTML shell with a 200, which is exactly how this looked broken
+# before: every call "succeeded" and parsed as nothing.
+[[redirects]]
+  from   = "/api/*"
+  to     = "https://marketplace-production-e49e.up.railway.app/api/:splat"
+  status = 200
+  force  = true
+
 # Single-page app: every path resolves to the shell, which then recovers the
 # transaction's real position from the service (or from the recorded run).
 [[redirects]]
   from   = "/*"
   to     = "/index.html"
   status = 200
-
-# The service is a FastAPI process and cannot run on Netlify's function
-# runtimes. Deploy it to any always-on host (Railway, Render, Fly.io) and
-# uncomment this to proxy the API through the same origin, which also keeps
-# the browser off cross-origin requests, so the service needs no CORS grant for
-# this domain.
-#
-# [[redirects]]
-#   from   = "/api/*"
-#   to     = "https://YOUR-SERVICE-HOST/api/:splat"
-#   status = 200
-#   force  = true
 
 [[headers]]
   for = "/*"
