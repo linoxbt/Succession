@@ -167,9 +167,13 @@ function ConnectButton() {
 
   return (
     <div ref={wrap} className="relative">
-      <Button size="sm" onClick={() => setOpen((v) => !v)} disabled={isPending}>
-        {isPending ? "Connecting…" : "Connect wallet"}
-      </Button>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        disabled={isPending}
+        className="border border-rule px-3 py-1.5 font-mono text-label uppercase text-ink transition-colors duration-500 ease-swift hover:border-ink disabled:opacity-40"
+      >
+        {isPending ? "Connecting" : "Connect"}
+      </button>
 
       {open ? (
         <div className="absolute right-0 top-full z-50 mt-2 min-w-[13rem] border border-rule bg-paper">

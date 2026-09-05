@@ -35,7 +35,7 @@ export default function Marketplace({
       <PageHead
         index="01 / Marketplace"
         title="Memory, offered for sale."
-        lede="Every row is a listing the contract itself has emitted, so a real sale cannot be invisible here because its seller skipped publishing a data room. Rows marked on chain only are exactly that: real, settled, and never described."
+        lede="Read from the contract."
         action={
           <div className="flex flex-wrap items-center gap-6">
             <Button size="sm" variant="quiet" onClick={onRefresh}>
@@ -49,12 +49,7 @@ export default function Marketplace({
       />
 
       {onChain === false ? (
-        <Note>
-          No contract is deployed, so there is nothing to read. This marketplace
-          takes its listings from <code>ListingContract</code> and has no offline
-          mode, there is deliberately no configuration that makes it show
-          listings without one.
-        </Note>
+        <Note>No contract deployed.</Note>
       ) : null}
 
       {rows.length === 0 ? (
