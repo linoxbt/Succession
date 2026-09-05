@@ -247,6 +247,92 @@ def cmd_claim(args: argparse.Namespace) -> int:
     return 0
 
 
+
+def cmd_prove(args: argparse.Namespace) -> int:
+    """Prove, against your own store, that all six categories actually transfer.
+
+    Runs a complete sale into a throwaway buyer store and compares the result
+    category by category. Nothing is listed, nothing is sold, no chain is
+    touched and no key is spent: this is the pipeline run end to end so you can
+    see what would land, before you trust it with the real thing.
+
+    The comparison is against the *buyer's re-export*, not against the bytes
+    sent. Checking what was sent only proves the courier was honest.
+    """
+    import tempfile
+
+    from .importer import import_package
+    from .smp import DATA_CATEGORIES
+
+    key = _require_key()
+    source = open_tenant(args.db, args.tenant)
+    export = export_tenant(
+        source,
+        agent_identity=args.agent,
+        private_key=key,
+        categories=args.categories or None,
+    )
+
+    from eth_account import Account
+
+    signer = Account.from_key(key).address
+
+    with tempfile.TemporaryDirectory() as tmp:
+        # A separate file, not a second tenant in the same one. Two tenants in
+        # one database would pass this and fail a real two-machine transfer.
+        sink = open_tenant(Path(tmp) / "buyer.db", "prove-buyer")
+        result = import_package(
+            export.package,
+            sink,
+            committed_root=export.root_hex,
+            expected_signer=signer,
+        )
+        back = export_tenant(
+            sink,
+            agent_identity=args.agent,
+            private_key=key,
+            categories=args.categories or None,
+        )
+
+    def subroots(package):
+        return {
+            e["category"]: (e["subroot"], e["leaf_count"])
+            for e in (package.integrity or {}).get("categories", [])
+        }
+
+    sent, landed = subroots(export.package), subroots(back.package)
+    selected = tuple(args.categories) if args.categories else DATA_CATEGORIES
+
+    print(f"committed   {export.root_hex}")
+    print(f"re-derived  {result.reimported_root}")
+    print(f"verified    {'YES' if result.verified else 'NO'}")
+    print()
+    print(f"{'category':22}{'sent':>7}{'landed':>8}   subroot")
+    failures = []
+    for category in selected:
+        a, b = sent.get(category), landed.get(category)
+        if a is None:
+            failures.append(f"{category}: nothing exported")
+            print(f"{category:22}{0:>7}{0:>8}   EMPTY")
+            continue
+        same = a == b
+        if not same:
+            failures.append(f"{category}: subroot changed in transit")
+        print(
+            f"{category:22}{a[1]:>7}{(b[1] if b else 0):>8}   "
+            f"{'identical' if same else 'CHANGED'}"
+        )
+
+    print()
+    if failures or not result.verified:
+        for line in failures:
+            print(f"  {line}")
+        print("NOT every category transferred intact.")
+        return 1
+    print(f"All {len(selected)} categories transferred intact.")
+    return 0
+
+
 def cmd_listings(args: argparse.Namespace) -> int:
     """What this seller has listed, from their own vault."""
     from .publish import SellerVault
@@ -337,6 +423,15 @@ def main(argv: list[str] | None = None) -> int:
         "SUCCESSION_MARKETPLACE", "http://127.0.0.1:8000"
     ), help="marketplace base URL")
     p.set_defaults(func=cmd_claim)
+
+    p = sub.add_parser(
+        "prove", help="prove every category transfers, against your own store"
+    )
+    tenant_args(p)
+    p.add_argument("--agent", required=True)
+    p.add_argument("--categories", nargs="*", choices=DATA_CATEGORIES,
+                   help="check only these (default: all six)")
+    p.set_defaults(func=cmd_prove)
 
     p = sub.add_parser("listings", help="what you have listed")
     p.set_defaults(func=cmd_listings)
