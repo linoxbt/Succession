@@ -24,6 +24,7 @@ import { HashVerification, TransferDiagram } from "./visuals";
 import { HashPlate, Lineage, MemoryField } from "./imagery";
 import { Button, Figure } from "../ui";
 import { Wordmark } from "../brand/Logo";
+import { WalletBar } from "../chain/Wallet";
 
 export function Landing({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void }) {
   return (
@@ -79,14 +80,17 @@ function Masthead({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void
     >
       <div className="gutter flex items-center justify-between gap-6">
         <Wordmark size={solid ? 24 : 30} />
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="font-mono text-label uppercase text-ink transition-opacity duration-500 hover:opacity-60"
-          aria-expanded={open}
-          aria-controls="landing-menu"
-        >
-          {open ? "Close" : "Menu"}
-        </button>
+        <div className="flex items-center gap-6 sm:gap-8">
+          <WalletBar />
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="link-underline font-mono text-label uppercase text-ink"
+            aria-expanded={open}
+            aria-controls="landing-menu"
+          >
+            {open ? "Close" : "Menu"}
+          </button>
+        </div>
       </div>
     </header>
     </>

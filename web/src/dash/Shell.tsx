@@ -94,8 +94,8 @@ export default function Shell({
             <Wordmark size={scrolled ? 24 : 30} />
           </button>
 
-          <div className="flex items-center gap-6">
-            <div className="hidden sm:block">{wallet}</div>
+          <div className="flex items-center gap-6 sm:gap-8">
+            {wallet}
             <button
               onClick={() => setOpen((v) => !v)}
               className="link-underline font-mono text-label uppercase text-ink"
@@ -127,7 +127,6 @@ export default function Shell({
               {item.label}
             </button>
           ))}
-          <div className="mt-12 sm:hidden">{wallet}</div>
         </div>
       </div>
 

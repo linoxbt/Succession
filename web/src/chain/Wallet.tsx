@@ -87,50 +87,48 @@ export function useChainStatus(): ChainStatus | null {
 
 /* -- connection --------------------------------------------------------- */
 
-export function WalletBar({ status }: { status: ChainStatus | null }) {
+/**
+ * The wallet control, in the masthead beside the menu.
+ *
+ * Deliberately **not** gated on chain status. It used to render only when the
+ * service reported a deployed contract, which meant the button vanished
+ * whenever the service was unreachable, taking the one control a visitor needs
+ * in order to do anything with it. Connecting a wallet does not depend on
+ * whether a contract exists; what depends on that is whether there is anything
+ * to spend it on, and `SettlementMode` already says so on the listing screen.
+ *
+ * Wrong-network is surfaced here rather than at the point of sale, because a
+ * visitor who connected to the wrong chain should learn it from the header
+ * rather than from a failed transaction.
+ */
+export function WalletBar(_props: { status?: ChainStatus | null }) {
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
 
-  if (!status || status.mode !== "chain") return null;
+  if (!isConnected) return <ConnectButton />;
 
-  const wrongChain = isConnected && chainId !== CHAIN.id;
+  const wrongChain = chainId !== CHAIN.id;
 
   return (
-    <div className="border-b border-rule">
-      <div className="mx-auto flex max-w-wide flex-wrap items-center gap-x-5 gap-y-2 px-6 py-2.5">
-        <span className="text-micro text-muted">
-          Settling on {CHAIN.name}
-        </span>
-
-        {isConnected ? (
-          <>
-            <Hash value={address ?? ""} chars={6} />
-            {wrongChain ? (
-              <>
-                <Badge tone="void">Wrong network</Badge>
-                <button
-                  onClick={() => switchChain({ chainId: CHAIN.id })}
-                  className="text-micro underline underline-offset-4 hover:text-escrow"
-                >
-                  Switch to {CHAIN.name}
-                </button>
-              </>
-            ) : (
-              <Badge tone="closed">Connected</Badge>
-            )}
-            <button
-              onClick={() => disconnect()}
-              className="text-micro text-muted underline underline-offset-4 hover:text-ink"
-            >
-              Disconnect
-            </button>
-          </>
-        ) : (
-          <ConnectButton />
-        )}
-      </div>
+    <div className="flex items-center gap-4">
+      {wrongChain ? (
+        <button
+          onClick={() => switchChain({ chainId: CHAIN.id })}
+          className="link-underline font-mono text-label uppercase text-void"
+        >
+          Wrong network, switch
+        </button>
+      ) : (
+        <Hash value={address ?? ""} chars={4} />
+      )}
+      <button
+        onClick={() => disconnect()}
+        className="link-underline font-mono text-label uppercase text-faint transition-colors duration-500 hover:text-ink"
+      >
+        Disconnect
+      </button>
     </div>
   );
 }
