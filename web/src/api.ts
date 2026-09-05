@@ -125,7 +125,9 @@ export interface MarketRow {
   preview: Preview;
   name: string;
   vertical: string;
-  featured: boolean;
+  valuation: string;
+  agent_identity: string;
+  has_envelope?: boolean;
 }
 
 export class ApiError extends Error {
@@ -154,37 +156,72 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export const api = {
-  reset: (categories?: string[]) =>
-    request<{ listing_id: string; committed_root: string }>("/api/demo/reset", {
-      method: "POST",
-      body: JSON.stringify({ categories: categories ?? null }),
-    }),
-  listing: () => request<Listing>("/api/listing"),
-  marketplace: () =>
-    request<{ listings: MarketRow[]; count: number }>("/api/marketplace"),
-  preview: () => request<Preview>("/api/listing/preview"),
-  buy: () => request<Listing>("/api/listing/buy", { method: "POST", body: "{}" }),
-  transfer: () => request<Outcome>("/api/listing/transfer", { method: "POST" }),
-  /** The settled outcome, if there is one. 404 means "has not settled", which
-   *  is why the caller distinguishes it from a failure rather than swallowing
-   *  every error into an empty screen. */
-  outcome: () => request<Outcome>("/api/listing/outcome"),
-  seal: (tenant: string) =>
-    request<{ sealed: boolean; record: { sealed_at: string; reason: string } | null }>(
-      `/api/seal/${tenant}`,
+/**
+ * Two clients, deliberately not one.
+ *
+ * `market` reads listings that exist because someone paid gas to commit their
+ * root; the contract is the source of truth and this service only adds what the
+ * contract has no field for. `walkthrough` drives a scripted sale on a sample
+ * agent, which settles through an in-process mirror and touches no chain.
+ *
+ * They are separate objects so the boundary is legible at the call site rather
+ * than buried in a URL. Every walkthrough response also carries `simulated`,
+ * so a screen keys its banner off the payload and cannot render one as the
+ * other by forgetting which client it used.
+ */
+// One definition, kept beside the wallet code that consumes it most. Imported
+// as well as re-exported because `market.chain()` names it in its own return
+// type, and a bare re-export does not bring it into local scope.
+import type { ChainStatus } from "./chain/Wallet";
+export type { ChainStatus };
+
+export const market = {
+  listings: () =>
+    request<{ listings: MarketRow[]; count: number; chain: boolean }>(
+      "/api/marketplace",
     ),
+  listing: (id: string) => request<MarketRow>(`/api/listing/${id}`),
+  /** Ciphertext. Public on purpose — inert without the content key. */
+  envelope: (id: string) => request<unknown>(`/api/listing/${id}/envelope`),
+  chain: () => request<ChainStatus>("/api/chain"),
+};
+
+export interface Simulated {
+  simulated: true;
+  notice: string;
+}
+
+export const walkthrough = {
+  reset: (categories?: string[]) =>
+    request<{ listing_id: string; committed_root: string; price: number } & Simulated>(
+      "/api/walkthrough/reset",
+      { method: "POST", body: JSON.stringify({ categories: categories ?? null }) },
+    ),
+  listing: () => request<Listing & Simulated>("/api/walkthrough/listing"),
+  preview: () => request<Preview & Simulated>("/api/walkthrough/preview"),
+  buy: () => request<Listing & Simulated>("/api/walkthrough/buy", { method: "POST" }),
+  transfer: () =>
+    request<Outcome & Simulated>("/api/walkthrough/transfer", { method: "POST" }),
+  outcome: () => request<Outcome & Simulated>("/api/walkthrough/outcome"),
+  seal: (tenant: string) =>
+    request<
+      {
+        sealed: boolean;
+        record: { sealed_at: string; reason: string } | null;
+      } & Simulated
+    >(`/api/walkthrough/seal/${tenant}`),
   writeAttempt: () =>
-    request<{ accepted: boolean; reason: string }>("/api/seller/write-attempt", {
-      method: "POST",
-      body: "{}",
-    }),
+    request<{ accepted: boolean; reason: string } & Simulated>(
+      "/api/walkthrough/write-attempt",
+      { method: "POST", body: "{}" },
+    ),
   message: (side: "seller" | "buyer", message: string) =>
-    request<Reply>(`/api/agent/${side}/message`, {
+    request<Reply & Simulated>(`/api/walkthrough/agent/${side}/message`, {
       method: "POST",
       body: JSON.stringify({ message }),
     }),
 };
+
 
 /** Money arrives in minor units; render it the way a closing statement would. */
 export function formatAmount(minorUnits: number, currency: string): string {

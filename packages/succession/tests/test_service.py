@@ -1,251 +1,325 @@
-"""The HTTP layer, exercised through the whole sale.
+"""The marketplace HTTP layer, against a real deployed contract.
 
-Routes are tested for the guarantees they are supposed to carry, not just for
-200s — chiefly that the preview route cannot leak, and that the seal is visible
-through the API the way it is in the library.
+Every test here runs the routes a browser calls, backed by ``ListingContract``
+executing in py-evm — the same bytecode that goes to Base Sepolia. There is no
+seeded catalogue and no demo tenant, because the service no longer has either:
+a listing exists in these tests only because a seller published one from a store
+built record by record in the fixture.
+
+What is being defended, specifically:
+
+* the chain is authoritative — metadata cannot describe a sale the contract does
+  not have, and a row whose chain read fails is dropped rather than rendered
+* only the address the *contract* records as seller can publish or release
+* a content key is never accepted or served except against funded escrow
 """
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
 import pytest
 
 pytest.importorskip("fastapi")
+pytest.importorskip("web3")
+pytest.importorskip("eth_tester")
+
+from eth_account import Account  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+
+from succession.chain import ChainSettlement  # noqa: E402
+from succession.publish import SellerVault, publish_listing, seller_auth_header  # noqa: E402
+from succession.redaction import Sensitivity, mark  # noqa: E402
+
+from chain import deploy, load_artifacts  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+AGENT_ID = 417
+AGENT = f"erc8004:84532:{AGENT_ID}"
+PRICE = 25_000_000
 
-#: The token the fixture configures. Mutating routes are gated, so the suite
-#: exercises the same authenticated path a deployed service uses rather than
-#: relying on the localhost exemption — TestClient is not on loopback anyway.
-TOKEN = "test-token-not-a-secret"
+
+def _fill(memory):
+    """A store filled the way an agent fills one, not from a catalogue."""
+    client = memory.client
+    client.set_entity(
+        "identity", AGENT,
+        mark({"name": "Real Operator", "role": "Freight agent", "erc8004": AGENT},
+             sensitivity=Sensitivity.PUBLIC),
+    )
+    for i in range(3):
+        client.set_entity(
+            "relationship", f"cp-{i}",
+            mark({"company": f"Counterparty {i}"}, sensitivity=Sensitivity.PRIVATE),
+        )
+        client.write_event(evaluated={"cp": f"cp-{i}"}, acted={"quoted": 2000 + i})
+    return memory
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
+def market(tmp_path, monkeypatch, seller):
+    """A running marketplace whose chain is a real contract in py-evm."""
+    from web3 import EthereumTesterProvider, Web3
+
     monkeypatch.setenv("SUCCESSION_WORKDIR", str(tmp_path / "state"))
-    monkeypatch.setenv("SUCCESSION_API_TOKEN", TOKEN)
+    monkeypatch.setenv("SUCCESSION_VAULT", str(tmp_path / "vault"))
     for module in [m for m in list(sys.modules) if m.startswith("service")]:
         del sys.modules[module]
-    from service.app import app
 
-    with TestClient(app, headers={"Authorization": f"Bearer {TOKEN}"}) as c:
-        c.post("/api/demo/reset", json={}).raise_for_status()
-        yield c
+    w3 = Web3(EthereumTesterProvider())
+    artifacts = load_artifacts()
+    funder = w3.eth.accounts[0]
 
+    seller_account, buyer_account = Account.create(), Account.create()
+    for who in (seller_account.address, buyer_account.address):
+        w3.eth.send_transaction(
+            {"from": funder, "to": who, "value": w3.to_wei(10, "ether")}
+        )
 
-def test_a_write_without_a_token_is_refused(client):
-    """The gate is real: same client, same route, no credential."""
-    response = client.post("/api/demo/reset", json={}, headers={"Authorization": ""})
-    assert response.status_code == 401
-
-
-def test_a_write_with_the_wrong_token_is_refused(client):
-    response = client.post(
-        "/api/demo/reset", json={}, headers={"Authorization": "Bearer wrong"}
+    token = deploy(w3, artifacts, "MockERC20", sender=funder)
+    registry = deploy(w3, artifacts, "MockIdentityRegistry", sender=funder)
+    listings = deploy(
+        w3, artifacts, "ListingContract",
+        token.address, registry.address, funder, sender=funder,
     )
-    assert response.status_code == 401
+    registry.functions.register(seller_account.address, AGENT_ID, "ipfs://x").transact(
+        {"from": funder}
+    )
+    token.functions.mint(buyer_account.address, PRICE * 4).transact({"from": funder})
+
+    backend = ChainSettlement(
+        w3, contract_address=listings.address,
+        seller_key=seller_account.key.hex(), buyer_key=buyer_account.key.hex(),
+    )
+    backend.approve_identity(registry.address, seller_account.address, AGENT_ID)
+    backend.approve_payment(token.address, buyer_account.address, PRICE * 4)
+
+    record = {
+        "chain_id": w3.eth.chain_id,
+        "listing_contract": listings.address,
+        "payment_token": token.address,
+        "identity_registry": registry.address,
+    }
+
+    from service import app as app_module
+
+    # The service reads the chain read-only; here that read points at py-evm
+    # instead of an RPC. Nothing else about the route code changes.
+    app_module.CHAIN_PROVIDER = lambda: (backend, record)
+    monkeypatch.setattr(app_module, "_deployment", lambda: record)
+
+    vault = SellerVault(tmp_path / "vault")
+    stored, asset = publish_listing(
+        _fill(seller), backend, agent_identity=AGENT,
+        private_key=seller_account.key.hex(), price=PRICE,
+        chain_id=record["chain_id"], listing_contract=listings.address, vault=vault,
+    )
+
+    with TestClient(app_module.app) as client:
+        yield {
+            "client": client,
+            "backend": backend,
+            "stored": stored,
+            "asset": asset,
+            "vault": vault,
+            "seller_key": seller_account.key.hex(),
+            "seller": seller_account.address,
+            "buyer": buyer_account.address,
+            "buyer_key": buyer_account.key.hex(),
+            "record": record,
+        }
 
 
-def test_reads_do_not_require_a_token(client):
-    """The data room is public by design; only writes are gated."""
-    response = client.get("/api/listing/preview", headers={"Authorization": ""})
-    assert response.status_code == 200
+def _publish(market, **overrides):
+    stored = market["stored"]
+    body = {
+        "listing_id": stored.listing_id,
+        "agent_identity": stored.agent_identity,
+        "committed_root": stored.committed_root,
+        "chain_id": stored.chain_id,
+        "contract": stored.listing_contract,
+        "name": "Real Operator",
+        "vertical": "Freight",
+        "valuation": stored.valuation_reference,
+        "preview": stored.preview,
+        "envelope": market["asset"].envelope.to_dict(),
+    }
+    body.update(overrides)
+    headers = seller_auth_header(market["seller_key"], body["listing_id"])
+    return market["client"].post("/api/listings", json=body, headers=headers)
 
 
-def test_a_malformed_buyer_address_is_rejected(client):
-    response = client.post("/api/listing/buy", json={"buyer_address": "not-an-address"})
+# --- publishing ----------------------------------------------------------
+
+
+def test_the_marketplace_is_empty_until_a_seller_publishes(market):
+    """No seed data. An empty market is the true answer, not a bug."""
+    body = market["client"].get("/api/marketplace").json()
+    assert body["count"] == 0
+    assert body["listings"] == []
+
+
+def test_a_seller_publishes_and_the_row_comes_from_chain(market):
+    assert _publish(market).status_code == 200
+    body = market["client"].get("/api/marketplace").json()
+    assert body["count"] == 1
+
+    row = body["listings"][0]
+    stored = market["stored"]
+    # Truth from the contract...
+    assert row["listing"]["seller"] == market["seller"]
+    assert row["listing"]["hash_commitment"].lower() == stored.committed_root.lower()
+    assert row["listing"]["price"] == PRICE
+    assert row["listing"]["state"] == "open"
+    # ...presentation from the registry, computed off the real store.
+    assert row["name"] == "Real Operator"
+    assert sum(row["preview"]["counts"].values()) > 0
+
+
+def test_metadata_cannot_claim_a_commitment_the_contract_does_not_have(market):
+    """The join is a check, not a merge."""
+    response = _publish(market, committed_root="0x" + "ee" * 32)
+    assert response.status_code == 409
+    assert "commits" in response.json()["detail"]
+
+
+def test_a_stranger_cannot_publish_someone_elses_listing(market):
+    stranger = Account.create()
+    body = {
+        "listing_id": market["stored"].listing_id,
+        "agent_identity": AGENT,
+        "committed_root": market["stored"].committed_root,
+        "chain_id": market["stored"].chain_id,
+        "contract": market["stored"].listing_contract,
+    }
+    headers = seller_auth_header(stranger.key.hex(), body["listing_id"])
+    response = market["client"].post("/api/listings", json=body, headers=headers)
+    assert response.status_code == 403
+    assert "is not the seller" in response.json()["detail"]
+
+
+def test_publishing_without_a_signature_is_refused(market):
+    body = {
+        "listing_id": market["stored"].listing_id,
+        "agent_identity": AGENT,
+        "committed_root": market["stored"].committed_root,
+        "chain_id": market["stored"].chain_id,
+        "contract": market["stored"].listing_contract,
+    }
+    assert market["client"].post("/api/listings", json=body).status_code == 401
+
+
+def test_a_listing_that_is_not_on_chain_is_refused(market):
+    response = _publish(market, listing_id="listing-never-happened")
+    assert response.status_code == 404
+
+
+# --- the envelope and the key --------------------------------------------
+
+
+def test_the_envelope_is_public_and_the_key_is_not(market):
+    _publish(market)
+    listing_id = market["stored"].listing_id
+
+    # Ciphertext is served to anyone: it is inert without the key.
+    envelope = market["client"].get(f"/api/listing/{listing_id}/envelope")
+    assert envelope.status_code == 200
+    assert envelope.json()["ciphertext"]
+
+    # The key is not, because escrow has not been funded.
+    key = market["client"].get(f"/api/listing/{listing_id}/key")
+    assert key.status_code == 409
+
+
+def test_a_key_is_not_accepted_before_escrow(market):
+    """Even from the real seller. The service checks the chain itself."""
+    _publish(market)
+    listing_id = market["stored"].listing_id
+    response = market["client"].post(
+        f"/api/listing/{listing_id}/key",
+        json={"content_key": market["asset"].content_key.hex()},
+        headers=seller_auth_header(market["seller_key"], listing_id),
+    )
+    assert response.status_code == 409
+    assert "funded escrow" in response.json()["detail"]
+
+
+def test_the_key_flows_once_escrow_is_funded(market):
+    """Seller releases, buyer collects, and what comes back opens the envelope."""
+    from succession.envelope import SealedEnvelope, open_envelope
+
+    _publish(market)
+    listing_id = market["stored"].listing_id
+    market["backend"].buy(listing_id, buyer=market["buyer"], amount=PRICE)
+
+    released = market["client"].post(
+        f"/api/listing/{listing_id}/key",
+        json={"content_key": market["asset"].content_key.hex()},
+        headers=seller_auth_header(market["seller_key"], listing_id),
+    )
+    assert released.status_code == 200
+    assert released.json()["buyer"] == market["buyer"]
+
+    collected = market["client"].get(f"/api/listing/{listing_id}/key")
+    assert collected.status_code == 200
+
+    key = bytes.fromhex(collected.json()["content_key"])
+    envelope = SealedEnvelope.from_dict(
+        market["client"].get(f"/api/listing/{listing_id}/envelope").json()
+    )
+    package = open_envelope(envelope, key)
+    assert package.integrity["root"].lower() == market["stored"].committed_root.lower()
+
+
+def test_a_stranger_cannot_release_a_key(market):
+    _publish(market)
+    listing_id = market["stored"].listing_id
+    market["backend"].buy(listing_id, buyer=market["buyer"], amount=PRICE)
+    stranger = Account.create()
+    response = market["client"].post(
+        f"/api/listing/{listing_id}/key",
+        json={"content_key": market["asset"].content_key.hex()},
+        headers=seller_auth_header(stranger.key.hex(), listing_id),
+    )
+    assert response.status_code == 403
+
+
+def test_a_malformed_key_is_rejected(market):
+    _publish(market)
+    listing_id = market["stored"].listing_id
+    market["backend"].buy(listing_id, buyer=market["buyer"], amount=PRICE)
+    response = market["client"].post(
+        f"/api/listing/{listing_id}/key",
+        json={"content_key": "not-hex"},
+        headers=seller_auth_header(market["seller_key"], listing_id),
+    )
     assert response.status_code == 422
 
 
-def test_health(client):
-    assert client.get("/api/health").json()["status"] == "ok"
+# --- listing detail and status -------------------------------------------
 
 
-def test_the_listing_exposes_the_commitment(client):
-    listing = client.get("/api/listing").json()
-    assert listing["state"] == "open"
-    assert listing["hash_commitment"].startswith("0x")
-    assert listing["seller_signature"].startswith("0x")
+def test_listing_detail_joins_chain_and_metadata(market):
+    _publish(market)
+    body = market["client"].get(f"/api/listing/{market['stored'].listing_id}").json()
+    assert body["listing"]["state"] == "open"
+    assert body["agent_identity"] == AGENT
+    assert body["valuation"]
 
 
-def test_the_preview_route_does_not_leak(client):
-    blob = json.dumps(client.get("/api/listing/preview").json()).lower()
-    for secret in ("ironwood", "defense logistics", "forbids assignment"):
-        assert secret not in blob
+def test_an_unknown_listing_is_404(market):
+    assert market["client"].get("/api/listing/nope").status_code == 404
 
 
-def test_the_buyers_agent_has_nothing_before_the_sale(client):
-    reply = client.post(
-        "/api/agent/buyer/message", json={"message": "Northwind Mills here"}
-    ).json()
-    assert reply["recalled"] is False
-
-
-def test_the_sellers_agent_recalls_before_the_sale(client):
-    reply = client.post(
-        "/api/agent/seller/message", json={"message": "Northwind Mills here"}
-    ).json()
-    assert reply["recalled"] is True
-    assert "2,380" in reply["text"]
-
-
-def test_the_seller_can_write_before_the_sale(client):
-    assert client.post("/api/seller/write-attempt", json={}).json()["accepted"] is True
-
-
-def test_transfer_requires_escrow(client):
-    assert client.post("/api/listing/transfer").status_code == 409
-
-
-def test_the_full_sale_through_the_api(client):
-    client.post("/api/listing/buy", json={}).raise_for_status()
-    assert client.get("/api/listing").json()["state"] == "escrowed"
-
-    outcome = client.post("/api/listing/transfer").json()
-    assert outcome["outcome"] == "verified"
-    assert outcome["committed_root"] == outcome["delivered_root"]
-    assert outcome["certificate"]["transfer_status"] == "VERIFIED"
-    assert "SUCCESSION CERTIFICATE" in outcome["certificate_text"]
-
-    # The seller is sealed...
-    assert client.get("/api/seal/tenant-seller").json()["sealed"] is True
-    rejected = client.post("/api/seller/write-attempt", json={}).json()
-    assert rejected["accepted"] is False
-    assert "live agent" in rejected["reason"]
-
-    # ...and the buyer's cold agent now recalls the in-flight quote.
-    reply = client.post(
-        "/api/agent/buyer/message",
-        json={"message": "Hi, Northwind Mills again - still good on that Duluth run?"},
-    ).json()
-    assert reply["recalled"] is True
-    assert "2,380" in reply["text"]
-    assert {c["tier"] for c in reply["citations"]} >= {
-        "relationship",
-        "commitment",
-        "state",
-    }
-
-    provenance = client.get("/api/agent/buyer/provenance").json()
-    assert provenance["verified_hash"] == outcome["committed_root"]
-
-
-def test_a_listing_cannot_be_bought_twice_over_http(client):
-    client.post("/api/listing/buy", json={}).raise_for_status()
-    assert client.post("/api/listing/buy", json={}).status_code == 409
-
-
-def test_a_partial_listing_transfers_over_http(client):
-    client.post(
-        "/api/demo/reset", json={"categories": ["relationships", "preferences"]}
-    ).raise_for_status()
-    client.post("/api/listing/buy", json={}).raise_for_status()
-
-    outcome = client.post("/api/listing/transfer").json()
-    assert outcome["outcome"] == "verified"
-    assert outcome["certificate"]["categories_transferred"] == [
-        "preferences",
-        "relationships",
-    ]
-
-
-# -- the settled outcome survives a reload --------------------------------
-
-
-def test_outcome_is_404_before_settlement(client):
-    """"Has not settled" and "failed" must not look the same to the console."""
-    assert client.get("/api/listing/outcome").status_code == 404
-
-
-def test_outcome_is_recoverable_after_settlement(client):
-    """A settled sale must survive a page reload.
-
-    The receipt is durable in settlement.db, but the certificate is assembled
-    from the package header, which lives only in the listing process. Without a
-    persisted outcome the confirmation screen and the ledger vanished on
-    refresh for a transfer that genuinely happened — the UI asserting that
-    nothing had occurred.
-    """
-    client.post("/api/listing/buy", json={}).raise_for_status()
-    settled = client.post("/api/listing/transfer").json()
-
-    recovered = client.get("/api/listing/outcome")
-
-    assert recovered.status_code == 200
-    body = recovered.json()
-    assert body["outcome"] == "verified" == settled["outcome"]
-    assert body["committed_root"] == settled["committed_root"]
-    assert body["certificate"]["transfer_status"] == "VERIFIED"
-    # The downloadable certificate is part of what has to survive; rebuilding
-    # it from the header is exactly what a reload cannot do.
-    assert body["certificate_text"]
-
-
-def test_reset_clears_a_previous_outcome(client):
-    """Otherwise a fresh demo opens showing the last sale's certificate."""
-    client.post("/api/listing/buy", json={}).raise_for_status()
-    client.post("/api/listing/transfer").raise_for_status()
-    assert client.get("/api/listing/outcome").status_code == 200
-
-    client.post("/api/demo/reset", json={}).raise_for_status()
-
-    assert client.get("/api/listing/outcome").status_code == 404
-
-
-# -- the settlement backend names itself ----------------------------------
-
-
-def test_chain_route_reports_local_when_nothing_is_deployed(client, monkeypatch):
-    """LocalSettlement must never be presentable as the chain."""
-    monkeypatch.setenv("SUCCESSION_DEPLOYMENT", "/nonexistent/base-sepolia.json")
-
-    body = client.get("/api/chain").json()
-
-    assert body["mode"] == "local"
-    assert body["deployment"] is None
-    assert "No transaction reaches Base" in body["explanation"]
-
-
-def test_chain_route_reports_the_deployment_when_one_exists(
-    client, monkeypatch, tmp_path
-):
-    record = {
-        "chain_id": 84532,
-        "listing_contract": "0x" + "11" * 20,
-        "identity_registry": "0x7177a6867296406881E20d6647232314736Dd09A",
-        "identity_registry_is_mock": False,
-        "payment_token": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-        "arbiter": "0x" + "22" * 20,
-    }
-    path = tmp_path / "base-sepolia.json"
-    path.write_text(json.dumps(record))
-    monkeypatch.setenv("SUCCESSION_DEPLOYMENT", str(path))
-
-    body = client.get("/api/chain").json()
-
+def test_chain_route_reports_the_deployment(market):
+    body = market["client"].get("/api/chain").json()
     assert body["mode"] == "chain"
-    assert body["chain_id"] == 84532
-    assert body["deployment"]["identity_registry_is_mock"] is False
+    assert body["deployment"]["listing_contract"] == market["record"]["listing_contract"]
 
 
-def test_chain_route_is_read_per_request_not_cached(client, monkeypatch, tmp_path):
-    """Deploying happens while the service is already running.
-
-    A value cached at import would keep reporting local mode until someone
-    restarted it, which is the shape of bug that gets diagnosed as "the deploy
-    silently failed".
-    """
-    path = tmp_path / "base-sepolia.json"
-    monkeypatch.setenv("SUCCESSION_DEPLOYMENT", str(path))
-    assert client.get("/api/chain").json()["mode"] == "local"
-
-    path.write_text(json.dumps({"chain_id": 84532, "listing_contract": "0x0"}))
-
-    assert client.get("/api/chain").json()["mode"] == "chain"
+def test_health(market):
+    assert market["client"].get("/api/health").json()["status"] == "ok"

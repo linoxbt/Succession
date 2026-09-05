@@ -50,9 +50,29 @@ this service cross-origin. If it is proxied through the same origin instead (see
 the `/api` block in `netlify.toml`), leave it alone — same-origin needs no CORS
 grant, and that is the better arrangement.
 
+## Routes
+
+Reads are public; writes authenticate as the **seller of a specific listing**,
+by signature, checked against what the contract records rather than against
+anything stored here.
+
+| | |
+|---|---|
+| `GET /api/marketplace` | Every listing: the contract for truth, the registry for counts and valuation |
+| `GET /api/listing/{id}` | One listing, same join |
+| `POST /api/listings` | A seller publishes metadata + ciphertext. Signature must recover to the on-chain seller |
+| `GET /api/listing/{id}/envelope` | The ciphertext. Public — AES-256-GCM and inert without the key |
+| `POST /api/listing/{id}/key` | The seller releases the key. Refused unless the chain says `Escrowed` |
+| `GET /api/listing/{id}/key` | The buyer collects it. Escrow re-checked on the way out |
+| `GET /api/chain` | Which contract is being read, if any |
+
+`/api/walkthrough/*` is the scripted sample-agent sale. Separate module,
+separate prefix, `LocalSettlement`, and every response carries
+`simulated: true`. Nothing in the marketplace reads its state.
+
 ## On-chain mode
 
-`GET /api/chain` reports `local` until `deployments/base-sepolia.json` exists.
+`GET /api/chain` reports `none` until `deployments/base-sepolia.json` exists.
 A deployment file is the only thing that switches it, and there is deliberately
 no flag that does — a flag is something that can be set wrongly, and reporting
 `LocalSettlement` as a real settlement is the one dishonest thing this codebase

@@ -104,11 +104,16 @@ preflight checks.
 - [ ] **Real authentication and accounts.** There is no notion of a user. A
       connected wallet is now an *address*, not an account — nothing is
       authorised against it server-side.
-- [x] **Multi-listing marketplace.** Six listings, each a real export, sortable
-      and filterable by vertical, state, valuation, price and spread.
+- [x] **Multi-listing marketplace.** Now genuinely multi-seller: every row is
+      read from `ListingContract` and joined with metadata its own seller
+      published. The six seeded exports are gone — an empty marketplace means
+      nobody has listed, which is the honest answer.
 - [ ] **Watchlists and search** across the marketplace.
-- [ ] **Seller onboarding** — connect a store, walk the redaction pass, preview
-      what a buyer will see before committing.
+- [x] **Seller onboarding** — `succession list` exports a seller's own store,
+      commits its root on chain and vaults the key. A terminal flow rather than
+      a form because Sibyl 0.8.0 is local-only and no browser can read a store;
+      the *Sell* screen builds the exact command. Previewing what a buyer will
+      see before committing is still to do.
 - [ ] **A redaction review UI.** Flags are still set in code, but the listing
       flow now *reads* them: the scope selector greys out and disables any
       category with nothing sellable in it, from the data room's per-category
@@ -183,6 +188,22 @@ preflight checks.
       natural consequence of making it property.
 
 ---
+
+### Newly introduced, and worth stating
+
+- [ ] **Seller liveness.** The content key is released by the seller's own
+      `succession fulfil` watcher, after it reads `Escrowed` from the chain
+      itself. Nobody else holds the key — not this marketplace — so a buyer whose
+      seller is offline waits. That is a deliberate trade for not trusting the
+      service with the key, and it is bounded: `reclaimExpired` returns the
+      buyer's money after the confirmation window without the seller's
+      cooperation. A seller daemon with an uptime guarantee, or a threshold
+      escrow of the key, is the real fix.
+- [ ] **Listings are discoverable only if their metadata was published.** The
+      chain is authoritative for every listing, but the marketplace enumerates
+      what sellers have posted to `service/registry.py`. A listing made on chain
+      without posting metadata is real and invisible. Indexing `Listed` events
+      directly would close that.
 
 ## Known technical debt
 

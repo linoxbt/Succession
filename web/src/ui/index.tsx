@@ -16,6 +16,7 @@
  * is paired with a text label, because colour is never the sole signal for
  * state — "Escrow: funds held", not a blue dot.
  */
+import { useState } from "react";
 import type { ReactNode } from "react";
 
 /* -- structure ---------------------------------------------------------- */
@@ -262,6 +263,42 @@ export function Empty({ children }: { children: ReactNode }) {
 }
 
 /** A short note in the document's own voice — formal, precise, not a callout box. */
+/**
+ * A command the reader is meant to run, with a copy button.
+ *
+ * Used wherever the honest answer is "this happens on your machine, not here" —
+ * a seller's Sibyl store and a buyer's import are both local files, so the
+ * interface hands over the exact line rather than pretending it can act on
+ * them. The text stays selectable so copying works even if the clipboard API is
+ * unavailable or refused.
+ */
+export function Copyable({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="relative">
+      <pre className="overflow-x-auto border border-rule bg-parchment px-4 py-3 text-[0.8125rem] leading-relaxed text-ink">
+        <code>{text}</code>
+      </pre>
+      <button
+        onClick={() => {
+          navigator.clipboard
+            ?.writeText(text)
+            .then(() => {
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1600);
+            })
+            .catch(() => {
+              /* select-and-copy still works; nothing to report */
+            });
+        }}
+        className="absolute right-2 top-2 border border-rule bg-vellum px-2 py-1 text-[0.75rem] text-muted hover:text-ink"
+      >
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </div>
+  );
+}
+
 export function Note({ children }: { children: ReactNode }) {
   return (
     <p className="max-w-column text-[0.8125rem] leading-relaxed text-muted">{children}</p>

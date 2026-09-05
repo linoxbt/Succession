@@ -40,7 +40,10 @@ export interface Deployment {
 }
 
 export interface ChainStatus {
-  mode: "local" | "chain";
+  // "none" when no deployment record exists. There is deliberately no third
+  // state: a flag that turned on chain mode without a deployment would be a
+  // flag that could be set wrongly.
+  mode: "none" | "chain";
   explanation: string;
   chain_id: number | null;
   deployment: Deployment | null;

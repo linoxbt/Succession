@@ -13,7 +13,7 @@ and verified by the buyer re-hashing their own store.
 [Overview](#overview) · [How it works](#how-a-sale-works) · [Quick start](#quick-start) ·
 [Architecture](#architecture) · [Security](#security-model) · [Roadmap](docs/ROADMAP.md)
 
-`248 tests` · `Python 3.11+` · `Solidity 0.8.28` · `React 18`
+`259 tests` · `Python 3.11+` · `Solidity 0.8.28` · `React 18`
 
 </div>
 
@@ -86,7 +86,7 @@ git clone https://github.com/linoxbt/Succession && cd Succession
 
 python -m venv .venv
 .venv/bin/pip install -e "packages/succession[test,service,acp,chain]"
-.venv/bin/python -m pytest packages/succession/tests        # 248 tests
+.venv/bin/python -m pytest packages/succession/tests        # 259 tests
 
 ( cd contracts && npm install && npm run build )            # solc → artifacts
 .venv/bin/python -m succession.demo                         # the whole workflow
@@ -95,7 +95,35 @@ PYTHONPATH=. .venv/bin/uvicorn service.app:app --port 8000  # API
 ( cd web && npm install && npm run dev )                    # UI on :5173
 ```
 
-### Command line
+### Selling your own agent's memory
+
+Listing happens on the seller's machine, and has to. Sibyl 0.8.0 is local-only —
+`MemoryClient.local(path)` is its sole constructor and the package makes no
+network calls beyond a tier check — so a store is a SQLite file on its owner's
+disk and no web page can read it. That constraint is also the only arrangement
+in which "plaintext never leaves the seller before escrow" is a fact: the
+export, the encryption and the signature all happen locally, and what reaches
+the network is a hash, a signature, aggregate counts and ciphertext.
+
+```bash
+# 1. Commit your memory's root on chain and keep the key in a local vault.
+SUCCESSION_SIGNING_KEY=0x… succession list \
+  --db ~/.sibyl-memory/memory.db --tenant my-agent \
+  --agent erc8004:84532:417 --price 25000000        # 25 USDC, 6 decimals
+
+# 2. Release the content key when — and only when — escrow is funded on chain.
+succession fulfil
+
+# 3. Buyer side: collect, import into your own store, and re-hash it there.
+succession claim --listing listing-… --db buyer.db --tenant my-successor
+```
+
+`succession list` refuses to run without a deployment record. Listing settles on
+chain and there is deliberately no offline mode for it: `LocalSettlement`
+mirrors the contract's state machine closely enough that a seller could watch
+every screen say "listed" while nothing had touched a chain.
+
+### The rest of the command line
 
 ```bash
 succession export  --db seller.db --tenant t-seller --agent erc8004:84532:0417 --out pkg
@@ -103,6 +131,7 @@ succession verify  pkg --root 0x… --signer 0x…
 succession import  pkg --db buyer.db --tenant t-buyer --root 0x… --signer 0x…
 succession value   --db seller.db --tenant t-seller
 succession preview --db seller.db --tenant t-seller --agent erc8004:84532:0417
+succession listings                                  # what you have listed
 
 succession-acp status
 succession-acp sync --db seller.db --tenant t-seller
@@ -111,6 +140,20 @@ succession-acp sync --db seller.db --tenant t-seller
 Export writes a package to disk; verify and import read it back in separate
 invocations against a separate store. That is deliberately the path a
 two-machine transfer takes — nothing is passed in memory between the halves.
+
+### What is in the app, and what is not
+
+The **Marketplace** shows only listings that exist on chain. There is no seed
+data and no cached recording behind it — an empty marketplace means nobody has
+listed yet, and that is the answer it gives.
+
+The **Walkthrough** is a scripted sale on a sample agent, kept in its own module
+(`service/walkthrough.py`), under its own route prefix, settling through
+`LocalSettlement`, with every response stamped `simulated: true` and a banner
+that does not go away. It exists because the load-bearing claim — that a
+successor agent inherits working context rather than a file — is only
+convincing when you watch a cold agent answer from memory it did not have a
+minute ago. No code path connects it to the marketplace.
 
 ---
 
@@ -135,6 +178,8 @@ packages/succession/src/succession/
 ├── dataroom.py      aggregate-only preview
 ├── seal.py          the seal registry and write guard
 ├── certificate.py   the Succession Certificate
+├── publish.py       the seller's side: list your own store, keep the key
+├── fulfil.py        release the key, only against escrow read from chain
 ├── transfer.py      the orchestrator
 ├── agent.py         retrieval over Sibyl's FTS index
 ├── catalog.py       the marketplace population — several distinct agents
@@ -143,7 +188,9 @@ packages/succession/src/succession/
 contracts/src/ListingContract.sol    escrow, atomic settlement, the sealed flag
                                      one live listing per agent; cancel before escrow
 scripts/                             deploy, run N transfers, record a run
-service/                             FastAPI over the pipeline
+service/app.py                       the marketplace: chain-backed, no seed data
+service/registry.py                  metadata the contract has no field for
+service/walkthrough.py               the sample-agent walkthrough, quarantined
 web/                                 landing page and operations console
 web/src/chain/                       wallet connection and on-chain escrow
 ```
@@ -320,7 +367,7 @@ bytes; it was the right to *be* that agent.
 ## Testing
 
 ```bash
-.venv/bin/python -m pytest packages/succession/tests   # 248
+.venv/bin/python -m pytest packages/succession/tests   # 259
 ( cd contracts && forge test )                         # 28, the mirrored Foundry suite
 ```
 

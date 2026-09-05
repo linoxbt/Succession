@@ -106,6 +106,161 @@ def cmd_preview(args: argparse.Namespace) -> int:
     return 0
 
 
+def _chain_backend(args: argparse.Namespace, key: str):
+    """A settlement backend against the deployed contract.
+
+    Deliberately has no local fallback. ``LocalSettlement`` mirrors the
+    contract's state machine well enough that a seller could list against it and
+    see every screen say "listed" while nothing had touched a chain — which is
+    precisely the failure this project exists to make impossible. If there is no
+    deployment record, listing stops.
+    """
+    from web3 import Web3
+    from web3.middleware import ExtraDataToPOAMiddleware
+
+    from .chain import ChainSettlement
+
+    record_path = Path(
+        args.deployment
+        or os.environ.get("SUCCESSION_DEPLOYMENT")
+        or Path(__file__).resolve().parents[4] / "deployments" / "base-sepolia.json"
+    )
+    if not record_path.is_file():
+        raise SystemExit(
+            f"no deployment record at {record_path}. Listing settles on chain and "
+            "there is no offline mode for it — deploy first with\n"
+            "  python scripts/deploy_base_sepolia.py"
+        )
+    record = json.loads(record_path.read_text("utf-8"))
+
+    rpc = os.environ.get("BASE_SEPOLIA_RPC_URL")
+    if not rpc:
+        raise SystemExit("set BASE_SEPOLIA_RPC_URL to reach the chain")
+    w3 = Web3(Web3.HTTPProvider(rpc, request_kwargs={"timeout": 30}))
+    w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
+    if not w3.is_connected():
+        raise SystemExit(f"cannot reach {rpc}")
+
+    backend = ChainSettlement(
+        w3, contract_address=record["listing_contract"], seller_key=key
+    )
+    return backend, record
+
+
+def cmd_list(args: argparse.Namespace) -> int:
+    """List your own agent's memory for sale, on chain."""
+    from .publish import PublishError, publish_listing
+
+    key = _require_key()
+    memory = open_tenant(args.db, args.tenant)
+    backend, record = _chain_backend(args, key)
+
+    try:
+        stored, asset = publish_listing(
+            memory,
+            backend,
+            agent_identity=args.agent,
+            private_key=key,
+            price=args.price,
+            chain_id=int(record["chain_id"]),
+            listing_contract=record["listing_contract"],
+            categories=args.categories,
+        )
+    except PublishError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    print(f"listed  {stored.listing_id}")
+    print(f"  agent           {stored.agent_identity}")
+    print(f"  committed root  {stored.committed_root}")
+    print(f"  price           {stored.price} ({stored.currency} minor units)")
+    print(f"  categories      {', '.join(stored.categories)}")
+    print(f"  records         {sum(asset.preview.to_dict()['counts'].values())}")
+    print(f"  contract        {stored.listing_contract}")
+    print()
+    print("The encrypted package and its key are in your vault. The key is")
+    print("released only when you see escrow funded on chain:")
+    print(f"  succession fulfil --listing {stored.listing_id}")
+    return 0
+
+
+def cmd_fulfil(args: argparse.Namespace) -> int:
+    """Release content keys for listings whose escrow has landed."""
+    from .fulfil import watch
+
+    key = _require_key()
+    backend, _ = _chain_backend(args, key)
+    results = watch(
+        backend,
+        interval=args.interval,
+        once=args.once,
+        listings=[args.listing] if args.listing else None,
+    )
+    return 0 if results or args.once else 0
+
+
+def cmd_claim(args: argparse.Namespace) -> int:
+    """Buyer side: collect the package you paid for, import it, re-hash it.
+
+    The import happens here rather than in the browser for the same reason
+    listing does — a Sibyl store is a local file, and the buyer's is on the
+    buyer's machine. Re-hashing the *destination* is the step that makes the
+    purchase checkable: it proves the importer wrote what it received and the
+    engine coerced nothing on the way in.
+    """
+    import urllib.request
+
+    from .envelope import SealedEnvelope, open_envelope
+    from .importer import import_package
+
+    def _get(path: str) -> dict:
+        with urllib.request.urlopen(
+            f"{args.marketplace.rstrip('/')}{path}", timeout=30
+        ) as response:
+            return json.load(response)
+
+    backend, _ = _chain_backend(args, os.environ.get(KEY_ENV, "0x" + "11" * 32))
+    listing = backend.get(args.listing)
+
+    envelope = SealedEnvelope.from_dict(_get(f"/api/listing/{args.listing}/envelope"))
+    key = bytes.fromhex(_get(f"/api/listing/{args.listing}/key")["content_key"])
+    package = open_envelope(envelope, key)
+
+    sink = open_tenant(args.db, args.tenant)
+    result = import_package(
+        package,
+        sink,
+        committed_root=listing.hash_commitment,
+        expected_signer=listing.seller,
+    )
+    print(f"imported {result.total_records} records into {result.tenant_id}")
+    print(f"  committed root  {listing.hash_commitment}")
+    print(f"  re-derived root {result.reimported_root}")
+    print(f"  {'VERIFIED' if result.verified else 'MISMATCH'}")
+    if not result.verified:
+        print()
+        print("Do not confirm on chain. Submitting this root refunds you and the")
+        print("sale is abandoned, which is the correct outcome for a bad delivery.")
+        return 1
+    print()
+    print("Confirm on chain to release payment and take the identity:")
+    print(f"  the root above, submitted to confirmTransfer({args.listing}, ...)")
+    return 0
+
+
+def cmd_listings(args: argparse.Namespace) -> int:
+    """What this seller has listed, from their own vault."""
+    from .publish import SellerVault
+
+    rows = SellerVault().all()
+    if not rows:
+        print("no listings in your vault")
+        return 0
+    for row in rows:
+        print(f"{row.listing_id}  {row.agent_identity}  {row.price} {row.currency}")
+        print(f"  root {row.committed_root}  chain {row.chain_id}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="succession")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -147,6 +302,44 @@ def main(argv: list[str] | None = None) -> int:
     tenant_args(p)
     p.add_argument("--agent", required=True)
     p.set_defaults(func=cmd_preview)
+
+    def deployment_arg(p: argparse.ArgumentParser) -> None:
+        p.add_argument(
+            "--deployment",
+            type=Path,
+            default=None,
+            help="path to the deployment record (default: deployments/base-sepolia.json)",
+        )
+
+    p = sub.add_parser("list", help="list your agent's memory for sale, on chain")
+    tenant_args(p)
+    deployment_arg(p)
+    p.add_argument("--agent", required=True,
+                   help="the ERC-8004 identity you hold, e.g. erc8004:84532:417")
+    p.add_argument("--price", type=int, required=True,
+                   help="asking price in the payment token's minor units (USDC has 6)")
+    p.add_argument("--categories", nargs="*", choices=DATA_CATEGORIES,
+                   help="partial succession: sell only these")
+    p.set_defaults(func=cmd_list)
+
+    p = sub.add_parser("fulfil", help="release content keys once escrow is funded")
+    deployment_arg(p)
+    p.add_argument("--listing", default=None, help="just this one (default: all)")
+    p.add_argument("--interval", type=int, default=30, help="seconds between polls")
+    p.add_argument("--once", action="store_true", help="check once and exit")
+    p.set_defaults(func=cmd_fulfil)
+
+    p = sub.add_parser("claim", help="collect, import and verify memory you bought")
+    tenant_args(p)
+    deployment_arg(p)
+    p.add_argument("--listing", required=True, help="the listing you funded escrow on")
+    p.add_argument("--marketplace", default=os.environ.get(
+        "SUCCESSION_MARKETPLACE", "http://127.0.0.1:8000"
+    ), help="marketplace base URL")
+    p.set_defaults(func=cmd_claim)
+
+    p = sub.add_parser("listings", help="what you have listed")
+    p.set_defaults(func=cmd_listings)
 
     args = parser.parse_args(argv)
     return args.func(args)
