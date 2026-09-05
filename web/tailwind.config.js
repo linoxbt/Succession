@@ -29,29 +29,35 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Paper and carbon: the two grounds the page alternates between.
-        paper: "#F4F1EA",
-        // A half-step off the page for an inset region. Not a card surface —
+        // Paper and carbon, both warm. The ground carries a little brown
+        // rather than sitting neutral, so the page reads as stock rather than
+        // as a white screen, and the dark chapters are a deep umber rather
+        // than a near-black: an inversion of the same paper, not a different
+        // material.
+        paper: "#EFE9DE",
+        // A half-step off the page for an inset region. Not a card surface,
         // there are no cards.
-        shade: "#E9E4D8",
-        carbon: "#16130F",
+        shade: "#E3DACA",
+        carbon: "#1C1611",
         // One step up from carbon, for hairlines on inverted sections.
-        carbonRule: "#2C2721",
+        carbonRule: "#352B22",
 
-        ink: "#1A1815",
+        ink: "#201A14",
         // Secondary and tertiary ink, mixed toward the page rather than grey,
         // so type never looks like it is floating on a different background.
-        muted: "#57534B",
-        faint: "#8B857A",
-        rule: "#CDC6B6",
-        hairline: "#DED8C9",
+        muted: "#5A5044",
+        faint: "#8C8172",
+        rule: "#C7BCA8",
+        hairline: "#D9D0BD",
 
         // Inverted equivalents, for type on carbon.
-        chalk: "#F4F1EA",
-        chalkMuted: "#A8A196",
-        chalkFaint: "#6E675C",
+        chalk: "#F1EBE0",
+        chalkMuted: "#A79C8A",
+        chalkFaint: "#6F6453",
 
-        // State — the only colours in the system.
+        // State. The only colours in the system that mean anything, and the
+        // only ones untouched by the warming above: they have to stay
+        // separable from the ground, not harmonised into it.
         escrow: "#2E4A6B",
         closed: "#3C6E4A",
         void: "#8A4038",
@@ -69,11 +75,11 @@ export default {
         // The scale is deliberately gapped rather than continuous. Editorial
         // hierarchy comes from large intervals between few sizes; a smooth
         // ramp of nine sizes reads as a UI kit.
-        colossal: ["clamp(3.5rem, 13vw, 13rem)", { lineHeight: "0.86", letterSpacing: "-0.035em" }],
-        display: ["clamp(2.75rem, 8vw, 7rem)", { lineHeight: "0.92", letterSpacing: "-0.03em" }],
-        title: ["clamp(2rem, 4.5vw, 3.5rem)", { lineHeight: "1.02", letterSpacing: "-0.025em" }],
+        colossal: ["clamp(3rem, 9vw, 7.5rem)", { lineHeight: "0.86", letterSpacing: "-0.035em" }],
+        display: ["clamp(2.25rem, 5.5vw, 4.5rem)", { lineHeight: "0.92", letterSpacing: "-0.03em" }],
+        title: ["clamp(1.75rem, 3.2vw, 2.5rem)", { lineHeight: "1.02", letterSpacing: "-0.025em" }],
         heading: ["clamp(1.35rem, 2.2vw, 1.85rem)", { lineHeight: "1.15", letterSpacing: "-0.015em" }],
-        figure: ["clamp(1.75rem, 3.2vw, 2.75rem)", { lineHeight: "1.05", letterSpacing: "-0.02em" }],
+        figure: ["clamp(1.5rem, 2.4vw, 2.25rem)", { lineHeight: "1.05", letterSpacing: "-0.02em" }],
         // The small end: labels and metadata, set wide because they are read
         // as annotation rather than prose.
         label: ["0.6875rem", { lineHeight: "1.4", letterSpacing: "0.14em" }],

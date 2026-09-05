@@ -10,9 +10,12 @@
  * draws itself under the label rather than by a filled pill: a pill is a button
  * shape, and these are places, not actions.
  *
- * On narrow screens the row becomes a full-height overlay set at display scale
- * rather than a horizontally scrolling strip. Six destinations shrunk to fit
- * are six destinations nobody can hit.
+ * There is one navigation at every width: a Menu button, and a full-height
+ * overlay behind it with the destinations set at display scale. A header that
+ * shows six links on desktop and hides them on mobile is two navigations to
+ * keep in agreement, and the inline row was the half that made the masthead
+ * heavy. The landing works the same way, so both halves of the product now
+ * open with the same gesture.
  */
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -91,26 +94,11 @@ export default function Shell({
             <Wordmark size={scrolled ? 24 : 30} />
           </button>
 
-          <nav className="hidden items-center gap-9 lg:flex" aria-label="Console">
-            {NAV.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => go(item.id)}
-                aria-current={view === item.id ? "page" : undefined}
-                className={`link-underline whitespace-nowrap font-mono text-label uppercase transition-colors duration-500 ${
-                  view === item.id ? "text-ink" : "text-faint hover:text-ink"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
-
           <div className="flex items-center gap-6">
             <div className="hidden sm:block">{wallet}</div>
             <button
               onClick={() => setOpen((v) => !v)}
-              className="font-mono text-label uppercase text-ink lg:hidden"
+              className="link-underline font-mono text-label uppercase text-ink"
               aria-expanded={open}
               aria-controls="console-menu"
             >
@@ -122,7 +110,7 @@ export default function Shell({
 
       <div
         id="console-menu"
-        className={`fixed inset-0 z-40 bg-paper transition-opacity duration-500 ease-swift lg:hidden ${
+        className={`fixed inset-0 z-40 bg-paper transition-opacity duration-500 ease-swift ${
           open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
