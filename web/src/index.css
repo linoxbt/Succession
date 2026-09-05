@@ -2,61 +2,250 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * Global layer.
+ *
+ * Motion here is systemic rather than decorative: a small set of primitives —
+ * reveal, parallax, mask, magnetic — applied deliberately, so the page has
+ * depth without anything jittering. Every one of them animates `transform` or
+ * `opacity` only, which is what keeps a heavily animated page off the main
+ * thread and at 60fps.
+ *
+ * Every effect below degrades to nothing under `prefers-reduced-motion`. The
+ * content was never carried by the animation.
+ */
+
 @layer base {
   html {
     color-scheme: light;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Lenis drives scrolling; the native smooth behaviour would fight it. */
+    scroll-behavior: auto;
   }
 
   body {
-    @apply bg-vellum font-sans text-ink;
+    @apply bg-paper font-sans text-body text-ink;
+    overflow-x: hidden;
   }
 
-  /* Numerals must line up column to column — a definition list of figures
-     that jitters between rows reads as sloppy bookkeeping. */
+  /* Display type is set tight and optically aligned. Instrument Serif carries
+     a little too much side bearing at these sizes to sit flush to a margin. */
+  .display-type {
+    @apply font-display;
+    font-kerning: normal;
+    text-wrap: balance;
+  }
+
+  /* Numerals must line up column to column — a table of figures that jitters
+     between rows reads as sloppy bookkeeping. */
   .tnum {
     font-variant-numeric: tabular-nums;
   }
 
-  /* Part 9's accessibility floor: a visible keyboard focus ring on every
-     interactive element. Built to, not announced. */
+  /* A visible keyboard focus ring on every interactive element. */
   :focus-visible {
-    @apply outline-none ring-2 ring-escrow ring-offset-2 ring-offset-vellum;
+    @apply outline-none ring-2 ring-escrow ring-offset-2 ring-offset-paper;
+  }
+
+  .on-carbon :focus-visible {
+    @apply ring-chalk ring-offset-carbon;
   }
 
   ::selection {
-    @apply bg-escrow/15;
+    @apply bg-ink/10;
+  }
+
+  .on-carbon ::selection {
+    @apply bg-chalk/20;
   }
 }
 
 @layer components {
-  /* --- The hash-match pulse ------------------------------------------
+  /* --- page frame -----------------------------------------------------
 
-     The only animation in the product. It fires once, when verification
-     completes, on the checkmark itself. Everything else on every screen is
-     static by design: this product's credibility comes from restraint, not
-     liveliness, so there is no loading shimmer, no card entrance, and no
-     hover lift anywhere in this file.
+     The page is edge-to-edge; this is the gutter, not a centring container.
+     Content sits close to the viewport edge on purpose and only pulls in far
+     enough to stay off it. */
+  .gutter {
+    @apply px-6 sm:px-10 lg:px-16 xl:px-24;
+  }
 
-     Respects prefers-reduced-motion by simply not animating — the checkmark
-     is still there, and it was never the animation that carried the meaning. */
+  /* A reading column, for prose only. Everything else uses the full width. */
+  .measure {
+    @apply max-w-measure;
+  }
+
+  /* --- chapter numbering ----------------------------------------------
+
+     Sections are numbered like chapters because the page is one document read
+     top to bottom, not a set of independent panels. */
+  .chapter-mark {
+    @apply font-mono text-label uppercase text-faint;
+  }
+
+  .on-carbon .chapter-mark {
+    @apply text-chalkFaint;
+  }
+
+  /* --- reveal ----------------------------------------------------------
+
+     The default entrance: a short rise with a fade, triggered once when the
+     element first crosses into view. Applied to blocks, never to every child —
+     a page where everything animates in is a page that feels slow. */
+  .reveal {
+    opacity: 0;
+    transform: translate3d(0, 1.75rem, 0);
+    transition:
+      opacity 900ms var(--ease-enter, cubic-bezier(0.16, 1, 0.3, 1)),
+      transform 900ms var(--ease-enter, cubic-bezier(0.16, 1, 0.3, 1));
+    will-change: transform, opacity;
+  }
+
+  .reveal.is-in {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+
+  /* Staggering is done with a custom property so a container can set it once
+     rather than every child carrying its own delay class. */
+  .reveal[style*="--i"] {
+    transition-delay: calc(var(--i) * 90ms);
+  }
+
+  /* --- masked reveal ---------------------------------------------------
+
+     For display lines and images: the element rises out from behind a clip
+     rather than fading in place. Reads as print being uncovered. */
+  .mask-line {
+    overflow: hidden;
+    display: block;
+  }
+
+  .mask-line > * {
+    display: block;
+    transform: translate3d(0, 105%, 0);
+    transition: transform 1100ms cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform;
+  }
+
+  .mask-line.is-in > * {
+    transform: translate3d(0, 0, 0);
+  }
+
+  .mask-line[style*="--i"] > * {
+    transition-delay: calc(var(--i) * 110ms);
+  }
+
+  /* --- image treatment -------------------------------------------------
+
+     Images are framed by their crop, not by a border-radius. The figure holds
+     the aspect ratio and clips; the image inside is oversized so parallax has
+     somewhere to travel without exposing an edge. */
+  .frame {
+    @apply relative overflow-hidden;
+  }
+
+  .frame > img,
+  .frame > canvas,
+  .frame > svg {
+    @apply h-full w-full object-cover;
+    transform: scale(1.06);
+    transition: transform 1200ms cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform;
+  }
+
+  .frame:hover > img {
+    transform: scale(1.01);
+  }
+
+  /* --- links -----------------------------------------------------------
+
+     A rule that draws itself from the leading edge. Directional, so it reads
+     as the link moving rather than as a state toggling. */
+  .link-underline {
+    @apply relative inline-block;
+  }
+
+  .link-underline::after {
+    content: "";
+    @apply absolute bottom-0 left-0 h-px w-full origin-right scale-x-0 bg-current;
+    transition: transform 520ms cubic-bezier(0.22, 0.61, 0.24, 1);
+  }
+
+  .link-underline:hover::after,
+  .link-underline:focus-visible::after {
+    @apply origin-left scale-x-100;
+  }
+
+  /* --- the hash-match pulse -------------------------------------------
+
+     Kept from the original system. It fires once, when verification completes,
+     on the checkmark itself — the single moment in the product where something
+     is genuinely resolved. */
   .verify-pulse {
     @apply animate-verify;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .verify-pulse {
-      animation: none;
-    }
+  /* --- the evidentiary strip ------------------------------------------
+
+     The region of a listing that should feel most official: set apart by rules,
+     never by a shadow. Shadows imply depth and depth is a marketing device; a
+     closing document is flat. */
+  .evidence {
+    @apply border-y border-rule py-8;
   }
 
-  /* --- The evidentiary strip -----------------------------------------
+  .on-carbon .evidence {
+    @apply border-carbonRule;
+  }
 
-     The "verified on-chain" region of the listing page. The single element
-     that should feel most official: set apart with a hairline border, never
-     a shadow. Shadows imply depth and depth is a marketing device; a closing
-     document is flat. */
-  .evidence {
-    @apply border-y border-rule py-4;
+  /* --- inverted chapters ----------------------------------------------
+
+     Full-bleed carbon sections. The alternation between paper and carbon is
+     what gives the page its cadence, so this is a section-level treatment and
+     never applied to a fragment. */
+  .on-carbon {
+    @apply bg-carbon text-chalk;
+  }
+}
+
+@layer utilities {
+  /* Horizontal rails scroll with the pointer or a swipe and hide their bar —
+     the content's own overflow is the affordance. */
+  .rail {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .rail::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* --- reduced motion ---------------------------------------------------
+
+   Everything above is an enhancement. Under a reduced-motion preference the
+   page is fully legible and fully functional with none of it: revealed
+   elements start visible, masks are open, parallax is inert. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .mask-line > *,
+  .frame > img {
+    transition: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+
+  .verify-pulse {
+    animation: none;
+  }
+
+  .animate-marquee {
+    animation: none;
+  }
+
+  html {
+    scroll-behavior: auto;
   }
 }

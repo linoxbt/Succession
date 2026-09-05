@@ -1,27 +1,32 @@
 /**
- * The design system, from Part 9 of the build spec.
+ * The design system.
  *
- * The reference point is a private M&A data room and an escrow closing
- * statement — not a consumer marketplace. This is a serious, slightly formal
- * transaction interface, closer in register to a stock transfer certificate
- * than a shopping cart. Every marketplace cliché is deliberately absent: no
- * product-grid cards, no star ratings, no cart-icon buy buttons, no confetti.
+ * The product is an escrow desk for agent memory — real money, irreversible
+ * transfers, hashes that either match or do not. So the art direction is
+ * editorial rather than promotional: this is set like a broadsheet and a
+ * closing document, not like a storefront. What carries the page is scale,
+ * rhythm and negative space, and the drama comes from alternating between
+ * paper and carbon at full bleed rather than from an accent colour.
  *
- * The rule that governs every colour decision below: **colour is used only to
- * encode transaction state, never as page decoration.** A screen with nothing
- * pending shows no colour beyond ink on vellum. That is why the palette has
- * exactly three state colours and no brand accent — an accent would be
- * decoration by definition, since it would appear on screens where nothing is
- * happening.
+ * Two rules survive from the original system because they are semantic, not
+ * stylistic, and the interface would be worse without them:
  *
- * Three families, each with exactly one job:
- *   Spectral       headings, agent identity, and any monetary or hash figure
- *                  treated as a headline moment — the register of a closing
- *                  document.
- *   IBM Plex Sans  body copy, labels, interface chrome.
- *   IBM Plex Mono  hash strings and on-chain identifiers, and nothing else. A
- *                  hash is evidence, not a headline; it should look like a
- *                  fingerprint, distinct from every other numeral on the page.
+ *   1. **Colour encodes transaction state and nothing else.** `escrow`,
+ *      `closed` and `void` mean funds held, hash verified, and mismatch. A
+ *      screen where nothing is pending shows no colour at all. A brand accent
+ *      would be decoration by definition — it would appear on screens where
+ *      nothing is happening.
+ *   2. **A hash is evidence, not a headline.** It is always mono, always
+ *      distinguishable from every other numeral on the page.
+ *
+ * Three families:
+ *   Instrument Serif  display. High contrast, and it holds up at the sizes
+ *                     this design actually uses — a hero line is set in the
+ *                     hundreds of pixels, where most serifs fall apart.
+ *   Inter Tight       everything else: labels, navigation, metadata, body.
+ *                     Tight enough to sit as a caption under display type
+ *                     without competing with it.
+ *   IBM Plex Mono     hashes and on-chain identifiers, and nothing else.
  */
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -29,48 +34,81 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Ground and ink
-        vellum: "#F1EDE3",
-        // A half-step off the page for the rare inset region. Not a card
-        // surface: there are no cards.
-        parchment: "#E8E3D6",
-        ink: "#23272B",
+        // Paper and carbon: the two grounds the page alternates between.
+        paper: "#F4F1EA",
+        // A half-step off the page for an inset region. Not a card surface —
+        // there are no cards.
+        shade: "#E9E4D8",
+        carbon: "#16130F",
+        // One step up from carbon, for hairlines on inverted sections.
+        carbonRule: "#2C2721",
+
+        ink: "#1A1815",
         // Secondary and tertiary ink, mixed toward the page rather than grey,
         // so type never looks like it is floating on a different background.
-        muted: "#5C6165",
-        faint: "#8A8F93",
-        rule: "#CFC8B8",
-        hairline: "#DCD6C7",
+        muted: "#57534B",
+        faint: "#8B857A",
+        rule: "#CDC6B6",
+        hairline: "#DED8C9",
 
-        // State — the only colours on the page.
-        escrow: "#2E4A6B", // funds held, awaiting confirmation
-        closed: "#3C6E4A", // transfer confirmed, hash verified
-        void: "#7A3B33", // mismatch, refund triggered
+        // Inverted equivalents, for type on carbon.
+        chalk: "#F4F1EA",
+        chalkMuted: "#A8A196",
+        chalkFaint: "#6E675C",
+
+        // State — the only colours in the system.
+        escrow: "#2E4A6B",
+        closed: "#3C6E4A",
+        void: "#8A4038",
       },
       fontFamily: {
-        serif: ['Spectral', 'Georgia', 'Times New Roman', 'serif'],
-        sans: ['"IBM Plex Sans"', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
-        mono: ['"IBM Plex Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        display: ['"Instrument Serif"', "Georgia", "Times New Roman", "serif"],
+        sans: ['"Inter Tight"', "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        mono: ['"IBM Plex Mono"', "ui-monospace", "SFMono-Regular", "monospace"],
       },
       fontSize: {
-        // A closing document's hierarchy: restrained, and set in the serif.
-        document: ['clamp(1.75rem, 3.2vw, 2.75rem)', { lineHeight: '1.12', letterSpacing: '-0.015em' }],
-        heading: ['clamp(1.25rem, 2vw, 1.6rem)', { lineHeight: '1.2', letterSpacing: '-0.01em' }],
-        figure: ['clamp(1.5rem, 2.4vw, 2rem)', { lineHeight: '1.1', letterSpacing: '-0.01em' }],
+        // The scale is deliberately gapped rather than continuous. Editorial
+        // hierarchy comes from large intervals between few sizes; a smooth
+        // ramp of nine sizes reads as a UI kit.
+        colossal: ["clamp(3.5rem, 13vw, 13rem)", { lineHeight: "0.86", letterSpacing: "-0.035em" }],
+        display: ["clamp(2.75rem, 8vw, 7rem)", { lineHeight: "0.92", letterSpacing: "-0.03em" }],
+        title: ["clamp(2rem, 4.5vw, 3.5rem)", { lineHeight: "1.02", letterSpacing: "-0.025em" }],
+        heading: ["clamp(1.35rem, 2.2vw, 1.85rem)", { lineHeight: "1.15", letterSpacing: "-0.015em" }],
+        figure: ["clamp(1.75rem, 3.2vw, 2.75rem)", { lineHeight: "1.05", letterSpacing: "-0.02em" }],
+        // The small end: labels and metadata, set wide because they are read
+        // as annotation rather than prose.
+        label: ["0.6875rem", { lineHeight: "1.4", letterSpacing: "0.14em" }],
+        micro: ["0.75rem", { lineHeight: "1.5", letterSpacing: "0.02em" }],
+        body: ["1.0625rem", { lineHeight: "1.65", letterSpacing: "-0.003em" }],
+        lede: ["clamp(1.125rem, 1.6vw, 1.375rem)", { lineHeight: "1.5", letterSpacing: "-0.008em" }],
       },
-      maxWidth: { document: '58rem', column: '34rem' },
+      maxWidth: { reading: "42rem", measure: "34rem", wide: "96rem" },
+      spacing: {
+        // Chapter rhythm. Sections are separated by these, not by margins
+        // chosen per component, so the vertical cadence is a system decision.
+        chapter: "clamp(6rem, 14vh, 11rem)",
+        beat: "clamp(3rem, 7vh, 5.5rem)",
+      },
+      transitionTimingFunction: {
+        // One curve for interface response, one for entrances. Two is enough;
+        // a library of easings makes motion feel arbitrary.
+        swift: "cubic-bezier(0.22, 0.61, 0.24, 1)",
+        enter: "cubic-bezier(0.16, 1, 0.3, 1)",
+      },
       keyframes: {
-        // The one animated moment in the entire product, per the brief: a
-        // brief, precise pulse on the hash-match checkmark when verification
-        // completes. Nothing else moves.
         verify: {
-          '0%': { transform: 'scale(0.82)', opacity: '0' },
-          '55%': { transform: 'scale(1.06)', opacity: '1' },
-          '100%': { transform: 'scale(1)', opacity: '1' },
+          "0%": { transform: "scale(0.82)", opacity: "0" },
+          "55%": { transform: "scale(1.06)", opacity: "1" },
+          "100%": { transform: "scale(1)", opacity: "1" },
+        },
+        marquee: {
+          from: { transform: "translate3d(0,0,0)" },
+          to: { transform: "translate3d(-50%,0,0)" },
         },
       },
       animation: {
-        verify: 'verify 420ms cubic-bezier(0.22, 0.7, 0.25, 1) both',
+        verify: "verify 420ms cubic-bezier(0.22, 0.7, 0.25, 1) both",
+        marquee: "marquee 42s linear infinite",
       },
     },
   },

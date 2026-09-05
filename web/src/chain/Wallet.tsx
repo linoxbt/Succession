@@ -100,8 +100,8 @@ export function WalletBar({ status }: { status: ChainStatus | null }) {
 
   return (
     <div className="border-b border-rule">
-      <div className="mx-auto flex max-w-document flex-wrap items-center gap-x-5 gap-y-2 px-6 py-2.5">
-        <span className="text-[0.8125rem] text-muted">
+      <div className="mx-auto flex max-w-wide flex-wrap items-center gap-x-5 gap-y-2 px-6 py-2.5">
+        <span className="text-micro text-muted">
           Settling on {CHAIN.name}
         </span>
 
@@ -113,7 +113,7 @@ export function WalletBar({ status }: { status: ChainStatus | null }) {
                 <Badge tone="void">Wrong network</Badge>
                 <button
                   onClick={() => switchChain({ chainId: CHAIN.id })}
-                  className="text-[0.8125rem] underline underline-offset-4 hover:text-escrow"
+                  className="text-micro underline underline-offset-4 hover:text-escrow"
                 >
                   Switch to {CHAIN.name}
                 </button>
@@ -123,7 +123,7 @@ export function WalletBar({ status }: { status: ChainStatus | null }) {
             )}
             <button
               onClick={() => disconnect()}
-              className="text-[0.8125rem] text-muted underline underline-offset-4 hover:text-ink"
+              className="text-micro text-muted underline underline-offset-4 hover:text-ink"
             >
               Disconnect
             </button>
@@ -135,7 +135,7 @@ export function WalletBar({ status }: { status: ChainStatus | null }) {
                 key={c.uid}
                 onClick={() => connect({ connector: c })}
                 disabled={isPending}
-                className="text-[0.8125rem] underline underline-offset-4 hover:text-escrow disabled:opacity-40"
+                className="text-micro underline underline-offset-4 hover:text-escrow disabled:opacity-40"
               >
                 {c.name}
               </button>
@@ -162,12 +162,12 @@ export function SettlementMode({ status }: { status: ChainStatus | null }) {
   return (
     <div className="mt-8">
       <div className="flex flex-wrap items-center gap-3 border-b border-rule pb-2">
-        <h3 className="font-serif text-heading text-ink">Settlement</h3>
+        <h3 className="font-display text-heading text-ink">Settlement</h3>
         <Badge tone={chain ? "escrow" : "neutral"}>
           {chain ? `On chain — ${CHAIN.name}` : "Local mirror — not on chain"}
         </Badge>
       </div>
-      <p className="mt-3 max-w-document text-[0.875rem] leading-relaxed text-muted">
+      <p className="mt-3 max-w-wide text-body leading-relaxed text-muted">
         {status.explanation}
       </p>
       {d ? (
@@ -346,7 +346,7 @@ export function FundEscrow({
       </div>
       {txHash ? (
         <a
-          className="text-[0.8125rem] underline underline-offset-4 hover:text-escrow"
+          className="text-micro underline underline-offset-4 hover:text-escrow"
           href={explorerTx(txHash)}
           target="_blank"
           rel="noreferrer"
@@ -411,7 +411,7 @@ export function ConfirmOnChain({
       </div>
       {txHash ? (
         <a
-          className="text-[0.8125rem] underline underline-offset-4 hover:text-escrow"
+          className="text-micro underline underline-offset-4 hover:text-escrow"
           href={explorerTx(txHash)}
           target="_blank"
           rel="noreferrer"
@@ -434,7 +434,7 @@ export function ConfirmOnChain({
 function ContractError({ error }: { error: Error }) {
   const message = extractRevert(error);
   return (
-    <p className="max-w-document text-[0.8125rem] leading-relaxed text-void">
+    <p className="max-w-wide text-micro leading-relaxed text-void">
       {message}
     </p>
   );

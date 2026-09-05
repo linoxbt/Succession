@@ -274,7 +274,7 @@ export function Docs() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Filter"
           aria-label="Filter documentation"
-          className="mb-3 w-full border border-rule bg-vellum px-3 py-2 text-[0.8125rem] placeholder:text-faint"
+          className="mb-3 w-full border border-rule bg-paper px-3 py-2 text-micro placeholder:text-faint"
         />
         <ul className="space-y-0.5">
           {filtered.map((d) => (
@@ -285,10 +285,10 @@ export function Docs() {
                   window.history.replaceState({}, "", `#${d.id}`);
                 }}
                 aria-current={active === d.id ? "page" : undefined}
-                className={`w-full rounded-md px-3 py-2 text-left text-[0.8125rem] transition-colors ${
+                className={`w-full border-l py-2 pl-4 pr-3 text-left text-micro transition-[border-color,color,transform] duration-500 ease-swift ${
                   active === d.id
-                    ? "bg-parchment text-ink"
-                    : "text-muted hover:bg-parchment/60 hover:text-ink"
+                    ? "border-ink text-ink"
+                    : "border-transparent text-faint hover:translate-x-1 hover:text-ink"
                 }`}
               >
                 {d.title}
@@ -296,7 +296,7 @@ export function Docs() {
             </li>
           ))}
           {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-[0.8125rem] text-faint">No match.</li>
+            <li className="px-3 py-2 text-micro text-faint">No match.</li>
           ) : null}
         </ul>
       </nav>
@@ -336,7 +336,7 @@ export function Docs() {
  *  argument is set in the secondary colour reads as a footnote to itself. */
 function P({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <p className={`mt-4 max-w-[70ch] text-[0.9375rem] leading-relaxed text-ink ${className}`}>
+    <p className={`mt-4 max-w-[70ch] text-body text-ink ${className}`}>
       {children}
     </p>
   );
@@ -344,7 +344,7 @@ function P({ children, className = "" }: { children: ReactNode; className?: stri
 
 function Code({ children }: { children: ReactNode }) {
   return (
-    <code className="bg-parchment px-1.5 py-0.5 font-mono text-[0.8125rem] text-ink">
+    <code className="bg-shade px-1.5 py-0.5 font-mono text-micro text-ink">
       {children}
     </code>
   );
@@ -352,7 +352,7 @@ function Code({ children }: { children: ReactNode }) {
 
 function Pre({ children }: { children: string }) {
   return (
-    <pre className="mt-5 overflow-x-auto border border-rule bg-parchment p-4 font-mono text-[0.8125rem] leading-relaxed text-ink">
+    <pre className="mt-5 overflow-x-auto border border-rule bg-shade p-4 font-mono text-micro leading-relaxed text-ink">
       {children}
     </pre>
   );
@@ -362,7 +362,7 @@ function Callout({ children, tone = "escrow" }: { children: ReactNode; tone?: "e
   const border = tone === "void" ? "border-void/40" : "border-escrow/40";
   return (
     <div className={`mt-6 border-l-2 ${border} pl-4`}>
-      <p className="max-w-[68ch] text-[0.9375rem] leading-relaxed text-ink">{children}</p>
+      <p className="max-w-[68ch] text-body text-ink">{children}</p>
     </div>
   );
 }
@@ -373,7 +373,7 @@ function Ol({ items }: { items: [string, string][] }) {
       {items.map(([term, line], i) => (
         <li key={term} className="flex gap-4">
           <span className="tnum w-5 shrink-0 pt-0.5 text-xs text-faint">{i + 1}</span>
-          <span className="max-w-[66ch] text-[0.9375rem] leading-relaxed">
+          <span className="max-w-[66ch] text-body">
             <span className="font-medium text-ink">{term}. </span>
             <span className="text-ink">{line}</span>
           </span>
@@ -391,7 +391,7 @@ function Ul({ items }: { items: string[] }) {
           <span className="pt-2 text-faint" aria-hidden>
             <Badge>·</Badge>
           </span>
-          <span className="max-w-[68ch] text-[0.9375rem] leading-relaxed text-ink">
+          <span className="max-w-[68ch] text-body text-ink">
             {line}
           </span>
         </li>

@@ -15,7 +15,7 @@
  */
 import type { MarketRow } from "../api";
 import { formatAmount } from "../api";
-import { Badge, Button, Empty, Hash, Note, Section, Table, Td } from "../ui";
+import { Badge, Button, Empty, Hash, Note, PageHead, Table, Td } from "../ui";
 
 export default function Marketplace({
   rows,
@@ -31,11 +31,13 @@ export default function Marketplace({
   onRefresh: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-8">
-      <Section
-        title="Marketplace"
+    <div>
+      <PageHead
+        index="01 — Marketplace"
+        title="Memory, offered for sale."
+        lede="Every listing below exists because a seller committed its hash on chain before a buyer existed. Nothing here is seeded; an empty market means nobody has listed yet."
         action={
-          <div className="flex gap-4">
+          <div className="flex flex-wrap items-center gap-6">
             <Button size="sm" variant="quiet" onClick={onRefresh}>
               Refresh
             </Button>
@@ -44,13 +46,7 @@ export default function Marketplace({
             </Button>
           </div>
         }
-      >
-        <p className="max-w-column text-[0.9375rem] leading-relaxed text-muted">
-          Agent memory offered for sale. Each row's committed hash was posted on
-          chain before a buyer existed, so it cannot have been computed after the
-          fact to match whatever was delivered.
-        </p>
-      </Section>
+      />
 
       {onChain === false ? (
         <Note>
@@ -79,7 +75,7 @@ export default function Marketplace({
                 <Td>
                   <span className="text-ink">{row.name || row.agent_identity}</span>
                   {row.vertical ? (
-                    <span className="ml-2 text-[0.75rem] text-faint">{row.vertical}</span>
+                    <span className="ml-2 text-label text-faint">{row.vertical}</span>
                   ) : null}
                 </Td>
                 <Td className="tnum">{records || "—"}</Td>

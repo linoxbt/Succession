@@ -63,7 +63,7 @@ export function Wordmark({ size = 22, className = "" }: { size?: number; classNa
     <span className={`inline-flex items-center gap-2.5 ${className}`}>
       <Mark size={size} />
       <span
-        className="font-serif tracking-[-0.01em]"
+        className="font-display tracking-[-0.01em]"
         style={{ fontSize: size * 0.72 }}
       >
         Succession

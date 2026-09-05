@@ -16,7 +16,7 @@
 import { useState } from "react";
 
 import type { ChainStatus } from "../api";
-import { Copyable, Note, Section } from "../ui";
+import { Copyable, Note, PageHead, Section } from "../ui";
 
 export default function Sell({ chainStatus }: { chainStatus: ChainStatus | null }) {
   const [db, setDb] = useState("~/.sibyl-memory/memory.db");
@@ -35,16 +35,12 @@ export default function Sell({ chainStatus }: { chainStatus: ChainStatus | null 
   ].join("\n");
 
   return (
-    <div className="flex flex-col gap-10">
-      <Section title="List your agent's memory">
-        <p className="max-w-column text-[0.9375rem] leading-relaxed text-muted">
-          Listing runs on your own machine. Your Sibyl store is a local file and
-          this page cannot read it — which is the same reason the memory itself
-          never reaches anyone until escrow is funded. The command below exports
-          your store, commits its hash on Base, encrypts the package, and keeps
-          the key in a vault on your disk.
-        </p>
-      </Section>
+    <div>
+      <PageHead
+        index="03 — Sell"
+        title="Listing runs on your machine."
+        lede="Your Sibyl store is a local file and this page cannot read it — which is the same reason the memory never reaches anyone until escrow is funded. The command below exports it, commits the hash on Base, and keeps the key in a vault on your disk."
+      />
 
       <Section title="Build the command">
         <div className="grid gap-4 sm:grid-cols-2">
@@ -70,7 +66,7 @@ export default function Sell({ chainStatus }: { chainStatus: ChainStatus | null 
       </Section>
 
       <Section title="Then stay reachable until it sells">
-        <p className="max-w-column text-[0.9375rem] leading-relaxed text-muted">
+        <p className="max-w-measure text-body text-muted">
           The content key is yours and is released only when you have seen escrow
           funded on chain yourself. This watcher checks for that and hands the key
           over when it lands:
@@ -109,13 +105,13 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[0.8125rem] text-ink">{label}</span>
+      <span className="text-micro text-ink">{label}</span>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="border border-rule bg-vellum px-3 py-2 text-[0.875rem] placeholder:text-faint"
+        className="border border-rule bg-paper px-3 py-2 text-body placeholder:text-faint"
       />
-      <span className="text-[0.75rem] text-faint">{hint}</span>
+      <span className="text-label text-faint">{hint}</span>
     </label>
   );
 }

@@ -163,7 +163,7 @@ export function HashVerification() {
             />
           </svg>
         </span>
-        <span className="text-[0.875rem] text-closed">
+        <span className="text-body text-closed">
           Match — escrow released, identity transferred, origin sealed
         </span>
       </div>
@@ -184,15 +184,15 @@ function HashPane({
 }) {
   return (
     <div className="p-6">
-      <p className="text-[0.75rem] uppercase tracking-[0.08em] text-faint">{label}</p>
+      <p className="text-label uppercase tracking-[0.08em] text-faint">{label}</p>
       <p
-        className={`mt-3 break-all font-mono text-[0.8125rem] leading-relaxed ${
+        className={`mt-3 break-all font-mono text-micro leading-relaxed ${
           tone === "closed" ? "text-closed" : "text-ink"
         }`}
       >
         {value}
       </p>
-      <p className="mt-3 text-[0.8125rem] text-muted">{caption}</p>
+      <p className="mt-3 text-micro text-muted">{caption}</p>
     </div>
   );
 }

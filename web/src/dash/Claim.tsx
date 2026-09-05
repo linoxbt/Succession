@@ -12,19 +12,17 @@
  * the way in. `succession claim` does that and refuses to tell you to confirm
  * if the roots disagree.
  */
-import { Copyable, Note, Section } from "../ui";
+import { Copyable, Note, PageHead, Section } from "../ui";
 
 export default function Claim({ listingId }: { listingId: string }) {
   const id = listingId || "<listing id>";
   return (
-    <div className="flex flex-col gap-10">
-      <Section title="Claim what you bought">
-        <p className="max-w-column text-[0.9375rem] leading-relaxed text-muted">
-          Once your escrow is funded and the seller has released the key, this
-          collects the encrypted package, imports it into your own store, and
-          re-derives the hash from what actually landed there.
-        </p>
-      </Section>
+    <div>
+      <PageHead
+        index="04 — Claim"
+        title="Collect what you paid for."
+        lede="Once escrow is funded and the seller has released the key, this collects the encrypted package, imports it into your own store, and re-derives the hash from what actually landed there."
+      />
 
       <Section title="1 — Install">
         <Copyable text={'pip install "succession[chain]"'} />
@@ -42,7 +40,7 @@ export default function Claim({ listingId }: { listingId: string }) {
     --db ~/.sibyl-memory/memory.db \\
     --tenant my-successor-agent`}
         />
-        <p className="mt-4 max-w-column text-[0.9375rem] leading-relaxed text-muted">
+        <p className="mt-4 max-w-measure text-body text-muted">
           It prints the root the seller committed before you existed as a buyer,
           and the root re-derived from your own store after the import. They
           match or the purchase is not what was advertised.
@@ -50,7 +48,7 @@ export default function Claim({ listingId }: { listingId: string }) {
       </Section>
 
       <Section title="3 — Confirm on chain">
-        <p className="max-w-column text-[0.9375rem] leading-relaxed text-muted">
+        <p className="max-w-measure text-body text-muted">
           Only if it printed <strong>VERIFIED</strong>. One transaction releases
           payment to the seller, transfers the ERC-8004 identity to you, and
           seals the seller's copy — all three, or none of them.
@@ -65,7 +63,7 @@ export default function Claim({ listingId }: { listingId: string }) {
       </Section>
 
       <Section title="If the key is not there yet">
-        <p className="max-w-column text-[0.9375rem] leading-relaxed text-muted">
+        <p className="max-w-measure text-body text-muted">
           The seller releases it only after seeing your escrow on chain
           themselves — nobody else holds it, including this marketplace. If they
           are offline you wait, and your money is never stuck: the confirmation

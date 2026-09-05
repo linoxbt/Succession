@@ -29,12 +29,18 @@ import Claim from "./dash/Claim";
 import Walkthrough from "./dash/Walkthrough";
 import { Docs } from "./dash/Docs";
 import { Note } from "./ui";
+import { SmoothScroll } from "./motion";
 
 export default function App() {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <Surface />
+        {/* Lenis wraps the whole app so the interpolated scroll survives moving
+            between the landing document and the console — a page that changes
+            its scroll physics mid-session feels broken rather than varied. */}
+        <SmoothScroll>
+          <Surface />
+        </SmoothScroll>
       </QueryClientProvider>
     </WagmiProvider>
   );

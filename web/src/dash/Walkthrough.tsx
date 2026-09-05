@@ -24,6 +24,7 @@ import {
   FieldList,
   FullHash,
   Note,
+  PageHead,
   Section,
   VerifyMark,
 } from "../ui";
@@ -84,12 +85,20 @@ export default function Walkthrough() {
     });
 
   return (
-    <div className="flex flex-col gap-10">
-      <div className="border border-void/35 bg-void/[0.03] px-4 py-3">
-        <p className="text-[0.875rem] leading-relaxed text-ink">
-          <strong>Sample agent — not a live listing.</strong> The memory here is
-          invented and nothing on this page touches a chain. Real listings are on
-          the Marketplace; this exists to show what a transfer actually does.
+    <div>
+      <PageHead
+        index="05 — Walkthrough"
+        title="A scripted sale, on a sample agent."
+        lede="The memory here is invented and nothing on this page touches a chain. It exists because the claim the product makes is only convincing when you watch a cold agent answer from memory it did not have a minute ago."
+      />
+
+      {/* Standing condition, not a dismissible alert. It stays for as long as
+          the page does, because what it qualifies never stops being true. */}
+      <div className="on-carbon -mx-6 mb-beat px-6 py-6 sm:-mx-10 sm:px-10 lg:-mx-16 lg:px-16 xl:-mx-24 xl:px-24">
+        <p className="font-mono text-label uppercase text-chalkFaint">Not a live listing</p>
+        <p className="mt-3 max-w-measure text-body text-chalkMuted">
+          Settlement here is an in-process mirror of the contract's state machine.
+          Real listings are on the Marketplace.
         </p>
       </div>
 
@@ -101,7 +110,7 @@ export default function Walkthrough() {
           </Button>
         }
       >
-        <p className="max-w-column text-[0.9375rem] leading-relaxed text-muted">
+        <p className="max-w-measure text-body text-muted">
           A freight agent with ninety-odd days of accumulated context: who its
           counterparties are, what it has quoted, what it has learned about how
           each one behaves, and one open commitment it has not yet closed.
@@ -157,7 +166,7 @@ export default function Walkthrough() {
             <div className="flex items-start gap-4">
               <VerifyMark matched={outcome.outcome === "verified"} pulse />
               <div className="min-w-0 flex-1">
-                <p className="mb-3 text-[0.875rem] text-muted">
+                <p className="mb-3 text-body text-muted">
                   Committed before a buyer existed, then re-derived from the
                   buyer's own store after the import — not from the bytes sent.
                 </p>
@@ -185,7 +194,7 @@ export default function Walkthrough() {
       ) : null}
 
       <Section title="The successor, booting cold">
-        <p className="mb-4 max-w-column text-[0.9375rem] leading-relaxed text-muted">
+        <p className="mb-4 max-w-measure text-body text-muted">
           A different tenant in a different file. Before the sale it knows
           nothing; after it, it answers from memory that was written into its own
           store by the import. Ask it about a counterparty — try{" "}
@@ -222,7 +231,7 @@ function Conversation({ side }: { side: "seller" | "buyer" }) {
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void send()}
           placeholder="Message the agent as a returning customer"
-          className="flex-1 border border-rule bg-vellum px-3 py-2 text-[0.875rem] placeholder:text-faint"
+          className="flex-1 border border-rule bg-paper px-3 py-2 text-body placeholder:text-faint"
         />
         <Button size="sm" variant="ghost" onClick={() => void send()} disabled={busy}>
           Send
@@ -230,9 +239,9 @@ function Conversation({ side }: { side: "seller" | "buyer" }) {
       </div>
       {reply ? (
         <div className="border-l-2 border-rule pl-4">
-          <p className="text-[0.9375rem] leading-relaxed text-ink">{reply.text}</p>
+          <p className="text-body text-ink">{reply.text}</p>
           {reply.citations?.length ? (
-            <p className="mt-2 text-[0.75rem] text-faint">
+            <p className="mt-2 text-label text-faint">
               recalled from {reply.citations.map((c) => c.tier).join(", ")}
             </p>
           ) : null}

@@ -47,7 +47,7 @@ export default function ListingView({
   const deployment = chainStatus?.deployment ?? null;
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-chapter">
       <Section
         title={row.name || row.agent_identity}
         action={
@@ -59,8 +59,8 @@ export default function ListingView({
         <SettlementMode status={chainStatus} />
       </Section>
 
-      <Section title="The data room">
-        <p className="mb-4 max-w-column text-[0.9375rem] leading-relaxed text-muted">
+      <Section index="01" title="The data room">
+        <p className="mb-4 max-w-measure text-body text-muted">
           Aggregate statistics only. The preview is built from counts, so there
           is no record body in scope for it to leak — what is for sale is
           described, never shown.
@@ -96,8 +96,8 @@ export default function ListingView({
       </Section>
 
       {deployment && listing.state === "open" ? (
-        <Section title="Fund escrow">
-          <p className="mb-4 max-w-column text-[0.9375rem] leading-relaxed text-muted">
+        <Section index="02" title="Fund escrow">
+          <p className="mb-4 max-w-measure text-body text-muted">
             Two transactions, shown as two: approve the payment token, then fund.
             The money is held by the contract and goes to the seller only when a
             matching hash is confirmed — or back to you if it is not.
@@ -112,8 +112,8 @@ export default function ListingView({
       ) : null}
 
       {listing.state === "escrowed" ? (
-        <Section title="Claim what you paid for">
-          <p className="mb-4 max-w-column text-[0.9375rem] leading-relaxed text-muted">
+        <Section index="03" title="Claim what you paid for">
+          <p className="mb-4 max-w-measure text-body text-muted">
             Your escrow is funded. Once the seller releases the key, collect and
             import the package on your own machine — the import writes into your
             Sibyl store, which this page cannot reach.
@@ -137,7 +137,7 @@ export default function ListingView({
       ) : null}
 
       {deployment && listing.state === "escrowed" && listing.delivered_hash ? (
-        <Section title="Confirm on chain">
+        <Section index="04" title="Confirm on chain">
           <ConfirmOnChain
             deployment={deployment}
             listingId={listing.listing_id}

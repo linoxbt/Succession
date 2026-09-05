@@ -1,269 +1,449 @@
 /**
- * The landing page, in the same register as the console.
+ * The landing document.
  *
- * The brief's rule about motion is absolute — "exactly one animated moment
- * beyond focus states", and that moment is the hash-match checkmark on the
- * confirmation screen. So there is no scroll reveal here, no counting-up
- * figures, and no hover lift: a page whose numbers animate into place is asking
- * to be admired, and this one is asking to be checked.
+ * Read top to bottom as one continuous composition rather than a stack of
+ * panels: chapters are numbered, the ground alternates between paper and
+ * carbon at full bleed, and elements from one chapter lead into the next. The
+ * page is set edge-to-edge — the gutter is a margin, not a centring container —
+ * so the type has room to run at the scale it is designed for.
  *
- * What replaces motion is typography. Spectral carries the claims at the scale
- * a closing document gives its headings; everything else is quiet. The two
- * diagrams draw the actual mechanism rather than decorating around it, which is
- * why they survive the cut where the animation did not.
+ * The product's own copy is unchanged. What changed is everything around it.
  */
-import type { ReactNode } from "react";
-import { Mark, Wordmark } from "../brand/Logo";
+import { useEffect, useState, type ReactNode } from "react";
+
+import { MaskLine, Reveal, useCountUp, useParallax, useScrollTo } from "../motion";
 import { HashVerification, TransferDiagram } from "./visuals";
-
-const MECHANISM: [string, string][] = [
-  ["Export", "The agent's whole memory becomes one signed, portable package."],
-  ["Commit", "A Merkle root goes on Base before a buyer exists."],
-  ["Settle", "Payment, identity and the seal move in one transaction."],
-  ["Verify", "The buyer re-hashes their own store. Mismatch refunds."],
-];
-
-const STACKS: [string, string][] = [
-  ["Base", "Escrow, ERC-8004 identity transfer, and the seal — one transaction, or none of them."],
-  ["Virtuals ACP", "Job history a buyer verifies by on-chain job id, not by trusting the seller."],
-  ["Sibyl Memory", "Five tiers exported, re-keyed under a new tenant, and re-hashed on arrival."],
-];
-
-const LIFECYCLE: [string, string, "built" | "roadmap"][] = [
-  ["Sell", "Full transfer, permanent, against payment", "built"],
-  ["Partial", "A category filter before serialization", "built"],
-  ["Archive", "Freeze a tenant without transferring it", "built"],
-  ["Lease", "Sell, plus a re-seal timer on the buyer's copy", "roadmap"],
-  ["Inherit", "The same pipeline, no payment leg", "roadmap"],
-  ["Merge", "Two evolved memories, one conflict rule", "roadmap"],
-  ["Split", "Partition along a category boundary", "roadmap"],
-];
+import { Button, Figure } from "../ui";
 
 export function Landing({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void }) {
   return (
-    <div className="min-h-screen bg-vellum">
-      <Header onEnter={onEnter} onDocs={onDocs} />
+    <div className="bg-paper">
+      <Masthead onEnter={onEnter} onDocs={onDocs} />
       <Hero onEnter={onEnter} onDocs={onDocs} />
       <Thesis />
       <Mechanism />
       <Verification />
+      <Proof />
       <Stacks />
       <Lifecycle />
       <Close onEnter={onEnter} />
-      <Footer onDocs={onDocs} />
+      <Colophon onDocs={onDocs} />
     </div>
   );
 }
 
-function Header({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void }) {
+/* -- masthead ------------------------------------------------------------ */
+
+function Masthead({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void }) {
+  const [solid, setSolid] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setSolid(window.scrollY > 40);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
-    <header className="border-b border-rule">
-      <div className="mx-auto flex max-w-document items-center justify-between px-6 py-5">
-        <Wordmark size={22} />
-        <nav className="flex items-center gap-5">
-          <button onClick={onDocs} className="text-[0.875rem] text-muted hover:text-ink">
+    <header
+      className={`fixed inset-x-0 top-0 z-50 transition-all duration-700 ease-swift ${
+        solid ? "border-b border-rule bg-paper/95 py-3" : "border-b border-transparent py-6"
+      }`}
+    >
+      <div className="gutter flex items-center justify-between gap-6">
+        <span className="font-mono text-label uppercase text-ink">Succession</span>
+        <div className="flex items-center gap-8">
+          <button
+            onClick={onDocs}
+            className="link-underline font-mono text-label uppercase text-faint transition-colors duration-500 hover:text-ink"
+          >
             Docs
           </button>
-          <a
-            href="https://github.com/linoxbt/Succession"
-            className="hidden text-[0.875rem] text-muted hover:text-ink sm:block"
-          >
-            GitHub
-          </a>
-          <button
-            onClick={onEnter}
-            className="bg-ink px-4 py-2 text-[0.875rem] font-medium text-vellum transition-colors hover:bg-black"
-          >
+          <Button size="sm" onClick={onEnter}>
             Open console
-          </button>
-        </nav>
+          </Button>
+        </div>
       </div>
     </header>
   );
 }
 
+/* -- 01 hero ------------------------------------------------------------- */
+
+/**
+ * The first view is a single sentence at the largest scale the page ever uses,
+ * uncovered line by line, with the mechanism diagram drifting behind it. The
+ * product is introduced progressively: the headline first, its consequence
+ * after, the controls last.
+ */
 function Hero({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void }) {
+  const drift = useParallax<HTMLDivElement>(-0.06);
+  const scrollTo = useScrollTo();
+
   return (
-    <section>
-      <div className="mx-auto max-w-document px-6 pb-20 pt-16 sm:pt-24">
-        <p className="mb-6 text-[0.8125rem] uppercase tracking-[0.14em] text-muted">
-          The property layer for agent memory
-        </p>
-        <h1 className="max-w-[17ch] font-serif text-document text-ink">
-          The code is replaceable. The memory is not.
-        </h1>
-        <p className="mt-7 max-w-column text-[1.0625rem] leading-relaxed text-muted">
-          Succession turns an agent's accumulated memory into an asset that can be
-          sold, verified, and settled on chain.
-        </p>
-        <div className="mt-9 flex flex-wrap items-center gap-4">
-          <button
-            onClick={onEnter}
-            className="bg-ink px-5 py-2.5 text-[0.875rem] font-medium text-vellum transition-colors hover:bg-black"
-          >
-            Open console
-          </button>
-          <button
-            onClick={onDocs}
-            className="border border-rule px-5 py-2.5 text-[0.875rem] font-medium text-ink transition-colors hover:border-ink"
-          >
-            Read the docs
-          </button>
+    <section className="relative flex min-h-[100svh] flex-col justify-between overflow-hidden pt-32 sm:pt-40">
+      {/* The diagram sits behind the headline at low contrast — present enough
+          to read as structure, quiet enough not to compete with the type. */}
+      <div
+        ref={drift}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-1/2 -z-0 hidden -translate-y-1/2 opacity-[0.07] lg:block"
+      >
+        <div className="gutter">
+          <TransferDiagram />
         </div>
+      </div>
+
+      <div className="gutter relative z-10">
+        <MaskLine>
+          <p className="chapter-mark">01 — The property layer for agent memory</p>
+        </MaskLine>
+
+        <h1 className="display-type mt-10 text-colossal text-ink">
+          <MaskLine index={0}>The code is</MaskLine>
+          <MaskLine index={1}>replaceable.</MaskLine>
+          <MaskLine index={2} className="text-faint">
+            The memory is not.
+          </MaskLine>
+        </h1>
+      </div>
+
+      <div className="gutter relative z-10 pb-12">
+        <div className="flex flex-col justify-between gap-10 border-t border-rule pt-8 lg:flex-row lg:items-end">
+          <Reveal index={4}>
+            <p className="max-w-measure text-lede text-muted">
+              Succession turns an agent's accumulated memory into an asset that can be
+              sold, verified, and settled on chain.
+            </p>
+          </Reveal>
+
+          <Reveal index={5}>
+            <div className="flex flex-wrap items-center gap-5">
+              <Button onClick={onEnter}>Open console</Button>
+              <Button variant="ghost" onClick={onDocs}>
+                Read the docs
+              </Button>
+            </div>
+          </Reveal>
+        </div>
+
+        <button
+          onClick={() => scrollTo("#thesis")}
+          className="mt-10 font-mono text-label uppercase text-faint transition-colors duration-500 hover:text-ink"
+        >
+          Scroll ↓
+        </button>
       </div>
     </section>
   );
 }
 
+/* -- 02 thesis ----------------------------------------------------------- */
+
+/**
+ * One statement, given a whole viewport. The line is the argument, so nothing
+ * shares the screen with it except the number and its own consequence.
+ */
 function Thesis() {
   return (
-    <Band>
-      <h2 className="max-w-[24ch] font-serif text-heading text-ink">
-        The model is the employee. The memory is the customer book.
+    <section id="thesis" className="gutter py-chapter">
+      <Reveal>
+        <p className="chapter-mark mb-16">02 — The thesis</p>
+      </Reveal>
+
+      <h2 className="display-type text-display text-ink">
+        <MaskLine index={0}>The model is the employee.</MaskLine>
+        <MaskLine index={1}>The memory is the customer book.</MaskLine>
       </h2>
-      <p className="mt-5 max-w-column text-[1.0625rem] leading-relaxed text-muted">
-        Succession does not sell the employee.
-      </p>
-    </Band>
+
+      <Reveal index={2}>
+        <p className="mt-14 max-w-measure border-l border-rule pl-6 text-lede text-muted lg:ml-auto">
+          Succession does not sell the employee.
+        </p>
+      </Reveal>
+    </section>
   );
 }
 
+/* -- 03 mechanism -------------------------------------------------------- */
+
+/**
+ * The first inversion. A full-bleed carbon chapter carrying the sale itself —
+ * six ordered steps, set as a schedule rather than as a row of feature cards,
+ * because the order is the whole guarantee.
+ */
 function Mechanism() {
+  const steps = [
+    ["Filter", "Non-transferable records are withheld before anything is hashed."],
+    ["Commit", "The Merkle root is posted on chain, before a buyer exists."],
+    ["Escrow", "The buyer's funds are held by the contract, not by us."],
+    ["Deliver", "An AES-256-GCM envelope. The key stays with the seller."],
+    ["Re-hash", "The buyer re-derives the root from their own store."],
+    ["Settle", "Payment, identity and the seal move in one transaction."],
+  ];
+
   return (
-    <Band label="The mechanism">
-      <TransferDiagram />
-      <dl className="mt-12 border-t border-hairline">
-        {MECHANISM.map(([step, line], i) => (
-          <div
-            key={step}
-            className="flex flex-col gap-1 border-b border-hairline py-4 sm:flex-row sm:gap-6"
-          >
-            <dt className="flex w-full shrink-0 items-baseline gap-3 sm:w-64">
-              <span className="tnum text-[0.75rem] text-faint">0{i + 1}</span>
-              <span className="font-serif text-[1.0625rem] text-ink">{step}</span>
-            </dt>
-            <dd className="text-[0.9375rem] leading-relaxed text-muted">{line}</dd>
-          </div>
-        ))}
-      </dl>
-    </Band>
+    <section className="on-carbon py-chapter">
+      <div className="gutter">
+        <Reveal>
+          <p className="chapter-mark mb-16">03 — How a sale works</p>
+        </Reveal>
+
+        <h2 className="display-type max-w-[18ch] text-title text-chalk">
+          <MaskLine>Atomicity by ordering, not by assertion.</MaskLine>
+        </h2>
+
+        <Reveal index={1}>
+          <p className="mt-10 max-w-measure text-lede text-chalkMuted">
+            A single transaction cannot span a chain and an off-chain store. Every step
+            before settlement is safe to abandon, and settlement itself is one
+            transaction — all of it, or none of it.
+          </p>
+        </Reveal>
+
+        <ol className="mt-24 border-t border-carbonRule">
+          {steps.map(([name, detail], i) => (
+            <Reveal as="li" key={name} index={i % 3}>
+              <div className="group flex flex-col gap-3 border-b border-carbonRule py-8 md:flex-row md:items-baseline md:gap-16">
+                <span className="font-mono text-label uppercase text-chalkFaint md:w-16">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <h3 className="display-type text-title text-chalk transition-transform duration-700 ease-swift md:w-[38%] md:group-hover:translate-x-2">
+                  {name}
+                </h3>
+                <p className="max-w-measure text-body text-chalkMuted">{detail}</p>
+              </div>
+            </Reveal>
+          ))}
+        </ol>
+      </div>
+    </section>
   );
 }
 
+/* -- 04 verification ----------------------------------------------------- */
+
+/**
+ * The moment the product turns on, so it gets the page to itself: the diagram
+ * at full width, and the argument for why re-hashing the destination is a
+ * different claim from checking the bytes.
+ */
 function Verification() {
   return (
-    <Band label="Proof">
-      <h2 className="max-w-[22ch] font-serif text-heading text-ink">
-        Anyone can claim a transfer happened.
-      </h2>
-      <p className="mt-5 max-w-column text-[1.0625rem] leading-relaxed text-muted">
-        The buyer re-hashes their own store and compares it to a root committed
-        before they existed. Escrow releases on a match and refunds on anything
-        else.
-      </p>
-      <div className="mt-10">
-        <HashVerification />
+    <section className="gutter py-chapter">
+      <Reveal>
+        <p className="chapter-mark mb-16">04 — Verification</p>
+      </Reveal>
+
+      <div className="grid gap-16 lg:grid-cols-12 lg:gap-24">
+        <div className="lg:col-span-5">
+          <h2 className="display-type text-title text-ink">
+            <MaskLine index={0}>Checked against</MaskLine>
+            <MaskLine index={1}>the destination.</MaskLine>
+          </h2>
+          <Reveal index={2}>
+            <p className="mt-8 max-w-measure text-body text-muted">
+              Checking the bytes received only proves the courier was honest. Re-exporting
+              the buyer's own store proves the importer wrote what it received, and that
+              the engine coerced nothing on the way in.
+            </p>
+          </Reveal>
+        </div>
+
+        <Reveal className="lg:col-span-7" index={1}>
+          <HashVerification />
+        </Reveal>
       </div>
-    </Band>
+    </section>
   );
 }
+
+/* -- 05 proof ------------------------------------------------------------ */
+
+/** Figures at display scale, counted up once as they arrive. */
+function Proof() {
+  const tests = useCountUp(259);
+  const contracts = useCountUp(28);
+
+  return (
+    <section className="gutter border-y border-rule py-beat">
+      <Reveal>
+        <p className="chapter-mark mb-14">05 — What is actually built</p>
+      </Reveal>
+
+      <div className="grid gap-14 sm:grid-cols-2 lg:grid-cols-4">
+        <Reveal index={0}>
+          <Figure value={<span ref={tests.ref}>{tests.shown}</span>} label="Python tests" />
+        </Reveal>
+        <Reveal index={1}>
+          <Figure
+            value={<span ref={contracts.ref}>{contracts.shown}</span>}
+            label="Contract tests"
+          />
+        </Reveal>
+        <Reveal index={2}>
+          <Figure value="9" label="SMP directories" />
+        </Reveal>
+        <Reveal index={3}>
+          <Figure value="1" label="Transaction to settle" tone="closed" />
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+/* -- 06 stacks ----------------------------------------------------------- */
 
 function Stacks() {
+  const rows = [
+    ["Sibyl Memory", "The asset itself. Five tiers export, hash, transfer and re-key."],
+    ["Base", "Escrow, atomic settlement, and the sealed flag, in one transaction."],
+    ["ERC-8004", "Identity as a token. Transferring it transfers the agent."],
+    ["Virtuals ACP", "Job history as a quality-of-earnings signal a buyer can check."],
+  ];
+
   return (
-    <Band label="Built on">
-      <dl className="border-t border-hairline">
-        {STACKS.map(([name, line]) => (
-          <div
-            key={name}
-            className="flex flex-col gap-1 border-b border-hairline py-4 sm:flex-row sm:gap-6"
-          >
-            <dt className="w-full shrink-0 font-serif text-[1.0625rem] text-ink sm:w-64">
-              {name}
-            </dt>
-            <dd className="text-[0.9375rem] leading-relaxed text-muted">{line}</dd>
-          </div>
+    <section className="gutter py-chapter">
+      <Reveal>
+        <p className="chapter-mark mb-16">06 — What it runs on</p>
+      </Reveal>
+
+      <dl className="border-t border-rule">
+        {rows.map(([name, detail], i) => (
+          <Reveal key={name} index={i % 3}>
+            <div className="group flex flex-col gap-3 border-b border-rule py-10 md:flex-row md:items-baseline md:gap-16">
+              <dt className="display-type text-title text-ink transition-transform duration-700 ease-swift md:w-[34%] md:group-hover:translate-x-2">
+                {name}
+              </dt>
+              <dd className="max-w-measure text-body text-muted">{detail}</dd>
+            </div>
+          </Reveal>
         ))}
       </dl>
-    </Band>
+    </section>
   );
 }
 
+/* -- 07 lifecycle -------------------------------------------------------- */
+
+/**
+ * A horizontal rail. The lifecycle is a sequence with more entries than fit a
+ * column comfortably, and reading it sideways makes the ordering legible in a
+ * way a vertical list of eight items does not.
+ */
 function Lifecycle() {
+  const items: [string, string, string][] = [
+    ["Sell", "Built", "The whole pipeline, end to end."],
+    ["Partial", "Built", "Transfer some categories, not all."],
+    ["Archive", "Free", "Sibyl's own semantics, at tenant level."],
+    ["Lease", "Designed", "A scheduled re-seal, or an on-chain expiry."],
+    ["Conditional", "Designed", "An oracle gate before the key releases."],
+    ["Inherit", "Roadmap", "The same pipeline, a different trigger."],
+    ["Merge", "Roadmap", "Two evolved memories, and a conflict rule."],
+    ["Split", "Roadmap", "The inverse of merge."],
+  ];
+
   return (
-    <Band label="The lifecycle">
-      <h2 className="max-w-[26ch] font-serif text-heading text-ink">
-        Selling outright is one mode of seven.
-      </h2>
-      <dl className="mt-10 border-t border-hairline">
-        {LIFECYCLE.map(([name, line, status]) => (
-          <div
-            key={name}
-            className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-b border-hairline py-3"
-          >
-            <dt className="w-24 shrink-0 font-serif text-[1.0625rem] text-ink">{name}</dt>
-            <dd className="min-w-0 flex-1 text-[0.9375rem] text-muted">{line}</dd>
-            {/* Colour is paired with the word, never standing in for it. */}
-            <span
-              className={`border px-2 py-0.5 text-[0.75rem] ${
-                status === "built" ? "border-closed/35 text-closed" : "border-rule text-faint"
-              }`}
+    <section className="py-chapter">
+      <div className="gutter">
+        <Reveal>
+          <p className="chapter-mark mb-16">07 — The lifecycle</p>
+        </Reveal>
+        <h2 className="display-type max-w-[20ch] text-title text-ink">
+          <MaskLine>Selling is the first primitive, not the only one.</MaskLine>
+        </h2>
+      </div>
+
+      <div className="rail mt-16 overflow-x-auto pb-4">
+        <ul className="flex w-max gap-px border-y border-rule bg-rule">
+          {items.map(([name, state, detail]) => (
+            <li
+              key={name}
+              className="w-[19rem] shrink-0 bg-paper px-8 py-12 transition-colors duration-700 hover:bg-shade sm:w-[22rem]"
             >
-              {status}
-            </span>
-          </div>
-        ))}
-      </dl>
-    </Band>
+              <p className="font-mono text-label uppercase text-faint">{state}</p>
+              <h3 className="display-type mt-5 text-title text-ink">{name}</h3>
+              <p className="mt-4 text-body text-muted">{detail}</p>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="gutter mt-6">
+        <p className="font-mono text-label uppercase text-faint">Scroll sideways →</p>
+      </div>
+    </section>
   );
 }
+
+/* -- 08 close ------------------------------------------------------------ */
 
 function Close({ onEnter }: { onEnter: () => void }) {
+  const drift = useParallax<HTMLDivElement>(0.05);
   return (
-    <Band>
-      <div className="flex flex-col items-start gap-8">
-        <Mark size={40} />
-        <h2 className="max-w-[19ch] font-serif text-heading text-ink">
-          Continuity, with an owner.
+    <section className="on-carbon relative overflow-hidden py-chapter">
+      <div ref={drift} className="gutter">
+        <Reveal>
+          <p className="chapter-mark mb-16">08 — Enter</p>
+        </Reveal>
+
+        <h2 className="display-type text-display text-chalk">
+          <MaskLine index={0}>Memory that outlives</MaskLine>
+          <MaskLine index={1}>the agent that made it.</MaskLine>
         </h2>
-        <button
-          onClick={onEnter}
-          className="bg-ink px-5 py-2.5 text-[0.875rem] font-medium text-vellum transition-colors hover:bg-black"
-        >
-          Open console
-        </button>
+
+        <Reveal index={2}>
+          <div className="mt-16 flex flex-wrap items-center gap-6">
+            <button
+              onClick={onEnter}
+              className="border border-chalk bg-chalk px-10 py-4 font-mono text-micro uppercase tracking-[0.12em] text-carbon transition-colors duration-500 ease-swift hover:bg-transparent hover:text-chalk"
+            >
+              Open console
+            </button>
+            <p className="font-mono text-label uppercase text-chalkFaint">
+              Listings are read from the contract
+            </p>
+          </div>
+        </Reveal>
       </div>
-    </Band>
+    </section>
   );
 }
 
-function Footer({ onDocs }: { onDocs: () => void }) {
+/* -- colophon ------------------------------------------------------------ */
+
+function Colophon({ onDocs }: { onDocs: () => void }) {
   return (
-    <footer className="border-t border-rule">
-      <div className="mx-auto flex max-w-document flex-col gap-4 px-6 py-10 sm:flex-row sm:items-center sm:justify-between">
-        <Wordmark size={18} />
-        <div className="flex flex-wrap gap-5 text-[0.8125rem] text-faint">
-          <button onClick={onDocs} className="hover:text-muted">
+    <footer className="gutter py-beat">
+      <div className="flex flex-col gap-6 border-t border-rule pt-8 sm:flex-row sm:items-center sm:justify-between">
+        <p className="font-mono text-label uppercase text-faint">
+          Succession · Base Sepolia · Sibyl Memory
+        </p>
+        <div className="flex gap-8">
+          <button
+            onClick={onDocs}
+            className="link-underline font-mono text-label uppercase text-faint transition-colors duration-500 hover:text-ink"
+          >
             Docs
           </button>
-          <a href="https://github.com/linoxbt/Succession" className="hover:text-muted">
-            GitHub
+          <a
+            href="https://github.com/linoxbt/Succession"
+            target="_blank"
+            rel="noreferrer"
+            className="link-underline font-mono text-label uppercase text-faint transition-colors duration-500 hover:text-ink"
+          >
+            Source
           </a>
-          <span>All counterparties in the seeded memory are invented.</span>
         </div>
       </div>
     </footer>
   );
 }
 
-function Band({ label, children }: { label?: string; children: ReactNode }) {
+export function Band({ label, children }: { label?: string; children: ReactNode }) {
   return (
-    <section className="border-t border-rule">
-      <div className="mx-auto max-w-document px-6 py-16 sm:py-20">
-        {label ? (
-          <p className="mb-10 text-[0.8125rem] uppercase tracking-[0.12em] text-faint">{label}</p>
-        ) : null}
-        {children}
-      </div>
+    <section className="gutter py-beat">
+      {label ? <p className="chapter-mark mb-10">{label}</p> : null}
+      {children}
     </section>
   );
 }
