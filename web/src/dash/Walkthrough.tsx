@@ -2,9 +2,9 @@
  * The scripted sale, on a sample agent, behind a banner that never leaves.
  *
  * This is the one screen in the console that is not live data, and it says so
- * permanently rather than once. It exists because the claim the project makes —
+ * permanently rather than once. It exists because the claim the project makes,
  * that memory is the asset, and that a successor agent inherits working context
- * rather than a file — is only convincing when you watch a cold agent answer
+ * rather than a file, is only convincing when you watch a cold agent answer
  * from memory it did not have a minute ago.
  *
  * The memory is invented. The pipeline is not: export, hash, encrypt, import and
@@ -87,7 +87,7 @@ export default function Walkthrough() {
   return (
     <div>
       <PageHead
-        index="05 — Walkthrough"
+        index="05 / Walkthrough"
         title="A scripted sale, on a sample agent."
         lede="The memory here is invented and nothing on this page touches a chain. It exists because the claim the product makes is only convincing when you watch a cold agent answer from memory it did not have a minute ago."
       />
@@ -124,7 +124,7 @@ export default function Walkthrough() {
           <FieldList>
             <Field label="State">
               <Badge tone={listing.state === "open" ? "neutral" : "escrow"}>
-                {listing.state === "open" ? "Open — no buyer" : "Escrow: funds held"}
+                {listing.state === "open" ? "Open, no buyer" : "Escrow: funds held"}
               </Badge>
             </Field>
             <Field label="Committed hash">
@@ -168,7 +168,7 @@ export default function Walkthrough() {
               <div className="min-w-0 flex-1">
                 <p className="mb-3 text-body text-muted">
                   Committed before a buyer existed, then re-derived from the
-                  buyer's own store after the import — not from the bytes sent.
+                  buyer's own store after the import, not from the bytes sent.
                 </p>
                 <FieldList>
                   <Field label="Committed">
@@ -186,7 +186,7 @@ export default function Walkthrough() {
           </Evidence>
           {sealed ? (
             <Note>
-              The seller's copy is sealed. Its next write is rejected — try it in
+              The seller's copy is sealed. Its next write is rejected, try it in
               the conversation below by asking the seller's agent anything.
             </Note>
           ) : null}
@@ -197,8 +197,8 @@ export default function Walkthrough() {
         <p className="mb-4 max-w-measure text-body text-muted">
           A different tenant in a different file. Before the sale it knows
           nothing; after it, it answers from memory that was written into its own
-          store by the import. Ask it about a counterparty — try{" "}
-          <em>"Hi, Northwind Mills again — still good on that Duluth run?"</em>
+          store by the import. Ask it about a counterparty, try{" "}
+          <em>"Hi, Northwind Mills again, still good on that Duluth run?"</em>
         </p>
         <Conversation side="buyer" />
       </Section>

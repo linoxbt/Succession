@@ -3,13 +3,13 @@
  *
  * Two surfaces that must never be confused. **Market** shows listings that
  * exist because a seller ran `succession list` against their own Sibyl store
- * and paid gas to commit its root — the contract is the source of truth and an
+ * and paid gas to commit its root, the contract is the source of truth and an
  * empty market is a true answer. **Walkthrough** is a scripted sale on a sample
  * agent that settles in-process and touches no chain; it lives behind its own
  * banner and its own client, and no code path connects the two.
  *
- * Selling is not in the browser, and cannot be. Sibyl 0.8.0 is local-only —
- * `MemoryClient.local(path)` is its sole constructor — so a seller's memory is a
+ * Selling is not in the browser, and cannot be. Sibyl 0.8.0 is local-only,
+ * `MemoryClient.local(path)` is its sole constructor, so a seller's memory is a
  * file on their own disk that no web page can read. The honest interface hands
  * them the command instead of pretending otherwise, which is what `Sell` does.
  */
@@ -39,7 +39,7 @@ export default function App() {
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
         {/* Lenis wraps the whole app so the interpolated scroll survives moving
-            between the landing document and the console — a page that changes
+            between the landing document and the console, a page that changes
             its scroll physics mid-session feels broken rather than varied. */}
         <SmoothScroll>
           <CursorProvider>

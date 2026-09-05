@@ -8,7 +8,7 @@
  * plausible rows would be exactly the pattern this project argues against.
  *
  * The figures come from two places on purpose. The seller, the commitment, the
- * price and the state are read from `ListingContract` — it is authoritative and
+ * price and the state are read from `ListingContract`, it is authoritative and
  * this page shows what it says. The counts and the valuation come from the
  * seller's published metadata, because the contract has no field for them and
  * should not.
@@ -33,7 +33,7 @@ export default function Marketplace({
   return (
     <div>
       <PageHead
-        index="01 — Marketplace"
+        index="01 / Marketplace"
         title="Memory, offered for sale."
         lede="Every listing below exists because a seller committed its hash on chain before a buyer existed. Nothing here is seeded; an empty market means nobody has listed yet."
         action={
@@ -52,7 +52,7 @@ export default function Marketplace({
         <Note>
           No contract is deployed, so there is nothing to read. This marketplace
           takes its listings from <code>ListingContract</code> and has no offline
-          mode — there is deliberately no configuration that makes it show
+          mode, there is deliberately no configuration that makes it show
           listings without one.
         </Note>
       ) : null}
@@ -78,7 +78,7 @@ export default function Marketplace({
                     <span className="ml-2 text-label text-faint">{row.vertical}</span>
                   ) : null}
                 </Td>
-                <Td className="tnum">{records || "—"}</Td>
+                <Td className="tnum">{records || "-"}</Td>
                 <Td>
                   <Hash value={row.listing.hash_commitment} />
                 </Td>

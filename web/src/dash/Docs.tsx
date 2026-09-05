@@ -23,7 +23,7 @@ const DOCS: Doc[] = [
       <>
         <P>
           Code gives an agent capability. A model gives it reasoning. Memory gives
-          it continuity — and Succession gives that continuity an economic life
+          it continuity, and Succession gives that continuity an economic life
           beyond the original agent.
         </P>
         <P>
@@ -34,7 +34,7 @@ const DOCS: Doc[] = [
           book itself a transferable asset.
         </P>
         <Callout>
-          Delete the memory layer and there is no product — no asset, no hash to
+          Delete the memory layer and there is no product, no asset, no hash to
           commit, no data room, and no cutover. That is the test, and it is the
           point.
         </Callout>
@@ -50,12 +50,12 @@ const DOCS: Doc[] = [
           items={[
             ["Export", "The seller's tenant is filtered, serialized and hashed into a Succession Memory Package, signed with the key holding the agent's ERC-8004 identity."],
             ["List", "The Merkle root is committed to ListingContract on Base, before any buyer exists."],
-            ["Preview", "A buyer sees aggregate statistics only — counts, never record bodies — beside verifiable ACP job history."],
+            ["Preview", "A buyer sees aggregate statistics only, counts, never record bodies, beside verifiable ACP job history."],
             ["Escrow", "The buyer funds the contract. Nothing has moved: the seller cannot touch the money, the buyer holds no identity."],
             ["Deliver", "The package travels encrypted. The content key is released only against funded escrow."],
             ["Re-key", "It imports into a brand-new tenant under the buyer's tenant id."],
             ["Verify", "The buyer re-exports their own store and re-derives the root."],
-            ["Settle", "confirmTransfer releases payment, transfers the identity token, and sets the sealed flag — in one transaction, or none."],
+            ["Settle", "confirmTransfer releases payment, transfers the identity token, and sets the sealed flag, in one transaction, or none."],
             ["Record", "The acquisition is written into the buyer's memory, extending the provenance chain for any future resale."],
           ]}
         />
@@ -96,7 +96,7 @@ const DOCS: Doc[] = [
           ))}
         </Table>
         <P className="mt-6">
-          A directory is a <em>selection unit</em>, not a storage location — it is
+          A directory is a <em>selection unit</em>, not a storage location, it is
           what partial succession filters on and what gets its own Merkle subroot.
           Every record also carries its <Code>origin</Code>, the exact tier and
           category it held in the source engine, which is what the importer
@@ -119,7 +119,7 @@ const DOCS: Doc[] = [
         </P>
         <Table head={["Decision", "Why"]}>
           {[
-            ["Leaves and nodes are domain-separated", "Stops an internal node being presented as a leaf — the classic second-preimage attack"],
+            ["Leaves and nodes are domain-separated", "Stops an internal node being presented as a leaf, the classic second-preimage attack"],
             ["An odd node is promoted, never duplicated", "Duplication makes two different leaf sets produce the same root"],
             ["The category name is bound to its subroot", "A seller cannot relabel a cheap directory as an expensive one"],
             ["Timestamps and row ids are excluded from leaves", "Destinations assign their own; hashing them would fail every honest import"],
@@ -134,7 +134,7 @@ const DOCS: Doc[] = [
         <P className="mt-6">
           The provenance header is signed in full, not just the root. Signing the
           bare root would leave the agent identity and the owner chain
-          unauthenticated — an intercepted package could keep a valid signature
+          unauthenticated, an intercepted package could keep a valid signature
           while claiming to be a different, more valuable agent.
         </P>
       </>
@@ -161,7 +161,7 @@ const DOCS: Doc[] = [
         </Table>
         <Callout>
           Filtering runs before hashing, not before display. A withheld record
-          never reaches the Merkle tree in recoverable form — otherwise anyone
+          never reaches the Merkle tree in recoverable form, otherwise anyone
           able to diff two packages could recover it.
         </Callout>
         <P className="mt-6">
@@ -211,13 +211,13 @@ const DOCS: Doc[] = [
         <Ol
           items={[
             ["Contract-level", "confirmTransfer sets a sealed flag against the agentId, readable by anyone. A sealed agent cannot be relisted."],
-            ["Service-level", "The seller's credentials for that tenant are revoked, and every write path — the adapter and the underlying client — checks the seal first and rejects unconditionally."],
+            ["Service-level", "The seller's credentials for that tenant are revoked, and every write path, the adapter and the underlying client, checks the seal first and rejects unconditionally."],
           ]}
         />
         <Callout tone="escrow">
           What sealing does not claim: the seller's database file still exists on
           their disk, and nothing reaches onto their machine. The guarantee is
-          narrower and actually enforceable — that copy can no longer
+          narrower and actually enforceable, that copy can no longer
           authenticate, sync, or be represented anywhere as the live agent. The
           asset was never the bytes; it was the right to be that agent.
         </Callout>
@@ -237,9 +237,9 @@ const DOCS: Doc[] = [
         <P>Stated rather than discovered.</P>
         <Ul
           items={[
-            "The buyer asserts the delivered hash. A dishonest buyer can submit a wrong one, take the automatic refund, and keep the decrypted package. No on-chain logic closes this — the chain cannot see the delivered bytes. The contract's arbiter role is the hook for an Evaluator-style agent that re-derives it independently.",
+            "The buyer asserts the delivered hash. A dishonest buyer can submit a wrong one, take the automatic refund, and keep the decrypted package. No on-chain logic closes this, the chain cannot see the delivered bytes. The contract's arbiter role is the hook for an Evaluator-style agent that re-derives it independently.",
             "Atomicity is by ordering, not by magic. One transaction cannot span the chain and an off-chain store; confirmTransfer is genuinely atomic because it is one EVM transaction, and delivery and sealing are ordered around it so every intermediate state is safe to abandon.",
-            "relationships/ carries the WARM edges, so its subroot depends on which other categories travel with it — an edge is pruned when the entity at its far end is not part of the sale.",
+            "relationships/ carries the WARM edges, so its subroot depends on which other categories travel with it, an edge is pruned when the entity at its far end is not part of the sale.",
             "Relationship records describe real counterparties. A production version needs a real answer to what terms let that data move with a sale, grounded in the operator's own terms of service. A hackathon build should not pretend to solve it.",
           ]}
         />
@@ -332,7 +332,7 @@ export function Docs() {
 
 // -- small prose primitives ------------------------------------------------
 
-/** Body copy is ink. Muted is for labels and asides — a document whose own
+/** Body copy is ink. Muted is for labels and asides, a document whose own
  *  argument is set in the secondary colour reads as a footnote to itself. */
 function P({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (

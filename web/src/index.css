@@ -37,6 +37,15 @@
     text-wrap: balance;
   }
 
+  /* Hashes and identifiers. With a single family there is no monospaced face
+     to set them apart, so the distinction is made with tabular figures, a
+     lighter weight and tighter tracking than the prose around them. */
+  .evidence-type {
+    font-variant-numeric: tabular-nums;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+  }
+
   /* Numerals must line up column to column — a table of figures that jitters
      between rows reads as sloppy bookkeeping. */
   .tnum {

@@ -1,7 +1,7 @@
 /**
  * The shared vocabulary.
  *
- * Every export here keeps the exact name, props and behaviour it had before —
+ * Every export here keeps the exact name, props and behaviour it had before,
  * these are consumed across the wallet flow, the listing screens and the
  * walkthrough, and a rename would be a functional change dressed as a visual
  * one. What changed is entirely presentational.
@@ -34,7 +34,7 @@ export function Rule({ className = "" }: { className?: string }) {
  * A titled region.
  *
  * The title is display type at section scale with a rule beneath it running
- * the full width — the masthead device of a broadsheet, where a heading owns
+ * the full width, the masthead device of a broadsheet, where a heading owns
  * its column rather than floating above a box.
  */
 export function Section({
@@ -114,13 +114,13 @@ export function FieldList({
  * that as `0xlocal:9f3a…` would invent a hex string that never existed.
  */
 export function Hash({ value, chars = 6 }: { value: string; chars?: number }) {
-  if (!value) return <span className="text-faint">—</span>;
+  if (!value) return <span className="text-faint">-</span>;
   const hex = /^0x[0-9a-fA-F]+$/.test(value);
   const body = hex ? value.slice(2) : value;
   const short =
     body.length > chars * 2 ? `${body.slice(0, chars)}…${body.slice(-chars)}` : body;
   return (
-    <span className="font-mono text-micro tnum text-ink" title={value}>
+    <span className="evidence-type text-micro text-ink" title={value}>
       {hex ? `0x${short}` : short}
     </span>
   );
@@ -130,7 +130,7 @@ export function Hash({ value, chars = 6 }: { value: string; chars?: number }) {
  * A hash shown in full, at size.
  *
  * This is the comparison the whole product turns on, so it is set large enough
- * to actually read and compare character by character — truncating it here
+ * to actually read and compare character by character, truncating it here
  * would undercut the only claim the page is making.
  */
 export function FullHash({ value, tone = "neutral" }: { value: string; tone?: Tone }) {
@@ -138,9 +138,9 @@ export function FullHash({ value, tone = "neutral" }: { value: string; tone?: To
     tone === "closed" ? "text-closed" : tone === "void" ? "text-void" : "text-ink";
   return (
     <span
-      className={`block break-all font-mono text-micro leading-[1.7] tnum sm:text-micro ${colour}`}
+      className={`evidence-type block break-all text-micro leading-[1.7] ${colour}`}
     >
-      {value || "—"}
+      {value || "-"}
     </span>
   );
 }
@@ -161,7 +161,7 @@ const TONES: Record<Tone, string> = {
 };
 
 /**
- * A state badge. Colour is never the sole signal — the caller passes the words
+ * A state badge. Colour is never the sole signal, the caller passes the words
  * and the badge renders them alongside the colour.
  */
 export function Badge({
@@ -227,7 +227,7 @@ export function VerifyMark({
 /**
  * Buttons are typographic, not chrome.
  *
- * `primary` leans toward the pointer — a small magnetic offset, enough that the
+ * `primary` leans toward the pointer, a small magnetic offset, enough that the
  * control feels answerable without feeling like it is dodging the cursor. The
  * effect is skipped on coarse pointers, where there is no hover to respond to.
  */
@@ -332,7 +332,7 @@ export function Empty({ children }: { children: ReactNode }) {
 /**
  * A command the reader is meant to run, with a copy button.
  *
- * Used wherever the honest answer is "this happens on your machine, not here" —
+ * Used wherever the honest answer is "this happens on your machine, not here",
  * a seller's Sibyl store and a buyer's import are both local files. The text
  * stays selectable so copying works even if the clipboard API is refused.
  */
@@ -364,7 +364,7 @@ export function Copyable({ text }: { text: string }) {
 }
 
 /**
- * An aside in the document's own voice — a marginal note, not a callout box.
+ * An aside in the document's own voice, a marginal note, not a callout box.
  * Set against a rule on the leading edge rather than inside a tinted panel.
  */
 export function Note({ children }: { children: ReactNode }) {
@@ -376,7 +376,7 @@ export function Note({ children }: { children: ReactNode }) {
 }
 
 /**
- * An oversized figure with its label beneath — the unit the proof section is
+ * An oversized figure with its label beneath, the unit the proof section is
  * built from. Display scale, because a number that matters should be read from
  * across the room.
  */
@@ -402,8 +402,8 @@ export function Figure({
 /**
  * The opening of a console screen.
  *
- * Each destination starts the same way — a chapter mark, a display line, and an
- * optional standfirst — so moving between them feels like turning to a new page
+ * Each destination starts the same way, a chapter mark, a display line, and an
+ * optional standfirst, so moving between them feels like turning to a new page
  * of one document rather than loading a different application. The heading is
  * masked and rises on arrival; nothing else on the screen announces itself.
  */

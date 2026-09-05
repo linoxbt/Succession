@@ -4,7 +4,7 @@
  * Read top to bottom as one continuous composition rather than a stack of
  * panels: chapters are numbered, the ground alternates between paper and
  * carbon at full bleed, and elements from one chapter lead into the next. The
- * page is set edge-to-edge — the gutter is a margin, not a centring container —
+ * page is set edge-to-edge, the gutter is a margin, not a centring container,
  * so the type has room to run at the scale it is designed for.
  *
  * The product's own copy is unchanged. What changed is everything around it.
@@ -21,7 +21,9 @@ import {
   useScrollTo,
 } from "../motion";
 import { HashVerification, TransferDiagram } from "./visuals";
+import { HashPlate, Lineage, MemoryField } from "./imagery";
 import { Button, Figure } from "../ui";
+import { Wordmark } from "../brand/Logo";
 
 export function Landing({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void }) {
   return (
@@ -29,11 +31,20 @@ export function Landing({ onEnter, onDocs }: { onEnter: () => void; onDocs: () =
       <Masthead onEnter={onEnter} onDocs={onDocs} />
       <Hero onEnter={onEnter} onDocs={onDocs} />
       <Thesis />
+      <Plate caption="Accumulation" tone="carbon">
+        <MemoryField className="h-full w-full" />
+      </Plate>
       <Mechanism />
+      <Plate caption="Inheritance">
+        <Lineage className="h-full w-full" />
+      </Plate>
       <Verification />
       <Commitment />
       <Proof />
       <Stacks />
+      <Plate caption="Evidence" height="h-[46vh] sm:h-[58vh]">
+        <HashPlate className="h-full w-full" />
+      </Plate>
       <Lifecycle />
       <Close onEnter={onEnter} />
       <Colophon onDocs={onDocs} />
@@ -45,6 +56,7 @@ export function Landing({ onEnter, onDocs }: { onEnter: () => void; onDocs: () =
 
 function Masthead({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void }) {
   const [solid, setSolid] = useState(false);
+  const [open, setOpen] = useState(false);
   useEffect(() => {
     const onScroll = () => setSolid(window.scrollY > 40);
     onScroll();
@@ -53,26 +65,90 @@ function Masthead({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void
   }, []);
 
   return (
+    <>
+      <LandingMenu
+        open={open}
+        onClose={() => setOpen(false)}
+        onEnter={onEnter}
+        onDocs={onDocs}
+      />
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-700 ease-swift ${
         solid ? "border-b border-rule bg-paper/95 py-3" : "border-b border-transparent py-6"
       }`}
     >
       <div className="gutter flex items-center justify-between gap-6">
-        <span className="font-mono text-label uppercase text-ink">Succession</span>
-        <div className="flex items-center gap-8">
-          <button
-            onClick={onDocs}
-            className="link-underline font-mono text-label uppercase text-faint transition-colors duration-500 hover:text-ink"
-          >
-            Docs
-          </button>
-          <Button size="sm" onClick={onEnter}>
-            Open console
-          </Button>
-        </div>
+        <Wordmark size={solid ? 24 : 30} />
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="font-mono text-label uppercase text-ink transition-opacity duration-500 hover:opacity-60"
+          aria-expanded={open}
+          aria-controls="landing-menu"
+        >
+          {open ? "Close" : "Menu"}
+        </button>
       </div>
     </header>
+    </>
+  );
+}
+
+/**
+ * The landing menu.
+ *
+ * Same button and same overlay as the console, so the two halves of the product
+ * open in one gesture rather than each inventing its own. Destinations are set
+ * at display scale because a menu that has the whole viewport should use it.
+ */
+function LandingMenu({
+  open,
+  onClose,
+  onEnter,
+  onDocs,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onEnter: () => void;
+  onDocs: () => void;
+}) {
+  useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
+  const items: [string, () => void][] = [
+    ["Open console", onEnter],
+    ["Marketplace", onEnter],
+    ["Docs", onDocs],
+  ];
+
+  return (
+    <div
+      id="landing-menu"
+      className={`fixed inset-0 z-40 bg-paper transition-opacity duration-500 ease-swift ${
+        open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+      }`}
+    >
+      <div className="gutter flex h-full flex-col justify-center gap-1">
+        {items.map(([label, go], i) => (
+          <button
+            key={label}
+            onClick={() => {
+              onClose();
+              go();
+            }}
+            style={{ transitionDelay: open ? `${i * 45}ms` : "0ms" }}
+            className={`display-type text-left text-title text-ink transition-all duration-700 ease-enter ${
+              open ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -90,7 +166,7 @@ function Hero({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void }) 
 
   return (
     <section className="relative flex min-h-[100svh] flex-col justify-between overflow-hidden pt-32 sm:pt-40">
-      {/* The diagram sits behind the headline at low contrast — present enough
+      {/* The diagram sits behind the headline at low contrast, present enough
           to read as structure, quiet enough not to compete with the type. */}
       <div
         ref={drift}
@@ -104,7 +180,7 @@ function Hero({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void }) 
 
       <div className="gutter relative z-10">
         <MaskLine>
-          <p className="chapter-mark">01 — The property layer for agent memory</p>
+          <p className="chapter-mark">01 / The property layer for agent memory</p>
         </MaskLine>
 
         <h1 className="display-type mt-10 text-colossal text-ink">
@@ -146,6 +222,45 @@ function Hero({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void }) 
   );
 }
 
+/* -- visual plates ------------------------------------------------------- */
+
+/**
+ * A full-bleed visual moment.
+ *
+ * The artwork is oversized inside a clipping frame so it has somewhere to
+ * travel under parallax without exposing an edge, and it sits at low contrast
+ * against the ground: these are compositions to move through, not illustrations
+ * to stop and read. The caption is the only text allowed on them.
+ */
+function Plate({
+  children,
+  caption,
+  tone = "paper",
+  height = "h-[62vh] sm:h-[78vh]",
+}: {
+  children: ReactNode;
+  caption: string;
+  tone?: "paper" | "carbon";
+  height?: string;
+}) {
+  const drift = useParallax<HTMLDivElement>(0.09);
+  const dark = tone === "carbon";
+  return (
+    <section className={dark ? "on-carbon" : ""}>
+      <figure className={`frame ${height} relative`}>
+        <div ref={drift} className="absolute inset-0 -top-[8%] h-[116%]">
+          <div className={dark ? "text-chalk/45 h-full" : "text-ink/25 h-full"}>
+            {children}
+          </div>
+        </div>
+        <figcaption className="gutter absolute bottom-0 left-0 right-0 pb-8">
+          <p className={`chapter-mark ${dark ? "text-chalkFaint" : ""}`}>{caption}</p>
+        </figcaption>
+      </figure>
+    </section>
+  );
+}
+
 /* -- 02 thesis ----------------------------------------------------------- */
 
 /**
@@ -156,7 +271,7 @@ function Thesis() {
   return (
     <section id="thesis" className="gutter py-chapter">
       <Reveal>
-        <p className="chapter-mark mb-16">02 — The thesis</p>
+        <p className="chapter-mark mb-16">02 / The thesis</p>
       </Reveal>
 
       <h2 className="display-type text-display text-ink">
@@ -176,38 +291,30 @@ function Thesis() {
 /* -- 03 mechanism -------------------------------------------------------- */
 
 /**
- * The first inversion. A full-bleed carbon chapter carrying the sale itself —
+ * The first inversion. A full-bleed carbon chapter carrying the sale itself,
  * six ordered steps, set as a schedule rather than as a row of feature cards,
  * because the order is the whole guarantee.
  */
 function Mechanism() {
   const steps = [
-    ["Filter", "Non-transferable records are withheld before anything is hashed."],
-    ["Commit", "The Merkle root is posted on chain, before a buyer exists."],
-    ["Escrow", "The buyer's funds are held by the contract, not by us."],
-    ["Deliver", "An AES-256-GCM envelope. The key stays with the seller."],
-    ["Re-hash", "The buyer re-derives the root from their own store."],
-    ["Settle", "Payment, identity and the seal move in one transaction."],
+    ["Filter", "Withheld before hashing."],
+    ["Commit", "Posted before a buyer exists."],
+    ["Escrow", "Held by the contract."],
+    ["Deliver", "Sealed. Key stays with the seller."],
+    ["Re-hash", "Derived from the buyer's own store."],
+    ["Settle", "One transaction, or none."],
   ];
 
   return (
     <section className="on-carbon py-chapter">
       <div className="gutter">
         <Reveal>
-          <p className="chapter-mark mb-16">03 — How a sale works</p>
+          <p className="chapter-mark mb-16">03 / How a sale works</p>
         </Reveal>
 
         <h2 className="display-type max-w-[18ch] text-title text-chalk">
           <MaskLine>Atomicity by ordering, not by assertion.</MaskLine>
         </h2>
-
-        <Reveal index={1}>
-          <p className="mt-10 max-w-measure text-lede text-chalkMuted">
-            A single transaction cannot span a chain and an off-chain store. Every step
-            before settlement is safe to abandon, and settlement itself is one
-            transaction — all of it, or none of it.
-          </p>
-        </Reveal>
 
         <ol className="mt-24 border-t border-carbonRule">
           {steps.map(([name, detail], i) => (
@@ -240,7 +347,7 @@ function Verification() {
   return (
     <section className="gutter py-chapter">
       <Reveal>
-        <p className="chapter-mark mb-16">04 — Verification</p>
+        <p className="chapter-mark mb-16">04 / Verification</p>
       </Reveal>
 
       <div className="grid gap-16 lg:grid-cols-12 lg:gap-24">
@@ -250,10 +357,8 @@ function Verification() {
             <MaskLine index={1}>the destination.</MaskLine>
           </h2>
           <Reveal index={2}>
-            <p className="mt-8 max-w-measure text-body text-muted">
-              Checking the bytes received only proves the courier was honest. Re-exporting
-              the buyer's own store proves the importer wrote what it received, and that
-              the engine coerced nothing on the way in.
+            <p className="mt-8 max-w-measure text-lede text-muted">
+              Not the bytes sent. The store that received them.
             </p>
           </Reveal>
         </div>
@@ -277,7 +382,7 @@ function Verification() {
  * and the two are compared. It is the argument of the product performed at the
  * speed the reader chooses, which is the one thing a static diagram cannot do.
  *
- * Progress is written straight to transforms in a rAF loop — never to React
+ * Progress is written straight to transforms in a rAF loop, never to React
  * state. A scroll-linked value that re-renders sixty times a second is a
  * scroll-linked value that drops frames.
  */
@@ -287,15 +392,15 @@ function Commitment() {
   const barRef = useRef<HTMLSpanElement | null>(null);
 
   const steps = [
-    ["Committed", "The root is posted on chain. No buyer exists yet."],
-    ["Escrowed", "Funds enter the contract. Still nothing has moved."],
-    ["Delivered", "The buyer imports, then re-hashes their own store."],
-    ["Verified", "The roots are compared, and settlement is one transaction."],
+    ["Committed", "No buyer exists yet."],
+    ["Escrowed", "Nothing has moved."],
+    ["Delivered", "Imported, then re-hashed."],
+    ["Verified", "Settled in one transaction."],
   ];
 
   const sceneRef = useScrollScene<HTMLElement>((p) => {
     // Ease the raw progress so the first and last steps hold a little longer
-    // than the middle — the ends are where a reader arrives and leaves.
+    // than the middle, the ends are where a reader arrives and leaves.
     const eased = Math.min(1, Math.max(0, (p - 0.12) / 0.72));
     if (barRef.current) barRef.current.style.transform = `scaleX(${eased})`;
 
@@ -315,7 +420,7 @@ function Commitment() {
     <section ref={sceneRef} className="on-carbon relative h-[300vh]">
       <div className="sticky top-0 flex h-screen flex-col justify-center overflow-hidden">
         <div className="gutter">
-          <p className="chapter-mark mb-12">05 — The commitment, in order</p>
+          <p className="chapter-mark mb-12">05 / The commitment, in order</p>
 
           <div ref={trackRef}>
             <h2 className="display-type max-w-[16ch] text-title text-chalk">
@@ -366,7 +471,7 @@ function Proof() {
   return (
     <section className="gutter border-y border-rule py-beat">
       <Reveal>
-        <p className="chapter-mark mb-14">05 — What is actually built</p>
+        <p className="chapter-mark mb-14">05 / What is actually built</p>
       </Reveal>
 
       <div className="grid gap-14 sm:grid-cols-2 lg:grid-cols-4">
@@ -394,16 +499,16 @@ function Proof() {
 
 function Stacks() {
   const rows = [
-    ["Sibyl Memory", "The asset itself. Five tiers export, hash, transfer and re-key."],
-    ["Base", "Escrow, atomic settlement, and the sealed flag, in one transaction."],
-    ["ERC-8004", "Identity as a token. Transferring it transfers the agent."],
-    ["Virtuals ACP", "Job history as a quality-of-earnings signal a buyer can check."],
+    ["Sibyl Memory", "The asset itself."],
+    ["Base", "Escrow and settlement."],
+    ["ERC-8004", "Identity as a token."],
+    ["Virtuals ACP", "Earnings a buyer can check."],
   ];
 
   return (
     <section className="gutter py-chapter">
       <Reveal>
-        <p className="chapter-mark mb-16">06 — What it runs on</p>
+        <p className="chapter-mark mb-16">06 / What it runs on</p>
       </Reveal>
 
       <dl className="border-t border-rule">
@@ -432,13 +537,13 @@ function Stacks() {
 function Lifecycle() {
   const railPointer = useCursorState("drag", "Drag");
   const items: [string, string, string][] = [
-    ["Sell", "Built", "The whole pipeline, end to end."],
-    ["Partial", "Built", "Transfer some categories, not all."],
-    ["Archive", "Free", "Sibyl's own semantics, at tenant level."],
-    ["Lease", "Designed", "A scheduled re-seal, or an on-chain expiry."],
-    ["Conditional", "Designed", "An oracle gate before the key releases."],
-    ["Inherit", "Roadmap", "The same pipeline, a different trigger."],
-    ["Merge", "Roadmap", "Two evolved memories, and a conflict rule."],
+    ["Sell", "Built", "End to end."],
+    ["Partial", "Built", "Some categories, not all."],
+    ["Archive", "Free", "At tenant level."],
+    ["Lease", "Designed", "An on-chain expiry."],
+    ["Conditional", "Designed", "An oracle gate."],
+    ["Inherit", "Roadmap", "A different trigger."],
+    ["Merge", "Roadmap", "Two memories, one rule."],
     ["Split", "Roadmap", "The inverse of merge."],
   ];
 
@@ -446,7 +551,7 @@ function Lifecycle() {
     <section className="py-chapter">
       <div className="gutter">
         <Reveal>
-          <p className="chapter-mark mb-16">07 — The lifecycle</p>
+          <p className="chapter-mark mb-16">07 / The lifecycle</p>
         </Reveal>
         <h2 className="display-type max-w-[20ch] text-title text-ink">
           <MaskLine>Selling is the first primitive, not the only one.</MaskLine>
@@ -483,7 +588,7 @@ function Close({ onEnter }: { onEnter: () => void }) {
     <section className="on-carbon relative overflow-hidden py-chapter">
       <div ref={drift} className="gutter">
         <Reveal>
-          <p className="chapter-mark mb-16">08 — Enter</p>
+          <p className="chapter-mark mb-16">08 / Enter</p>
         </Reveal>
 
         <h2 className="display-type text-display text-chalk">

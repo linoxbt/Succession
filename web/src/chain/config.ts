@@ -2,7 +2,7 @@
  * Wallet connection, against Base Sepolia.
  *
  * Two connectors, and no wallet-picker modal library: `baseAccount` for a Base
- * Account (passkey — no extension, no seed phrase, which is the shortest path
+ * Account (passkey, no extension, no seed phrase, which is the shortest path
  * for someone opening this for the first time), and `injected` for whatever
  * browser wallet the visitor already has. Anything more is a dependency that
  * exists to render a grid of logos.
@@ -13,7 +13,7 @@
  * connector here, discovery is the thing that makes a visitor's actual wallet
  * appear at all.
  *
- * Storage is `localStorage`, not `cookieStorage` — this is a static SPA with no
+ * Storage is `localStorage`, not `cookieStorage`, this is a static SPA with no
  * server rendering, so there is no server that needs to read the connection
  * back, and `ssr: true` would make wagmi wait for a hydration pass that never
  * comes.

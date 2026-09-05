@@ -4,13 +4,13 @@
  * Two things this file is careful about.
  *
  * **It never claims a chain it is not on.** `SettlementMode` renders what the
- * service reports — local mirror or deployed contract — in the same words the
+ * service reports, local mirror or deployed contract, in the same words the
  * service uses. `LocalSettlement` mirrors the contract's state machine closely
  * enough that a screen showing only the outcome could not tell them apart, so
  * the screen says which one produced it.
  *
  * **It surfaces the contract's own refusal.** ListingContract reverts with
- * named custom errors — `WrongState`, `NotAuthorised`, `SelfPurchase`. The
+ * named custom errors, `WrongState`, `NotAuthorised`, `SelfPurchase`. The
  * generated ABI carries them, so a failure reads as the sentence the contract
  * meant rather than as a hex selector.
  */
@@ -151,7 +151,7 @@ export function WalletBar({ status }: { status: ChainStatus | null }) {
 
 /**
  * Says plainly which backend is settling. Rendered on the listing screen, not
- * tucked into a footer — a reader deciding whether to believe the hash
+ * tucked into a footer, a reader deciding whether to believe the hash
  * comparison needs to know this before they read it, not after.
  */
 export function SettlementMode({ status }: { status: ChainStatus | null }) {
@@ -164,7 +164,7 @@ export function SettlementMode({ status }: { status: ChainStatus | null }) {
       <div className="flex flex-wrap items-center gap-3 border-b border-rule pb-2">
         <h3 className="font-display text-heading text-ink">Settlement</h3>
         <Badge tone={chain ? "escrow" : "neutral"}>
-          {chain ? `On chain — ${CHAIN.name}` : "Local mirror — not on chain"}
+          {chain ? `On chain, ${CHAIN.name}` : "Local mirror, not on chain"}
         </Badge>
       </div>
       <p className="mt-3 max-w-wide text-body leading-relaxed text-muted">
@@ -211,7 +211,7 @@ export function SettlementMode({ status }: { status: ChainStatus | null }) {
           </Field>
           <Field label="Arbiter">
             <Hash value={d.arbiter} chars={8} />
-            <span className="text-muted"> — may confirm alongside the buyer</span>
+            <span className="text-muted">, may confirm alongside the buyer</span>
           </Field>
         </FieldList>
       ) : null}
@@ -223,7 +223,7 @@ export function SettlementMode({ status }: { status: ChainStatus | null }) {
 
 /**
  * Approve, then `buy`. Two transactions, shown as two steps, because that is
- * what they are — collapsing them into one button that silently sends two
+ * what they are, collapsing them into one button that silently sends two
  * signature requests is how a user ends up approving a token spend they did not
  * read.
  */
@@ -269,7 +269,7 @@ export function FundEscrow({
 
   // Which transaction hash has already been acted on. `isSuccess` and `txHash`
   // stay set after a receipt lands, so without this the effect re-runs on any
-  // dependency change — including a parent re-render — and calls `onFunded`
+  // dependency change, including a parent re-render, and calls `onFunded`
   // again for a transaction that was already handled.
   const handled = useRef<string | null>(null);
 
@@ -280,7 +280,7 @@ export function FundEscrow({
     if (stage === "approve") {
       // Await the refetch before leaving the approve stage. Firing it and
       // moving on leaves `allowance` stale for a beat, during which the button
-      // still reads "Approve the payment token" against a granted allowance —
+      // still reads "Approve the payment token" against a granted allowance,
       // and a user who takes it at its word signs a second, pointless approval.
       void refetchAllowance().finally(() => {
         setStage("buy");
@@ -341,7 +341,7 @@ export function FundEscrow({
         <Note>
           {approved
             ? "The contract will pull exactly the asking price into escrow."
-            : "Step 1 of 2 — approve, then fund. Two transactions, shown as two."}
+            : "Step 1 of 2, approve, then fund. Two transactions, shown as two."}
         </Note>
       </div>
       {txHash ? (
@@ -360,7 +360,7 @@ export function FundEscrow({
 }
 
 /**
- * Submit the re-derived root. The buyer's own assertion — which is exactly the
+ * Submit the re-derived root. The buyer's own assertion, which is exactly the
  * hole the Evaluator exists to close, so the caller is expected to say so.
  */
 export function ConfirmOnChain({
@@ -427,7 +427,7 @@ export function ConfirmOnChain({
 /**
  * A contract revert, in the contract's own vocabulary.
  *
- * wagmi surfaces the decoded custom error name when the ABI carries it — which
+ * wagmi surfaces the decoded custom error name when the ABI carries it, which
  * is why `generate-abi.mjs` keeps every `error` entry. A user who sees
  * `WrongState` can at least search for it; one who sees `0x1f2a3b4c` cannot.
  */

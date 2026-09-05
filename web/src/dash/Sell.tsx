@@ -37,9 +37,9 @@ export default function Sell({ chainStatus }: { chainStatus: ChainStatus | null 
   return (
     <div>
       <PageHead
-        index="03 — Sell"
+        index="03 / Sell"
         title="Listing runs on your machine."
-        lede="Your Sibyl store is a local file and this page cannot read it — which is the same reason the memory never reaches anyone until escrow is funded. The command below exports it, commits the hash on Base, and keeps the key in a vault on your disk."
+        lede="Your Sibyl store is a local file and this page cannot read it, which is the same reason the memory never reaches anyone until escrow is funded. The command below exports it, commits the hash on Base, and keeps the key in a vault on your disk."
       />
 
       <Section title="Build the command">
@@ -58,7 +58,7 @@ export default function Sell({ chainStatus }: { chainStatus: ChainStatus | null 
         <div className="mt-6">
           <Copyable text={command} />
           <Note>
-            The key is read from the environment, never from an argument — a
+            The key is read from the environment, never from an argument, a
             private key on a command line lands in shell history and in the
             process table.
           </Note>

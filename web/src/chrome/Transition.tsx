@@ -7,7 +7,7 @@
  * and doing that instantly makes the app feel like a set of tabs.
  *
  * So: a short outgoing settle, a swap while nothing is on screen, and an
- * incoming rise. Deliberately brief — around a third of a second each way. A
+ * incoming rise. Deliberately brief, around a third of a second each way. A
  * transition a person notices twice is a transition they resent by the tenth
  * time, and this is an application people will move through repeatedly rather
  * than a site they will visit once.
@@ -34,7 +34,7 @@ export default function Transition({
 
   useEffect(() => {
     if (current.current === routeKey) {
-      // Same destination, new content — the screen refreshed under itself, so
+      // Same destination, new content, the screen refreshed under itself, so
       // update in place. Animating here would flash on every data refresh.
       setShown(children);
       return;

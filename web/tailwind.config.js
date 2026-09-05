@@ -11,22 +11,17 @@
  * Two rules survive from the original system because they are semantic, not
  * stylistic, and the interface would be worse without them:
  *
- *   1. **Colour encodes transaction state and nothing else.** `escrow`,
- *      `closed` and `void` mean funds held, hash verified, and mismatch. A
- *      screen where nothing is pending shows no colour at all. A brand accent
- *      would be decoration by definition — it would appear on screens where
- *      nothing is happening.
- *   2. **A hash is evidence, not a headline.** It is always mono, always
- *      distinguishable from every other numeral on the page.
+ *   1. Colour encodes transaction state and nothing else. `escrow`, `closed`
+ *      and `void` mean funds held, hash verified, and mismatch. A screen where
+ *      nothing is pending shows no colour at all. A brand accent would be
+ *      decoration by definition, appearing on screens where nothing happens.
+ *   2. A hash is evidence, not prose. It no longer gets its own face, so it
+ *      earns its distinction through tabular figures, tighter tracking and a
+ *      lighter weight than the copy around it.
  *
- * Three families:
- *   Instrument Serif  display. High contrast, and it holds up at the sizes
- *                     this design actually uses — a hero line is set in the
- *                     hundreds of pixels, where most serifs fall apart.
- *   Inter Tight       everything else: labels, navigation, metadata, body.
- *                     Tight enough to sit as a caption under display type
- *                     without competing with it.
- *   IBM Plex Mono     hashes and on-chain identifiers, and nothing else.
+ * One family: Inter Tight, across display, interface and figures. Hierarchy is
+ * carried by size, weight and tracking rather than by a change of voice, which
+ * is a harder discipline and a quieter result.
  */
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -61,10 +56,14 @@ export default {
         closed: "#3C6E4A",
         void: "#8A4038",
       },
+      // One family. `display`, `sans` and `mono` all resolve to it so existing
+      // markup keeps working, and hierarchy is carried entirely by size, weight
+      // and tracking. Figures stay aligned through `font-variant-numeric`
+      // rather than through a separate monospaced face.
       fontFamily: {
-        display: ['"Instrument Serif"', "Georgia", "Times New Roman", "serif"],
+        display: ['"Inter Tight"', "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
         sans: ['"Inter Tight"', "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
-        mono: ['"IBM Plex Mono"', "ui-monospace", "SFMono-Regular", "monospace"],
+        mono: ['"Inter Tight"', "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
       },
       fontSize: {
         // The scale is deliberately gapped rather than continuous. Editorial

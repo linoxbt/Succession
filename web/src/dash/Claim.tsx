@@ -19,12 +19,12 @@ export default function Claim({ listingId }: { listingId: string }) {
   return (
     <div>
       <PageHead
-        index="04 — Claim"
+        index="04 / Claim"
         title="Collect what you paid for."
         lede="Once escrow is funded and the seller has released the key, this collects the encrypted package, imports it into your own store, and re-derives the hash from what actually landed there."
       />
 
-      <Section title="1 — Install">
+      <Section title="1, Install">
         <Copyable text={'pip install "succession[chain]"'} />
         <Note>
           You need a Sibyl store to import into. If you do not have one:{" "}
@@ -33,7 +33,7 @@ export default function Claim({ listingId }: { listingId: string }) {
         </Note>
       </Section>
 
-      <Section title="2 — Claim, import and verify">
+      <Section title="2, Claim, import and verify">
         <Copyable
           text={`succession claim \\
     --listing ${id} \\
@@ -47,11 +47,11 @@ export default function Claim({ listingId }: { listingId: string }) {
         </p>
       </Section>
 
-      <Section title="3 — Confirm on chain">
+      <Section title="3, Confirm on chain">
         <p className="max-w-measure text-body text-muted">
           Only if it printed <strong>VERIFIED</strong>. One transaction releases
           payment to the seller, transfers the ERC-8004 identity to you, and
-          seals the seller's copy — all three, or none of them.
+          seals the seller's copy, all three, or none of them.
         </p>
         <Note>
           If the roots disagree, do not confirm. Submitting the mismatched root
@@ -65,7 +65,7 @@ export default function Claim({ listingId }: { listingId: string }) {
       <Section title="If the key is not there yet">
         <p className="max-w-measure text-body text-muted">
           The seller releases it only after seeing your escrow on chain
-          themselves — nobody else holds it, including this marketplace. If they
+          themselves, nobody else holds it, including this marketplace. If they
           are offline you wait, and your money is never stuck: the confirmation
           window ends and you can take it back.
         </p>

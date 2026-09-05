@@ -2,14 +2,14 @@
  * The page's two illustrations, both drawn rather than photographed.
  *
  * Stock imagery would be the wrong instrument here. This product's subject is a
- * mechanism — records moving between stores under a hash commitment — and a
+ * mechanism, records moving between stores under a hash commitment, and a
  * photograph of a server rack says nothing true about it. These draw the actual
  * thing.
  *
  * They used to animate: packets travelling a wire, hashes scrambling into
  * place, a checkmark fading up on a timer. All of it is gone, because the brief
  * permits exactly one animated moment in the product and it is not here. A
- * hash that resolves on a timer is also quietly dishonest — it performs a
+ * hash that resolves on a timer is also quietly dishonest, it performs a
  * verification that is not happening, on a page where the whole argument is
  * that the verification is real. Static, the same diagram makes a claim the
  * reader can check in the console instead of watching a simulation of.
@@ -33,7 +33,7 @@ const ESCROW = "#2E4A6B";
  * The transfer, as a sequence.
  *
  * Records leave the seller's store, become one committed root, and arrive in a
- * tenant that was empty — the claim the whole system exists to make checkable,
+ * tenant that was empty, the claim the whole system exists to make checkable,
  * so it is worth drawing literally.
  */
 export function TransferDiagram() {
@@ -164,7 +164,7 @@ export function HashVerification() {
           </svg>
         </span>
         <span className="text-body text-closed">
-          Match — escrow released, identity transferred, origin sealed
+          Match, escrow released, identity transferred, origin sealed
         </span>
       </div>
     </div>

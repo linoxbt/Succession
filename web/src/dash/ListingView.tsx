@@ -5,7 +5,7 @@
  * explicit about where the line falls. Funding escrow is an on-chain action
  * their wallet takes from here. Importing what they bought writes into *their*
  * Sibyl store, which is a file on their machine, so it happens in their
- * terminal — and the page hands over the exact command rather than pretending
+ * terminal, and the page hands over the exact command rather than pretending
  * a web page could do it.
  */
 import { formatAmount, type MarketRow } from "../api";
@@ -62,15 +62,15 @@ export default function ListingView({
       <Section index="01" title="The data room">
         <p className="mb-4 max-w-measure text-body text-muted">
           Aggregate statistics only. The preview is built from counts, so there
-          is no record body in scope for it to leak — what is for sale is
+          is no record body in scope for it to leak, what is for sale is
           described, never shown.
         </p>
         <FieldList>
-          <Field label="Agent identity">{row.agent_identity || "—"}</Field>
+          <Field label="Agent identity">{row.agent_identity || "-"}</Field>
           <Field label="Seller">
             <FullHash value={listing.seller} />
           </Field>
-          <Field label="Records">{records || "—"}</Field>
+          <Field label="Records">{records || "-"}</Field>
           {preview?.memory_size_bytes ? (
             <Field label="Memory size">{preview.memory_size_bytes} bytes</Field>
           ) : null}
@@ -100,7 +100,7 @@ export default function ListingView({
           <p className="mb-4 max-w-measure text-body text-muted">
             Two transactions, shown as two: approve the payment token, then fund.
             The money is held by the contract and goes to the seller only when a
-            matching hash is confirmed — or back to you if it is not.
+            matching hash is confirmed, or back to you if it is not.
           </p>
           <FundEscrow
             deployment={deployment}
@@ -115,7 +115,7 @@ export default function ListingView({
         <Section index="03" title="Claim what you paid for">
           <p className="mb-4 max-w-measure text-body text-muted">
             Your escrow is funded. Once the seller releases the key, collect and
-            import the package on your own machine — the import writes into your
+            import the package on your own machine, the import writes into your
             Sibyl store, which this page cannot reach.
           </p>
           <Copyable

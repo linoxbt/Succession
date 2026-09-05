@@ -2,8 +2,8 @@
  * The pointer.
  *
  * A custom cursor earns its place only if it carries information the native one
- * cannot. This one does two things: it reports what the thing under it *is* —
- * a link, a draggable rail, a block of reading — and it lags fractionally
+ * cannot. This one does two things: it reports what the thing under it *is*,
+ * a link, a draggable rail, a block of reading, and it lags fractionally
  * behind the pointer, which is what makes the page feel like it has weight
  * rather than like it is tracking a mouse.
  *

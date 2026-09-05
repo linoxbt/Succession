@@ -2,8 +2,8 @@
  * The first two seconds.
  *
  * A preloader is only justified if it does work. This one waits on the two
- * things that actually cause a visible flash on this page — the display face,
- * and the first paint of the hero — and it uses the wait to state what the
+ * things that actually cause a visible flash on this page, the display face,
+ * and the first paint of the hero, and it uses the wait to state what the
  * product is, so the time is spent rather than merely passed.
  *
  * It is deliberately short and it never blocks. The counter is driven by real
@@ -118,7 +118,7 @@ export default function Preloader({ onDone }: { onDone: () => void }) {
           <span className="display-type text-colossal leading-none text-chalk tnum">
             {String(count).padStart(3, "0")}
           </span>
-          {/* The rule fills as the count climbs — the same information twice,
+          {/* The rule fills as the count climbs, the same information twice,
               once as a figure and once as a length, because a number alone at
               this scale reads as decoration. */}
           <span className="mb-4 hidden h-px flex-1 origin-left bg-carbonRule sm:block">

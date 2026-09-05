@@ -1,8 +1,8 @@
 /**
  * The console shell.
  *
- * A masthead, not application chrome. It sits directly on the paper — no
- * elevation, no tinted bar — and condenses as the page moves, so on a long
+ * A masthead, not application chrome. It sits directly on the paper, no
+ * elevation, no tinted bar, and condenses as the page moves, so on a long
  * screen it becomes a hairline and a set of labels rather than a band
  * competing with the content beneath it.
  *
@@ -86,9 +86,9 @@ export default function Shell({
           <button
             onClick={onHome}
             className="shrink-0 text-left transition-opacity duration-500 hover:opacity-60"
-            aria-label="Succession — home"
+            aria-label="Succession, home"
           >
-            <Wordmark size={scrolled ? 16 : 19} />
+            <Wordmark size={scrolled ? 24 : 30} />
           </button>
 
           <nav className="hidden items-center gap-9 lg:flex" aria-label="Console">

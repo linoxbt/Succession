@@ -1,5 +1,5 @@
 /**
- * The service client. Every shape here mirrors what the Python returns —
+ * The service client. Every shape here mirrors what the Python returns,
  * nothing is computed on this side, because a number the UI derives is a number
  * that can disagree with the one the contract enforces.
  */
@@ -181,7 +181,7 @@ export const market = {
       "/api/marketplace",
     ),
   listing: (id: string) => request<MarketRow>(`/api/listing/${id}`),
-  /** Ciphertext. Public on purpose — inert without the content key. */
+  /** Ciphertext. Public on purpose, inert without the content key. */
   envelope: (id: string) => request<unknown>(`/api/listing/${id}/envelope`),
   chain: () => request<ChainStatus>("/api/chain"),
 };

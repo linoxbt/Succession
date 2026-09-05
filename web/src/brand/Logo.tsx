@@ -4,7 +4,7 @@
  * The idea is the product in one shape: a single S-spine drawn as **two
  * strokes with a visible seam**. The upper half is the origin agent, the lower
  * half the successor, and the gap between them is the transfer. One continuous
- * letterform, visibly handed over — continuity that changed hands, which is
+ * letterform, visibly handed over, continuity that changed hands, which is
  * the whole thesis.
  *
  * Both halves are the same path with `pathLength="100"` normalised, so the
@@ -13,7 +13,7 @@
  * animatable: the successor half draws itself in, once, on first paint.
  *
  * It survives 16px because it is one stroke weight, one shape, and no interior
- * detail — the seam stays legible when everything else has collapsed.
+ * detail, the seam stays legible when everything else has collapsed.
  */
 
 /** The S-spine. Two mirrored bowls, drawn as cubics for an even weight. */
@@ -58,13 +58,13 @@ export function Mark({ size = 32, className = "" }: { size?: number; className?:
 }
 
 /** Mark plus name, for the header and the console rail. */
-export function Wordmark({ size = 22, className = "" }: { size?: number; className?: string }) {
+export function Wordmark({ size = 28, className = "" }: { size?: number; className?: string }) {
   return (
-    <span className={`inline-flex items-center gap-2.5 ${className}`}>
+    <span className={`inline-flex items-center gap-1.5 ${className}`}>
       <Mark size={size} />
       <span
-        className="font-display tracking-[-0.01em]"
-        style={{ fontSize: size * 0.72 }}
+        className="font-display font-medium tracking-[-0.03em]"
+        style={{ fontSize: size * 0.95 }}
       >
         Succession
       </span>

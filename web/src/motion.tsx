@@ -1,7 +1,7 @@
 /**
  * The motion system.
  *
- * Four primitives — smooth scroll, reveal, parallax, magnetic — and nothing
+ * Four primitives, smooth scroll, reveal, parallax, magnetic, and nothing
  * else. A page whose motion comes from a handful of shared behaviours reads as
  * composed; one where each component invents its own reads as busy.
  *
@@ -17,7 +17,7 @@
  *    triggers layout, so the compositor does the work.
  *
  * All of it is an enhancement. Under `prefers-reduced-motion` the observers
- * still run — elements are marked visible immediately — and the parallax loop
+ * still run, elements are marked visible immediately, and the parallax loop
  * never starts, so the page is complete and static.
  */
 import {
@@ -166,7 +166,7 @@ export function Reveal({
  * A line of display type that rises out from behind a clip.
  *
  * Each line needs its own clipping box, so callers pass one `MaskLine` per
- * line rather than one per paragraph — which also means the line breaks are a
+ * line rather than one per paragraph, which also means the line breaks are a
  * deliberate typographic decision rather than whatever the width produced.
  */
 export function MaskLine({
@@ -238,7 +238,7 @@ export function useParallax<T extends HTMLElement>(speed = 0.12) {
 /**
  * A control that leans toward the pointer.
  *
- * Deliberately small in travel — enough that a button feels answerable, not so
+ * Deliberately small in travel, enough that a button feels answerable, not so
  * much that it feels like it is dodging the cursor. Bound to pointer events and
  * skipped entirely on coarse pointers, where there is no hover to respond to
  * and the effect would only fire after a tap had already landed.
