@@ -233,6 +233,7 @@ def publish_listing(
     chain_id: int,
     listing_contract: str,
     categories: Sequence[str] | None = None,
+    scope: Any = None,
     base_price: Decimal | str | int | None = None,
     currency: str = "USDC",
     vault: SellerVault | None = None,
@@ -263,6 +264,7 @@ def publish_listing(
         agent_identity=agent_identity,
         private_key=private_key,
         categories=categories,
+        scope=scope,
     )
     listing_id = listing_id_for(agent_identity, probe.root_hex)
     if vault.exists(listing_id):
@@ -281,6 +283,7 @@ def publish_listing(
         price=price,
         currency=currency,
         categories=categories,
+        scope=scope,
         base_price=base_price,
     )
 

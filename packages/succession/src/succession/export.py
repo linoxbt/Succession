@@ -18,6 +18,7 @@ from .memory.base import MemorySource
 from .merkle import to_hex
 from .provenance import build_header, sign_header
 from .redaction import Consent, RedactionReport, filter_transferable, read_disclosure
+from .scope import SaleScope
 from .smp import DATA_CATEGORIES, SMPPackage, route
 
 __all__ = ["ExportResult", "read_all", "build_package", "export_tenant", "memory_version_of"]
@@ -66,17 +67,34 @@ def build_package(
     *,
     categories: Sequence[str] | None = None,
     category_map: dict[str, str] | None = None,
+    scope: "SaleScope | None" = None,
 ) -> tuple[SMPPackage, RedactionReport]:
-    """Filter and route a tenant's records into an unsigned SMP package."""
+    """Filter and route a tenant's records into an unsigned SMP package.
+
+    ``scope`` is the richer form of ``categories``: it says how *much* of each
+    category is being sold rather than only which ones. The two do the same job
+    at the whole-category level, so a caller passing either gets the same result
+    for a 100% selection, and a caller passing neither still sells everything.
+
+    Scope resolution runs *after* the transferability and consent gates, so a
+    percentage is always a percentage of what was sellable in the first place.
+    "All of relationships" therefore never means "including the ones the seller
+    withheld", which is both what a seller intends and the only safe reading.
+    """
     records = read_all(source)
     kept, withheld_non_transferable, withheld_without_consent = filter_transferable(
         records
     )
 
-    selected = tuple(categories) if categories is not None else DATA_CATEGORIES
-    withheld_by_category = sum(
-        1 for r in kept if route(r, category_map) not in set(selected)
-    )
+    if scope is not None:
+        selected = scope.categories
+        kept, withheld_by_scope = scope.resolve(kept, category_map=category_map)
+        withheld_by_category = sum(withheld_by_scope.values())
+    else:
+        selected = tuple(categories) if categories is not None else DATA_CATEGORIES
+        withheld_by_category = sum(
+            1 for r in kept if route(r, category_map) not in set(selected)
+        )
 
     kept, withheld_dangling = _prune_dangling_relations(
         kept, selected=set(selected), category_map=category_map
@@ -149,6 +167,7 @@ def export_tenant(
     private_key: str,
     categories: Sequence[str] | None = None,
     category_map: dict[str, str] | None = None,
+    scope: "SaleScope | None" = None,
     provenance_chain: list[dict[str, Any]] | None = None,
     created_at: str | None = None,
 ) -> ExportResult:
@@ -159,7 +178,7 @@ def export_tenant(
     sold attested to this", rather than "some key attested to this".
     """
     package, report = build_package(
-        source, categories=categories, category_map=category_map
+        source, categories=categories, category_map=category_map, scope=scope
     )
     tree = package.tree()
 
@@ -170,6 +189,10 @@ def export_tenant(
             "full": "every record in the package, post-purchase and hash-verified",
         },
         "redaction": report.to_dict(),
+        "scope": scope.to_dict() if scope is not None else {
+            "selections": [],
+            "rule": "Whole categories. No percentage selection was applied.",
+        },
         # Previously a single sentence asserting the seller had authority over
         # every record alike. That applied equally to a book the seller had a
         # defensible basis for and to one they did not, so it told a buyer

@@ -97,6 +97,7 @@ def list_asset(
     price: int,
     currency: str = "USDC",
     categories: Sequence[str] | None = None,
+    scope: Any = None,
     base_price: Decimal | str | int | None = None,
     provenance_chain: list[dict[str, Any]] | None = None,
 ) -> ListedAsset:
@@ -113,6 +114,7 @@ def list_asset(
         agent_identity=agent_identity,
         private_key=private_key,
         categories=categories,
+        scope=scope,
         provenance_chain=provenance_chain,
     )
     valuation = (

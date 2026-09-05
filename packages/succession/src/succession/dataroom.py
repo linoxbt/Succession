@@ -38,6 +38,7 @@ from .canonical import canonical_bytes
 from .memory.base import MemorySource
 from .export import memory_version_of
 from .redaction import Sensitivity, read_disclosure
+from .scope import take_inventory
 from .smp import DATA_CATEGORIES, route
 from .valuation import Valuation, value_tenant
 
@@ -69,6 +70,11 @@ class DataRoomPreview:
     #: buyer wants before paying, and because computing it at preview time
     #: proves the seller did not supply it.
     reputation: dict[str, Any] | None = None
+    #: Per category: how much is sellable, how deep it runs, and whether it can
+    #: honestly be offered at all. This is what the listing screen reads to
+    #: decide what a seller may select, so it is computed from the store rather
+    #: than assumed from the category list.
+    inventory: dict[str, dict[str, Any]] = field(default_factory=dict)
     acp: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -84,6 +90,7 @@ class DataRoomPreview:
                 k: dict(v) for k, v in self.category_transferability.items()
             },
             "reputation": self.reputation,
+            "inventory": self.inventory,
             "disclosure": (
                 "Aggregate statistics only. Record contents are released after "
                 "purchase and hash verification."
@@ -186,9 +193,12 @@ def build_preview(
         bucket = transferability.setdefault(
             route(record), {"sellable": 0, "withheld": 0}
         )
+        # `may_transfer`, not `transferable`: a record a counterparty has not
+        # consented to move is withheld by the export, so counting it as
+        # sellable here would offer the seller more than they can actually sell.
         key = (
             "sellable"
-            if read_disclosure(record.get("body")).transferable
+            if read_disclosure(record.get("body")).may_transfer
             else "withheld"
         )
         bucket[key] += 1
@@ -261,4 +271,5 @@ def build_preview(
         committed_root=committed_root,
         acp=acp_history.to_dict() if acp_history is not None else None,
         reputation=reputation.to_dict(),
+        inventory={k: v.to_dict() for k, v in take_inventory(source).items()},
     )

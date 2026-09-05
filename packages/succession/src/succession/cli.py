@@ -165,6 +165,7 @@ def cmd_list(args: argparse.Namespace) -> int:
             chain_id=int(record["chain_id"]),
             listing_contract=record["listing_contract"],
             categories=args.categories,
+            scope=_parse_scope(getattr(args, "scope", None)),
         )
     except PublishError as exc:
         raise SystemExit(str(exc)) from exc
@@ -246,6 +247,66 @@ def cmd_claim(args: argparse.Namespace) -> int:
     print(f"  the root above, submitted to confirmTransfer({args.listing}, ...)")
     return 0
 
+
+
+
+def cmd_inventory(args: argparse.Namespace) -> int:
+    """What this agent actually has to sell, category by category.
+
+    Read from the store rather than assumed from the category list, because an
+    agent that has never written a preference cannot sell preferences and
+    offering the category anyway produces a listing whose directory exports
+    empty.
+    """
+    from .scope import take_inventory
+
+    source = open_tenant(args.db, args.tenant)
+    inventory = take_inventory(source)
+
+    print(f"{'category':22}{'sellable':>9}{'withheld':>10}{'depth':>11}   offerable")
+    for category, entry in inventory.items():
+        withheld = entry.withheld_by_seller + entry.withheld_without_consent
+        print(
+            f"{category:22}{entry.sellable:>9}{withheld:>10}{entry.depth:>11}   "
+            f"{'yes' if entry.offerable else 'NO — nothing to sell'}"
+        )
+
+    offerable = [c for c, e in inventory.items() if e.offerable]
+    print()
+    print(f"{len(offerable)} of {len(inventory)} categories can be offered.")
+    if len(offerable) < len(inventory):
+        print("An empty category cannot be listed: it would export an empty directory.")
+    print()
+    print("Sell a share of each with --scope, for example:")
+    print(f"  succession list --scope {offerable[0] if offerable else 'history'}=60,history=100 …")
+    return 0
+
+
+def _parse_scope(raw: str | None):
+    """``relationships=60,history=100`` into a SaleScope."""
+    from .scope import SaleScope
+
+    if not raw:
+        return None
+    percentages: dict[str, int] = {}
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "=" not in part:
+            raise SystemExit(
+                f"bad --scope entry {part!r}; expected category=percent, "
+                "for example relationships=60"
+            )
+        category, _, percent = part.partition("=")
+        try:
+            value = int(percent)
+        except ValueError:
+            raise SystemExit(f"bad percent in --scope entry {part!r}") from None
+        if not 0 <= value <= 100:
+            raise SystemExit(f"--scope percent must be 0-100, got {value}")
+        percentages[category.strip()] = value
+    return SaleScope.from_percentages(percentages)
 
 
 def cmd_prove(args: argparse.Namespace) -> int:
@@ -405,7 +466,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--price", type=int, required=True,
                    help="asking price in the payment token's minor units (USDC has 6)")
     p.add_argument("--categories", nargs="*", choices=DATA_CATEGORIES,
-                   help="partial succession: sell only these")
+                   help="partial succession: sell only these, in whole")
+    p.add_argument("--scope", default=None,
+                   help="sell a share of each, e.g. relationships=60,history=100")
     p.set_defaults(func=cmd_list)
 
     p = sub.add_parser("fulfil", help="release content keys once escrow is funded")
@@ -423,6 +486,12 @@ def main(argv: list[str] | None = None) -> int:
         "SUCCESSION_MARKETPLACE", "http://127.0.0.1:8000"
     ), help="marketplace base URL")
     p.set_defaults(func=cmd_claim)
+
+    p = sub.add_parser(
+        "inventory", help="what this agent actually has to sell, per category"
+    )
+    tenant_args(p)
+    p.set_defaults(func=cmd_inventory)
 
     p = sub.add_parser(
         "prove", help="prove every category transfers, against your own store"

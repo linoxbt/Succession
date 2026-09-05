@@ -18,11 +18,34 @@ import { useState } from "react";
 import type { ChainStatus } from "../api";
 import { Copyable, Note, PageHead, Section } from "../ui";
 
+/** The six directories that carry memory. The other three are generated. */
+const CATEGORIES = [
+  "identity",
+  "relationships",
+  "preferences",
+  "history",
+  "commitments",
+  "learned-behaviors",
+] as const;
+
 export default function Sell({ chainStatus }: { chainStatus: ChainStatus | null }) {
   const [db, setDb] = useState("~/.sibyl-memory/memory.db");
   const [tenant, setTenant] = useState("");
   const [agent, setAgent] = useState("");
   const [price, setPrice] = useState("25");
+
+  // Percentage per category. 100 means the whole directory; 0 leaves it out of
+  // the sale entirely, which is why "not selling this" and "selling none of it"
+  // are the same control rather than two.
+  const [shares, setShares] = useState<Record<string, number>>(
+    Object.fromEntries(CATEGORIES.map((c) => [c, 100])),
+  );
+
+  const share = (c: string) => shares[c] ?? 100;
+  const scope = CATEGORIES.filter((c) => share(c) > 0)
+    .map((c) => `${c}=${share(c)}`)
+    .join(",");
+  const partial = CATEGORIES.some((c) => share(c) !== 100);
 
   const minor = Math.round((Number(price) || 0) * 1_000_000);
   const command = [
@@ -31,6 +54,7 @@ export default function Sell({ chainStatus }: { chainStatus: ChainStatus | null 
     `    --db ${db || "<your store>"} \\`,
     `    --tenant ${tenant || "<your tenant>"} \\`,
     `    --agent ${agent || "erc8004:84532:<your agent id>"} \\`,
+    ...(partial ? [`    --scope ${scope || "<nothing selected>"} \\`] : []),
     `    --price ${minor}`,
   ].join("\n");
 
@@ -55,7 +79,51 @@ export default function Sell({ chainStatus }: { chainStatus: ChainStatus | null 
           <Field label="Asking price (USDC)" hint="what a buyer pays" value={price} onChange={setPrice} />
         </div>
 
-        <div className="mt-6">
+        <div className="mt-12">
+          <p className="chapter-mark mb-6">How much of each to sell</p>
+          <p className="mb-8 max-w-measure text-body text-muted">
+            Run <code>succession inventory</code> first to see what this agent
+            actually holds. A category it has never written to cannot be sold,
+            and offering it anyway would list a directory that exports empty.
+          </p>
+
+          <div className="border-t border-hairline">
+            {CATEGORIES.map((category) => (
+              <div
+                key={category}
+                className="flex flex-wrap items-center gap-x-8 gap-y-3 border-b border-hairline py-5"
+              >
+                <span className="w-56 shrink-0 text-body text-ink">{category}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={share(category)}
+                  onChange={(e) =>
+                    setShares((s) => ({ ...s, [category]: Number(e.target.value) }))
+                  }
+                  className="h-px flex-1 min-w-[8rem] cursor-pointer appearance-none bg-rule accent-ink"
+                  aria-label={`Percentage of ${category} to sell`}
+                />
+                <span className="w-20 shrink-0 text-right tnum text-body text-ink">
+                  {share(category)}%
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <Note>
+            Records are ordered newest first and a percentage takes that many
+            from the front, so a successor inherits recent context rather than
+            the oldest half. Relationship edges follow their endpoints rather
+            than counting toward the percentage, because half an edge is not a
+            thing. The rule is written into the package, so a buyer can
+            reproduce your selection exactly.
+          </Note>
+        </div>
+
+        <div className="mt-12">
           <Copyable text={command} />
           <Note>
             The key is read from the environment, never from an argument, a
