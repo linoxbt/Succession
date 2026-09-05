@@ -22,6 +22,7 @@ import { WalletBar, useChainStatus } from "./chain/Wallet";
 import { market, type MarketRow } from "./api";
 import { Landing } from "./landing/Landing";
 import Shell, { type View } from "./dash/Shell";
+import Dashboard from "./dash/Overview";
 import Marketplace from "./dash/Marketplace";
 import ListingView from "./dash/ListingView";
 import Sell from "./dash/Sell";
@@ -58,7 +59,7 @@ function Surface() {
   const [route, setRoute] = useState<"landing" | "console">(
     window.location.pathname.startsWith("/app") ? "console" : "landing",
   );
-  const [view, setView] = useState<View>("market");
+  const [view, setView] = useState<View>("overview");
   const [rows, setRows] = useState<MarketRow[]>([]);
   const [selected, setSelected] = useState<MarketRow | null>(null);
   const [onChain, setOnChain] = useState<boolean | null>(null);
@@ -103,6 +104,29 @@ function Surface() {
     setView("listing");
   }, []);
 
+  // The dashboard hands back a listing id rather than a row, because it holds
+  // its own copy of the market from /api/overview. Resolve against what is
+  // already loaded, and fall back to fetching the one listing if the two views
+  // have drifted.
+  const openById = useCallback(
+    (listingId: string) => {
+      const known = rows.find((r) => r.listing.listing_id === listingId);
+      if (known) {
+        setSelected(known);
+        setView("listing");
+        return;
+      }
+      void market
+        .listing(listingId)
+        .then((row) => {
+          setSelected(row);
+          setView("listing");
+        })
+        .catch(() => setView("market"));
+    },
+    [rows],
+  );
+
   if (route === "landing") {
     return (
       <>
@@ -137,6 +161,7 @@ function Surface() {
       ) : null}
 
       <Transition routeKey={view}>
+      {view === "overview" ? <Dashboard onOpenListing={openById} /> : null}
       {view === "market" ? (
         <Marketplace
           rows={rows}

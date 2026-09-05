@@ -1,0 +1,240 @@
+/**
+ * The dashboard.
+ *
+ * One read, not five. Assembling this from separate calls would leave it
+ * half-drawn for the first second and repeat the same bounded log scan each
+ * time, so `/api/overview` aggregates at the source and this renders it.
+ *
+ * The figures are derived from the listings rather than tracked in a tally.
+ * A stored count is a second source of truth that drifts from the first, and
+ * the argument this whole project makes is that there is only one.
+ */
+import { useEffect, useState } from "react";
+import { useAccount } from "wagmi";
+
+import { formatAmount, market, type AgentsHeld, type Overview } from "../api";
+import { explorerAddress } from "../chain/config";
+import { Badge, Empty, Figure, Hash, Note, PageHead, Section, Table, Td } from "../ui";
+import { Reveal } from "../motion";
+
+const STATE_TONE: Record<string, "neutral" | "escrow" | "closed" | "void"> = {
+  open: "neutral",
+  escrowed: "escrow",
+  confirmed: "closed",
+  refunded: "void",
+};
+
+export default function Dashboard({
+  onOpenListing,
+}: {
+  onOpenListing: (listingId: string) => void;
+}) {
+  const [data, setData] = useState<Overview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { address, isConnected } = useAccount();
+  const [held, setHeld] = useState<AgentsHeld | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    market
+      .overview()
+      .then((body) => live && setData(body))
+      .catch((e) => live && setError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!address) {
+      setHeld(null);
+      return;
+    }
+    let live = true;
+    market
+      .agents(address)
+      .then((body) => live && setHeld(body))
+      .catch(() => live && setHeld(null));
+    return () => {
+      live = false;
+    };
+  }, [address]);
+
+  const totals = data?.totals ?? {};
+  const byState = totals.by_state ?? {};
+  const deployment = data?.deployment ?? null;
+
+  return (
+    <div>
+      <PageHead
+        index="00 / Overview"
+        title="The desk."
+        lede={data ? data.explanation : "Reading the contract."}
+      />
+
+      {error ? <Note>The service is unreachable ({error}).</Note> : null}
+
+      {/* --- the figures ------------------------------------------------ */}
+      <Section index="01" title="Position">
+        <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-4">
+          <Reveal index={0}>
+            <Figure value={String(totals.listings ?? 0)} label="Listings" />
+          </Reveal>
+          <Reveal index={1}>
+            <Figure
+              value={formatAmount(totals.volume_settled ?? 0, "USDC").replace(" USDC", "")}
+              label="Settled, USDC"
+              tone="closed"
+            />
+          </Reveal>
+          <Reveal index={2}>
+            <Figure
+              value={formatAmount(totals.volume_open ?? 0, "USDC").replace(" USDC", "")}
+              label="Open, USDC"
+            />
+          </Reveal>
+          <Reveal index={3}>
+            <Figure value={String(totals.agents ?? 0)} label="Agents listed" />
+          </Reveal>
+        </div>
+
+        <div className="mt-12 flex flex-wrap gap-3">
+          {Object.entries(byState).map(([state, n]) => (
+            <Badge key={state} tone={STATE_TONE[state] ?? "neutral"}>
+              {n} {state}
+            </Badge>
+          ))}
+        </div>
+
+        {totals.listings ? (
+          <Note>
+            {totals.with_data_room ?? 0} of {totals.listings} sellers published a
+            data room. The rest are listed on chain and undescribed, which is a
+            real gap rather than a rendering one.
+          </Note>
+        ) : null}
+      </Section>
+
+      {/* --- your agents ------------------------------------------------ */}
+      <Section index="02" title="Your agents" className="mt-chapter">
+        {!isConnected ? (
+          <Note>Connect a wallet to see the ERC-8004 agents it holds.</Note>
+        ) : !held ? (
+          <Note>Reading the registry.</Note>
+        ) : held.agents.length === 0 ? (
+          <Note>This wallet holds no ERC-8004 agents.</Note>
+        ) : (
+          <>
+            <div className="border-t border-hairline">
+              {held.agents.map((a) => (
+                <div
+                  key={a.identity}
+                  className="flex flex-wrap items-baseline gap-x-8 gap-y-1 border-b border-hairline py-4"
+                >
+                  <span className="evidence-type text-body text-ink">{a.identity}</span>
+                  <span className="text-label uppercase tracking-[0.14em] text-faint">
+                    token {a.agent_id}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {!held.complete ? (
+              <Note>
+                Showing {held.found} of {held.balance}. The registry cannot be
+                enumerated directly, so older agents may sit outside the scanned
+                range. Everything listed is confirmed on chain.
+              </Note>
+            ) : null}
+          </>
+        )}
+      </Section>
+
+      {/* --- the market -------------------------------------------------- */}
+      <Section index="03" title="The market" className="mt-chapter">
+        {!data ? (
+          <Empty>Reading the contract.</Empty>
+        ) : data.listings.length === 0 ? (
+          <Empty>No listings on this contract yet.</Empty>
+        ) : (
+          <Table head={["Agent", "State", "Price", "Committed hash", ""]}>
+            {data.listings.map((row) => (
+              <tr
+                key={row.listing.listing_id}
+                className="border-b border-hairline"
+              >
+                <Td>
+                  <span className="text-ink">
+                    {row.name || `Agent ${row.agent_identity}`}
+                  </span>
+                  {row.has_metadata === false ? (
+                    <span className="ml-3 text-label uppercase tracking-[0.14em] text-faint">
+                      on chain only
+                    </span>
+                  ) : null}
+                </Td>
+                <Td>
+                  <Badge tone={STATE_TONE[row.listing.state] ?? "neutral"}>
+                    {row.listing.state}
+                  </Badge>
+                </Td>
+                <Td className="tnum">
+                  {formatAmount(row.listing.price, row.listing.currency)}
+                </Td>
+                <Td>
+                  <Hash value={row.listing.hash_commitment} />
+                </Td>
+                <Td>
+                  <button
+                    onClick={() => onOpenListing(row.listing.listing_id)}
+                    className="link-underline font-mono text-label uppercase text-muted hover:text-ink"
+                  >
+                    Open
+                  </button>
+                </Td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Section>
+
+      {/* --- what it settles on ------------------------------------------ */}
+      <Section index="04" title="Settlement" className="mt-chapter">
+        {!deployment ? (
+          <Note>No contract deployed.</Note>
+        ) : (
+          <div className="border-t border-hairline">
+            {[
+              ["Listing contract", deployment.listing_contract],
+              ["Identity registry", deployment.identity_registry],
+              ["Payment token", deployment.payment_token],
+              ["Arbiter", deployment.arbiter],
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                className="flex flex-col gap-1 border-b border-hairline py-4 sm:flex-row sm:items-baseline sm:gap-10"
+              >
+                <span className="w-full shrink-0 font-mono text-label uppercase text-faint sm:w-64">
+                  {label}
+                </span>
+                <a
+                  href={explorerAddress(String(value))}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="link-underline evidence-type text-micro text-ink"
+                >
+                  {value}
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
+        {deployment && !deployment.identity_registry_is_mock ? (
+          <Note>
+            The identity registry is a real ERC-8004 deployment, not a stand-in.
+            Payment settles in Circle's USDC.
+          </Note>
+        ) : null}
+      </Section>
+    </div>
+  );
+}

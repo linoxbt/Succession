@@ -22,11 +22,19 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Wordmark } from "../brand/Logo";
 import { useScrollProgress, useScrolled } from "../motion";
 
-export type View = "market" | "listing" | "sell" | "claim" | "walkthrough" | "docs";
+export type View =
+  | "overview"
+  | "market"
+  | "listing"
+  | "sell"
+  | "claim"
+  | "walkthrough"
+  | "docs";
 
 // "Walkthrough" reads as what it is. Naming it something like "Demo" beside
 // "Marketplace" would invite exactly the confusion its banner then has to undo.
 const NAV: { id: View; label: string }[] = [
+  { id: "overview", label: "Overview" },
   { id: "market", label: "Marketplace" },
   { id: "listing", label: "Listing" },
   { id: "sell", label: "Sell" },

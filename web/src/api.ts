@@ -48,6 +48,22 @@ export interface AcpHistory {
   verification: string;
 }
 
+export interface Overview {
+  chain: boolean;
+  explanation: string;
+  totals: {
+    listings?: number;
+    by_state?: Record<string, number>;
+    volume_settled?: number;
+    volume_open?: number;
+    agents?: number;
+    sellers?: number;
+    with_data_room?: number;
+  };
+  listings: MarketRow[];
+  deployment: ChainStatus["deployment"];
+}
+
 export interface AgentHolding {
   agent_id: number;
   identity: string;
@@ -218,6 +234,8 @@ export const market = {
   /** Ciphertext. Public on purpose, inert without the content key. */
   envelope: (id: string) => request<unknown>(`/api/listing/${id}/envelope`),
   chain: () => request<ChainStatus>("/api/chain"),
+  /** Everything the service knows, in one read. */
+  overview: () => request<Overview>("/api/overview"),
   /** Which ERC-8004 agents a wallet holds, for choosing a successor. */
   agents: (owner: string) => request<AgentsHeld>(`/api/agents/${owner}`),
 };

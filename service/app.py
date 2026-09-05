@@ -509,6 +509,78 @@ def chain_status() -> dict[str, Any]:
     }
 
 
+@app.get("/api/overview")
+def overview() -> dict[str, Any]:
+    """Everything the service knows, in one read.
+
+    A dashboard that assembles itself from five separate calls spends its first
+    second half-drawn, and each call would repeat the same bounded log scan. So
+    the aggregation happens here, once, where the chain read already is.
+
+    Counts are derived from the listings themselves rather than tracked
+    separately. A stored tally is a second source of truth that drifts from the
+    first, and the whole argument of this project is that there is one.
+    """
+    record = _deployment()
+    if record is None:
+        return {
+            "chain": False,
+            "explanation": (
+                "No contract deployed. Listings are read from ListingContract, "
+                "so there is nothing to summarise."
+            ),
+            "totals": {},
+            "listings": [],
+            "deployment": None,
+        }
+
+    body = marketplace()
+    rows = body.get("listings", [])
+
+    by_state: dict[str, int] = {}
+    volume_settled = 0
+    volume_open = 0
+    agents: set[str] = set()
+    sellers: set[str] = set()
+    described = 0
+
+    for row in rows:
+        listing = row["listing"]
+        state = listing.get("state", "unknown")
+        by_state[state] = by_state.get(state, 0) + 1
+        price = int(listing.get("price") or 0)
+        if state == "confirmed":
+            volume_settled += price
+        elif state in ("open", "escrowed"):
+            volume_open += price
+        if row.get("agent_identity"):
+            agents.add(str(row["agent_identity"]))
+        if listing.get("seller"):
+            sellers.add(listing["seller"])
+        if row.get("has_metadata"):
+            described += 1
+
+    return {
+        "chain": True,
+        "explanation": "Read from ListingContract on Base Sepolia.",
+        "totals": {
+            "listings": len(rows),
+            "by_state": by_state,
+            # Minor units, like every other figure the API returns, so the
+            # frontend formats money in exactly one place.
+            "volume_settled": volume_settled,
+            "volume_open": volume_open,
+            "agents": len(agents),
+            "sellers": len(sellers),
+            # How many listings their seller actually described. The gap is
+            # worth showing: it is the difference between a market and a ledger.
+            "with_data_room": described,
+        },
+        "listings": rows,
+        "deployment": record,
+    }
+
+
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "workdir": str(STORE.workdir)}
