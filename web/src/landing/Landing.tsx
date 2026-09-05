@@ -9,9 +9,17 @@
  *
  * The product's own copy is unchanged. What changed is everything around it.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { MaskLine, Reveal, useCountUp, useParallax, useScrollTo } from "../motion";
+import {
+  MaskLine,
+  Reveal,
+  useCountUp,
+  useCursorState,
+  useParallax,
+  useScrollScene,
+  useScrollTo,
+} from "../motion";
 import { HashVerification, TransferDiagram } from "./visuals";
 import { Button, Figure } from "../ui";
 
@@ -23,6 +31,7 @@ export function Landing({ onEnter, onDocs }: { onEnter: () => void; onDocs: () =
       <Thesis />
       <Mechanism />
       <Verification />
+      <Commitment />
       <Proof />
       <Stacks />
       <Lifecycle />
@@ -257,7 +266,97 @@ function Verification() {
   );
 }
 
-/* -- 05 proof ------------------------------------------------------------ */
+/* -- pinned: the commitment ---------------------------------------------- */
+
+/**
+ * A pinned chapter, choreographed by scroll position rather than by time.
+ *
+ * The section is three viewports tall and its inner frame sticks for the whole
+ * traversal, so the reader's scroll drives a sequence instead of moving past
+ * it: the commitment is posted, a buyer appears, the delivered root is derived
+ * and the two are compared. It is the argument of the product performed at the
+ * speed the reader chooses, which is the one thing a static diagram cannot do.
+ *
+ * Progress is written straight to transforms in a rAF loop — never to React
+ * state. A scroll-linked value that re-renders sixty times a second is a
+ * scroll-linked value that drops frames.
+ */
+function Commitment() {
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const stepRefs = useRef<(HTMLLIElement | null)[]>([]);
+  const barRef = useRef<HTMLSpanElement | null>(null);
+
+  const steps = [
+    ["Committed", "The root is posted on chain. No buyer exists yet."],
+    ["Escrowed", "Funds enter the contract. Still nothing has moved."],
+    ["Delivered", "The buyer imports, then re-hashes their own store."],
+    ["Verified", "The roots are compared, and settlement is one transaction."],
+  ];
+
+  const sceneRef = useScrollScene<HTMLElement>((p) => {
+    // Ease the raw progress so the first and last steps hold a little longer
+    // than the middle — the ends are where a reader arrives and leaves.
+    const eased = Math.min(1, Math.max(0, (p - 0.12) / 0.72));
+    if (barRef.current) barRef.current.style.transform = `scaleX(${eased})`;
+
+    const active = Math.min(steps.length - 1, Math.floor(eased * steps.length));
+    stepRefs.current.forEach((el, i) => {
+      if (!el) return;
+      const on = i <= active;
+      el.style.opacity = on ? "1" : "0.22";
+      el.style.transform = `translate3d(0, ${on ? 0 : 8}px, 0)`;
+    });
+    if (trackRef.current) {
+      trackRef.current.style.transform = `translate3d(0, ${(0.5 - eased) * 40}px, 0)`;
+    }
+  });
+
+  return (
+    <section ref={sceneRef} className="on-carbon relative h-[300vh]">
+      <div className="sticky top-0 flex h-screen flex-col justify-center overflow-hidden">
+        <div className="gutter">
+          <p className="chapter-mark mb-12">05 — The commitment, in order</p>
+
+          <div ref={trackRef}>
+            <h2 className="display-type max-w-[16ch] text-title text-chalk">
+              The hash is posted before a buyer exists.
+            </h2>
+
+            <ol className="mt-16 grid gap-px border-y border-carbonRule bg-carbonRule sm:grid-cols-2 lg:grid-cols-4">
+              {steps.map(([name, detail], i) => (
+                <li
+                  key={name}
+                  ref={(el) => {
+                    stepRefs.current[i] = el;
+                  }}
+                  className="bg-carbon px-6 py-10 transition-[opacity,transform] duration-500 ease-swift"
+                  style={{ opacity: 0.22 }}
+                >
+                  <span className="font-mono text-label uppercase text-chalkFaint">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <h3 className="display-type mt-4 text-heading text-chalk">{name}</h3>
+                  <p className="mt-3 text-body text-chalkMuted">{detail}</p>
+                </li>
+              ))}
+            </ol>
+
+            {/* The reader's own position through the sequence, as a length. */}
+            <span className="mt-12 block h-px w-full bg-carbonRule">
+              <span
+                ref={barRef}
+                className="block h-px origin-left bg-chalk"
+                style={{ transform: "scaleX(0)" }}
+              />
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* -- 06 proof ------------------------------------------------------------ */
 
 /** Figures at display scale, counted up once as they arrive. */
 function Proof() {
@@ -331,6 +430,7 @@ function Stacks() {
  * way a vertical list of eight items does not.
  */
 function Lifecycle() {
+  const railPointer = useCursorState("drag", "Drag");
   const items: [string, string, string][] = [
     ["Sell", "Built", "The whole pipeline, end to end."],
     ["Partial", "Built", "Transfer some categories, not all."],
@@ -353,7 +453,7 @@ function Lifecycle() {
         </h2>
       </div>
 
-      <div className="rail mt-16 overflow-x-auto pb-4">
+      <div className="rail mt-16 overflow-x-auto pb-4" {...railPointer}>
         <ul className="flex w-max gap-px border-y border-rule bg-rule">
           {items.map(([name, state, detail]) => (
             <li

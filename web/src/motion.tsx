@@ -343,3 +343,101 @@ export function useCountUp(value: number, duration = 1200) {
 
   return useMemo(() => ({ ref, shown }), [ref, shown]);
 }
+
+/* -- scroll-linked scenes ------------------------------------------------ */
+
+type SceneEntry = { el: HTMLElement; set: (p: number) => void };
+const sceneElements = new Set<SceneEntry>();
+let sceneRaf = 0;
+
+function sceneLoop() {
+  const viewport = window.innerHeight;
+  for (const { el, set } of sceneElements) {
+    const rect = el.getBoundingClientRect();
+    // 0 when the element's top reaches the bottom of the viewport, 1 when its
+    // bottom leaves the top. The whole traversal, not just the visible part,
+    // so a pinned section can choreograph across its entire scroll length.
+    const total = rect.height + viewport;
+    const travelled = viewport - rect.top;
+    set(Math.max(0, Math.min(1, travelled / total)));
+  }
+  sceneRaf = requestAnimationFrame(sceneLoop);
+}
+
+/**
+ * Progress of an element through the viewport, 0 → 1, updated per frame.
+ *
+ * The value is handed to a callback rather than to React state on purpose:
+ * a scroll-linked value that re-renders sixty times a second is a scroll-linked
+ * value that drops frames. Callers write straight to a transform.
+ */
+export function useScrollScene<T extends HTMLElement>(onProgress: (p: number) => void) {
+  const ref = useRef<T | null>(null);
+  const cb = useRef(onProgress);
+  cb.current = onProgress;
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (prefersReduced()) {
+      cb.current(1);
+      return;
+    }
+    const entry = { el, set: (p: number) => cb.current(p) };
+    sceneElements.add(entry);
+    if (!sceneRaf) sceneRaf = requestAnimationFrame(sceneLoop);
+    return () => {
+      sceneElements.delete(entry);
+      if (sceneElements.size === 0) {
+        cancelAnimationFrame(sceneRaf);
+        sceneRaf = 0;
+      }
+    };
+  }, []);
+
+  return ref;
+}
+
+/* -- pointer ------------------------------------------------------------- */
+
+export type CursorMode = "default" | "link" | "drag" | "read";
+
+const CursorCtx = createContext<{
+  mode: CursorMode;
+  setMode: (m: CursorMode) => void;
+  label: string;
+  setLabel: (l: string) => void;
+}>({ mode: "default", setMode: () => {}, label: "", setLabel: () => {} });
+
+export const useCursor = () => useContext(CursorCtx);
+
+export function CursorProvider({ children }: { children: ReactNode }) {
+  const [mode, setMode] = useState<CursorMode>("default");
+  const [label, setLabel] = useState("");
+  const value = useMemo(() => ({ mode, setMode, label, setLabel }), [mode, label]);
+  return <CursorCtx.Provider value={value}>{children}</CursorCtx.Provider>;
+}
+
+/**
+ * Props that put the cursor into a state while the pointer is over an element.
+ *
+ * Spread onto anything: `<a {...cursorState("link")}>`. Returning props rather
+ * than wrapping in a component means a caller never has to change their markup
+ * structure to opt in.
+ */
+export function useCursorState(mode: CursorMode, label = "") {
+  const { setMode, setLabel } = useCursor();
+  return useMemo(
+    () => ({
+      onPointerEnter: () => {
+        setMode(mode);
+        setLabel(label);
+      },
+      onPointerLeave: () => {
+        setMode("default");
+        setLabel("");
+      },
+    }),
+    [mode, label, setMode, setLabel],
+  );
+}

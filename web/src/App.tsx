@@ -29,7 +29,10 @@ import Claim from "./dash/Claim";
 import Walkthrough from "./dash/Walkthrough";
 import { Docs } from "./dash/Docs";
 import { Note } from "./ui";
-import { SmoothScroll } from "./motion";
+import { CursorProvider, SmoothScroll } from "./motion";
+import Cursor from "./chrome/Cursor";
+import Preloader from "./chrome/Preloader";
+import Transition from "./chrome/Transition";
 
 export default function App() {
   return (
@@ -39,7 +42,10 @@ export default function App() {
             between the landing document and the console — a page that changes
             its scroll physics mid-session feels broken rather than varied. */}
         <SmoothScroll>
-          <Surface />
+          <CursorProvider>
+            <Cursor />
+            <Surface />
+          </CursorProvider>
         </SmoothScroll>
       </QueryClientProvider>
     </WagmiProvider>
@@ -99,13 +105,19 @@ function Surface() {
 
   if (route === "landing") {
     return (
-      <Landing
-        onEnter={() => navigate("console")}
-        onDocs={() => {
-          setView("docs");
-          navigate("console");
-        }}
-      />
+      <>
+        {/* The curtain owns the first paint and lifts itself. The landing is
+            mounted underneath it from the start, so the hero's own entrance is
+            already running as the curtain clears rather than starting after. */}
+        <Preloader onDone={() => undefined} />
+        <Landing
+          onEnter={() => navigate("console")}
+          onDocs={() => {
+            setView("docs");
+            navigate("console");
+          }}
+        />
+      </>
     );
   }
 
@@ -124,6 +136,7 @@ function Surface() {
         </Note>
       ) : null}
 
+      <Transition routeKey={view}>
       {view === "market" ? (
         <Marketplace
           rows={rows}
@@ -146,6 +159,7 @@ function Surface() {
       {view === "claim" ? <Claim listingId={selected?.listing.listing_id ?? ""} /> : null}
       {view === "walkthrough" ? <Walkthrough /> : null}
       {view === "docs" ? <Docs /> : null}
+      </Transition>
     </Shell>
   );
 }

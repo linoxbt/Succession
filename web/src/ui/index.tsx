@@ -22,7 +22,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 
-import { MaskLine, Reveal, useMagnetic, useReveal } from "../motion";
+import { MaskLine, Reveal, useCursorState, useMagnetic, useReveal } from "../motion";
 
 /* -- structure ---------------------------------------------------------- */
 
@@ -247,6 +247,7 @@ export function Button({
   type?: "button" | "submit";
 }) {
   const magnet = useMagnetic<HTMLButtonElement>(variant === "primary" ? 0.2 : 0);
+  const pointer = useCursorState("link");
 
   const variants = {
     primary:
@@ -267,6 +268,7 @@ export function Button({
       type={type}
       onClick={onClick}
       disabled={disabled}
+      {...pointer}
       className={`inline-flex items-center justify-center gap-2 font-mono uppercase tracking-[0.12em] transition-[background-color,border-color,color,transform] duration-500 ease-swift disabled:cursor-not-allowed disabled:opacity-35 ${
         variants[variant]
       } ${variant === "quiet" ? "" : sizes[size]}`}

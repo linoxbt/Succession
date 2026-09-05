@@ -210,6 +210,118 @@
   }
 }
 
+@layer components {
+  /* --- the pointer -----------------------------------------------------
+
+     Desktop only, and hidden entirely wherever precision matters. The dot
+     tracks exactly; the ring eases behind it, and the gap under fast movement
+     is what reads as inertia. */
+  .cursor-layer {
+    @apply pointer-events-none fixed inset-0 z-[100] hidden;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .cursor-layer {
+      @apply block;
+    }
+
+    /* The native cursor stays wherever a person is aiming at something small
+       or typing into it. */
+    body:not(input):not(textarea) {
+      cursor: none;
+    }
+
+    input,
+    textarea,
+    select,
+    [contenteditable="true"] {
+      cursor: auto;
+    }
+  }
+
+  .cursor-dot,
+  .cursor-ring {
+    @apply absolute left-0 top-0 opacity-0;
+    transition: opacity 300ms ease-out;
+  }
+
+  .cursor-dot {
+    @apply -ml-[3px] -mt-[3px] h-1.5 w-1.5 rounded-full bg-ink;
+  }
+
+  .cursor-dot[data-mode="link"],
+  .cursor-dot[data-mode="drag"] {
+    @apply opacity-0;
+  }
+
+  .cursor-ring {
+    @apply -ml-5 -mt-5 flex h-10 w-10 items-center justify-center rounded-full border border-ink/35;
+    transition:
+      width 500ms cubic-bezier(0.22, 0.61, 0.24, 1),
+      height 500ms cubic-bezier(0.22, 0.61, 0.24, 1),
+      margin 500ms cubic-bezier(0.22, 0.61, 0.24, 1),
+      background-color 500ms cubic-bezier(0.22, 0.61, 0.24, 1),
+      border-color 500ms cubic-bezier(0.22, 0.61, 0.24, 1),
+      opacity 300ms ease-out;
+  }
+
+  /* Over a link the ring closes in and fills — the pointer becomes the
+     affordance rather than sitting beside it. */
+  .cursor-ring[data-mode="link"] {
+    @apply -ml-8 -mt-8 h-16 w-16 border-transparent bg-ink/10;
+  }
+
+  .cursor-ring[data-mode="drag"] {
+    @apply -ml-11 -mt-11 h-[5.5rem] w-[5.5rem] border-transparent bg-ink/90;
+  }
+
+  .cursor-ring[data-mode="read"] {
+    @apply -ml-1 -mt-6 h-12 w-0.5 rounded-none border-0 bg-ink/50;
+  }
+
+  .cursor-label {
+    @apply font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-paper;
+  }
+
+  .on-carbon .cursor-dot {
+    @apply bg-chalk;
+  }
+
+  /* --- the curtain -----------------------------------------------------
+
+     Full-bleed carbon, lifted by a clip rather than a fade so the page appears
+     to be uncovered rather than to brighten. */
+  .preloader {
+    @apply fixed inset-0 z-[200] bg-carbon text-chalk;
+    clip-path: inset(0 0 0 0);
+    transition: clip-path 900ms cubic-bezier(0.76, 0, 0.24, 1);
+  }
+
+  .preloader.is-lifting {
+    clip-path: inset(0 0 100% 0);
+  }
+
+  /* --- route change ----------------------------------------------------
+
+     Short both ways. A transition noticed twice is one resented by the tenth
+     time, and this is an application people move through repeatedly. */
+  .route[data-phase="out"] {
+    opacity: 0;
+    transform: translate3d(0, -0.75rem, 0);
+    transition:
+      opacity var(--route-out, 260ms) cubic-bezier(0.4, 0, 1, 1),
+      transform var(--route-out, 260ms) cubic-bezier(0.4, 0, 1, 1);
+  }
+
+  .route[data-phase="in"] {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    transition:
+      opacity var(--route-in, 420ms) cubic-bezier(0.16, 1, 0.3, 1),
+      transform var(--route-in, 420ms) cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
 @layer utilities {
   /* Horizontal rails scroll with the pointer or a swipe and hide their bar —
      the content's own overflow is the affordance. */
@@ -243,6 +355,25 @@
 
   .animate-marquee {
     animation: none;
+  }
+
+  .preloader {
+    transition: none !important;
+  }
+
+  .route[data-phase="out"],
+  .route[data-phase="in"] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .cursor-layer {
+    display: none !important;
+  }
+
+  body {
+    cursor: auto !important;
   }
 
   html {
