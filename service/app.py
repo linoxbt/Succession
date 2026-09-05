@@ -293,35 +293,65 @@ def post_listing(body: ListingPost, request: Request) -> dict[str, Any]:
 
 @app.get("/api/marketplace")
 def marketplace() -> dict[str, Any]:
-    """Every listing, joined: the contract for truth, the registry for the rest.
+    """Every listing the contract has emitted, enriched where metadata exists.
 
-    A listing whose chain read fails is dropped rather than shown from metadata
-    alone — a row rendered from this table while the contract said otherwise
-    would be the marketplace inventing a sale.
+    The index is the chain, not this service's own table. That is a correction
+    of a real gap: enumerating only what sellers had posted here meant a listing
+    made on chain without that extra step was real, settled, and invisible, and
+    the marketplace showed nothing while six listings existed.
+
+    So `Listed` events decide what exists and the contract decides its state,
+    price and seller. Metadata adds the counts, valuation and display name it
+    has no field for. A listing with no metadata still appears, described by
+    what the chain knows about it, because a real sale nobody can see is worse
+    than a sparse row.
     """
     try:
         chain, _record = CHAIN_PROVIDER()
     except HTTPException:
-        # No chain configured yet. An empty marketplace is the honest answer;
-        # inventing rows to fill the screen is the thing this project argues
+        # No chain configured. An empty marketplace is the honest answer;
+        # inventing rows to fill the screen is the pattern this project argues
         # against.
         return {"listings": [], "count": 0, "chain": False}
 
+    # Discovery is the union of both sources, because neither is guaranteed
+    # complete. The log scan is bounded and can miss an old listing; the
+    # metadata table only holds what sellers chose to publish. Taking both and
+    # validating every candidate against the contract below means a listing has
+    # to be missing from *both* to disappear, and anything either one invents is
+    # dropped when the chain does not confirm it.
+    discovered: list[str] = []
+    try:
+        discovered = chain.listed_ids()
+    except Exception:  # noqa: BLE001 - a refused scan degrades, it does not blank
+        discovered = []
+
+    seen = set(discovered)
+    listing_ids = list(discovered)
+    for row in STORE.registry.all():
+        if row["listing_id"] not in seen:
+            seen.add(row["listing_id"])
+            listing_ids.append(row["listing_id"])
+
     rows = []
-    for meta in STORE.registry.all():
+    for listing_id in listing_ids:
         try:
-            on_chain = chain.get(meta["listing_id"])
+            on_chain = chain.get(listing_id)
         except SettlementError:
             continue
+        meta = STORE.registry.get(listing_id) or {}
         rows.append(
             {
                 "listing": on_chain.to_dict(),
-                "preview": meta["preview"],
-                "name": meta["name"],
-                "vertical": meta["vertical"],
-                "valuation": meta["valuation"],
-                "agent_identity": meta["agent_identity"],
-                "has_envelope": meta["has_envelope"],
+                "preview": meta.get("preview", {}),
+                "name": meta.get("name", ""),
+                "vertical": meta.get("vertical", ""),
+                "valuation": meta.get("valuation", ""),
+                # The chain knows the agent even when nobody published metadata,
+                # so a bare listing still says whose memory it is.
+                "agent_identity": meta.get("agent_identity") or on_chain.agent_id,
+                "has_envelope": bool(meta.get("has_envelope")),
+                "has_metadata": bool(meta),
             }
         )
     return {"listings": rows, "count": len(rows), "chain": True}

@@ -35,7 +35,7 @@ export default function Marketplace({
       <PageHead
         index="01 / Marketplace"
         title="Memory, offered for sale."
-        lede="Every listing below exists because a seller committed its hash on chain before a buyer existed. Nothing here is seeded; an empty market means nobody has listed yet."
+        lede="Every row is a listing the contract itself has emitted, so a real sale cannot be invisible here because its seller skipped publishing a data room. Rows marked on chain only are exactly that: real, settled, and never described."
         action={
           <div className="flex flex-wrap items-center gap-6">
             <Button size="sm" variant="quiet" onClick={onRefresh}>
@@ -60,8 +60,8 @@ export default function Marketplace({
       {rows.length === 0 ? (
         <Empty>
           {onChain
-            ? "No listings yet. The first seller to run succession list will appear here."
-            : "Nothing to show."}
+            ? "No listings on this contract yet. The first seller to run succession list will appear here."
+            : "No contract is deployed, so there is nothing to read."}
         </Empty>
       ) : (
         <Table head={["Agent", "Records", "Committed hash", "Price", "State", ""]}>
@@ -73,12 +73,21 @@ export default function Marketplace({
             return (
               <tr key={row.listing.listing_id} className="border-b border-hairline">
                 <Td>
-                  <span className="text-ink">{row.name || row.agent_identity}</span>
+                  <span className="text-ink">
+                    {row.name || `Agent ${row.agent_identity}`}
+                  </span>
                   {row.vertical ? (
                     <span className="ml-2 text-label text-faint">{row.vertical}</span>
                   ) : null}
+                  {row.has_metadata === false ? (
+                    <span className="ml-3 text-label uppercase tracking-[0.14em] text-faint">
+                      on chain only
+                    </span>
+                  ) : null}
                 </Td>
-                <Td className="tnum">{records || "-"}</Td>
+                <Td className="tnum">
+                  {records || <span className="text-faint">not published</span>}
+                </Td>
                 <Td>
                   <Hash value={row.listing.hash_commitment} />
                 </Td>

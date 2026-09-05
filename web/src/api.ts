@@ -160,6 +160,8 @@ export interface MarketRow {
   valuation: string;
   agent_identity: string;
   has_envelope?: boolean;
+  /** False when the seller published nothing beyond the on-chain listing. */
+  has_metadata?: boolean;
 }
 
 export class ApiError extends Error {

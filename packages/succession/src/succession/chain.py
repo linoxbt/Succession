@@ -366,6 +366,60 @@ class ChainSettlement:
         )
         return self.get(listing_id)
 
+    # -- discovery -----------------------------------------------------
+
+    #: The public Base Sepolia endpoint refuses `eth_getLogs` over wider spans
+    #: with a 413. Measured, not guessed: 50,000 fails and 10,000 succeeds.
+    LOG_SPAN = 9_000
+
+    def listed_ids(
+        self, *, lookback_blocks: int = 120_000, span: int | None = None
+    ) -> list[str]:
+        """Every listing id the contract has emitted a `Listed` event for.
+
+        The marketplace previously enumerated only what sellers had posted to
+        its own metadata table, which meant a listing made on chain without that
+        extra step was real, settled, and invisible. The chain is the source of
+        truth for what exists, so this is what the marketplace should read, and
+        metadata is an enrichment on top rather than the index itself.
+
+        Bounded and paged for the same reason the registry scan is: the endpoint
+        refuses wide ranges. Newest first, so a truncated scan returns the most
+        recent listings rather than an arbitrary slice.
+        """
+        head = self.w3.eth.block_number
+        step = span or self.LOG_SPAN
+        topic = self.w3.keccak(text="Listed(bytes32,address,uint256,bytes32,uint256)")
+
+        seen: list[str] = []
+        already: set[str] = set()
+        upper = head
+        floor = max(0, head - lookback_blocks)
+
+        while upper > floor:
+            lower = max(floor, upper - step)
+            try:
+                logs = self.w3.eth.get_logs(
+                    {
+                        "address": self.contract.address,
+                        "fromBlock": lower,
+                        "toBlock": upper,
+                        "topics": [topic],
+                    }
+                )
+                # Within a window, newest last; reversed keeps the overall list
+                # in newest-first order as windows walk backwards.
+                for log in reversed(logs):
+                    listing_id = bytes32_to_listing_id(bytes(log["topics"][1]))
+                    if listing_id and listing_id not in already:
+                        already.add(listing_id)
+                        seen.append(listing_id)
+            except Exception:  # noqa: BLE001 - one refused window is not fatal
+                pass
+            upper = lower
+
+        return seen
+
     def _receipt_from_logs(
         self, listing: Listing, receipt: Any, *, confirmed_by: str = "buyer"
     ) -> SettlementReceipt:
