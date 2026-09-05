@@ -16,6 +16,7 @@ import {
   Copyable,
   Field,
   FieldList,
+  Figure,
   FullHash,
   Note,
   Section,
@@ -95,8 +96,36 @@ export default function ListingView({
         </Note>
       </Section>
 
+      {preview?.reputation ? (
+        <Section index="02" title="Track record">
+          <p className="mb-8 max-w-measure text-body text-muted">
+            Recomputed here from the provenance chain and the memory itself. The
+            seller does not supply this figure and there is no field in the
+            package to put one in, so it cannot be inflated: a chain entry only
+            exists because a settlement verified.
+          </p>
+
+          <div className="flex flex-wrap items-end gap-x-16 gap-y-8">
+            <Figure value={preview.reputation.score} label={preview.reputation.grade} />
+            <Figure
+              value={String(preview.reputation.links)}
+              label="Verified handovers"
+            />
+          </div>
+
+          <FieldList className="mt-10">
+            {preview.reputation.factors.map((f) => (
+              <Field key={f.name} label={f.name.replace(/_/g, " ")}>
+                <span className="tnum">{f.value}</span>
+                <span className="ml-4 text-muted">{f.explanation}</span>
+              </Field>
+            ))}
+          </FieldList>
+        </Section>
+      ) : null}
+
       {deployment && listing.state === "open" ? (
-        <Section index="02" title="Fund escrow">
+        <Section index="03" title="Fund escrow">
           <p className="mb-4 max-w-measure text-body text-muted">
             Two transactions, shown as two: approve the payment token, then fund.
             The money is held by the contract and goes to the seller only when a
@@ -112,7 +141,7 @@ export default function ListingView({
       ) : null}
 
       {listing.state === "escrowed" ? (
-        <Section index="03" title="Claim what you paid for">
+        <Section index="04" title="Claim what you paid for">
           <p className="mb-4 max-w-measure text-body text-muted">
             Your escrow is funded. Once the seller releases the key, collect and
             import the package on your own machine, the import writes into your
@@ -137,7 +166,7 @@ export default function ListingView({
       ) : null}
 
       {deployment && listing.state === "escrowed" && listing.delivered_hash ? (
-        <Section index="04" title="Confirm on chain">
+        <Section index="05" title="Confirm on chain">
           <ConfirmOnChain
             deployment={deployment}
             listingId={listing.listing_id}

@@ -36,6 +36,7 @@ from typing import Any
 
 from .canonical import canonical_bytes
 from .memory.base import MemorySource
+from .export import memory_version_of
 from .redaction import Sensitivity, read_disclosure
 from .smp import DATA_CATEGORIES, route
 from .valuation import Valuation, value_tenant
@@ -63,6 +64,11 @@ class DataRoomPreview:
     )
     valuation: Valuation | None = None
     committed_root: str | None = None
+    #: The lineage's track record, recomputed here rather than read from
+    #: anywhere. It belongs in the data room because it is precisely what a
+    #: buyer wants before paying, and because computing it at preview time
+    #: proves the seller did not supply it.
+    reputation: dict[str, Any] | None = None
     acp: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -77,6 +83,7 @@ class DataRoomPreview:
             "category_transferability": {
                 k: dict(v) for k, v in self.category_transferability.items()
             },
+            "reputation": self.reputation,
             "disclosure": (
                 "Aggregate statistics only. Record contents are released after "
                 "purchase and hash verification."
@@ -202,6 +209,32 @@ def build_preview(
         **({"base_price": base_price} if base_price is not None else {}),
     )
 
+    # The chain lives inside the memory, in the acquisition record a previous
+    # settlement wrote. An origin memory has none, and scores as unproven
+    # rather than as poor.
+    from .reputation import read_lineage, score_lineage
+
+    chain: list[dict[str, Any]] = []
+    for entity in entities:
+        if entity.get("category") == "provenance" and entity.get("name") == "acquisition":
+            body = entity.get("body")
+            if isinstance(body, dict) and isinstance(body.get("provenance_chain"), list):
+                chain = body["provenance_chain"]
+            break
+
+    resolved = completed = 0
+    if acp_history is not None:
+        completed = len(acp_history.completed)
+        resolved = completed + len(acp_history.failed)
+
+    reputation = score_lineage(
+        read_lineage(chain),
+        resolved_jobs=resolved,
+        completed_jobs=completed,
+        current_version=memory_version_of(source),
+        now=now,
+    )
+
     return DataRoomPreview(
         agent_identity=agent_identity,
         tenure_days=tenure_days,
@@ -227,4 +260,5 @@ def build_preview(
         valuation=valuation,
         committed_root=committed_root,
         acp=acp_history.to_dict() if acp_history is not None else None,
+        reputation=reputation.to_dict(),
     )

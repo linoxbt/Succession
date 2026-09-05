@@ -17,7 +17,7 @@ from .canonical import canonical_bytes
 from .memory.base import MemorySource
 from .merkle import to_hex
 from .provenance import build_header, sign_header
-from .redaction import RedactionReport, filter_transferable, read_disclosure
+from .redaction import Consent, RedactionReport, filter_transferable, read_disclosure
 from .smp import DATA_CATEGORIES, SMPPackage, route
 
 __all__ = ["ExportResult", "read_all", "build_package", "export_tenant", "memory_version_of"]
@@ -69,7 +69,9 @@ def build_package(
 ) -> tuple[SMPPackage, RedactionReport]:
     """Filter and route a tenant's records into an unsigned SMP package."""
     records = read_all(source)
-    kept, withheld_non_transferable = filter_transferable(records)
+    kept, withheld_non_transferable, withheld_without_consent = filter_transferable(
+        records
+    )
 
     selected = tuple(categories) if categories is not None else DATA_CATEGORIES
     withheld_by_category = sum(
@@ -85,6 +87,7 @@ def build_package(
     )
     report = RedactionReport(
         withheld_non_transferable=withheld_non_transferable,
+        withheld_without_consent=withheld_without_consent,
         withheld_by_category_filter=withheld_by_category,
         withheld_dangling_relations=withheld_dangling,
         categories_selected=tuple(sorted(selected)),
@@ -167,10 +170,24 @@ def export_tenant(
             "full": "every record in the package, post-purchase and hash-verified",
         },
         "redaction": report.to_dict(),
-        "consent_basis": (
-            "Seller asserts authority to transfer these records under the "
-            "operator's own terms of service with its end users."
-        ),
+        # Previously a single sentence asserting the seller had authority over
+        # every record alike. That applied equally to a book the seller had a
+        # defensible basis for and to one they did not, so it told a buyer
+        # nothing. This reports what the filter actually did instead.
+        "consent": {
+            "policy": (
+                "Each record carries its own basis. Records marked 'withheld' "
+                "are filtered before hashing and are not in the package or the "
+                "Merkle tree."
+            ),
+            "bases": list(Consent.TRANSFERABLE),
+            "withheld_without_consent": report.withheld_without_consent,
+            "operator_responsibility": (
+                "The basis recorded against each record is the operator's "
+                "judgement against their own terms with their counterparties. "
+                "This package enforces the flag; it does not adjudicate it."
+            ),
+        },
     }
 
     header = build_header(

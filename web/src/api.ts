@@ -48,7 +48,22 @@ export interface AcpHistory {
   verification: string;
 }
 
+export interface Reputation {
+  score: string;
+  grade: string;
+  links: number;
+  basis: string;
+  factors: {
+    name: string;
+    value: string;
+    weight: string;
+    contribution: string;
+    explanation: string;
+  }[];
+}
+
 export interface Preview {
+  reputation?: Reputation | null;
   agent_identity: string;
   tenure_days: number;
   counts: Record<string, number>;

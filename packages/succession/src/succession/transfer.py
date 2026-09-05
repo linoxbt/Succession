@@ -276,6 +276,7 @@ def _write_post_sale_record(
         owner=buyer_identity,
         verified_hash=verified_hash,
         acquired_at=receipt.settled_at,
+        memory_version=header["memory_version"],
     )
     buyer_sink.write_entities(
         [

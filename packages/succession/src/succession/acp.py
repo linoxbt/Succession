@@ -35,6 +35,8 @@ import json
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
+from eth_utils import to_checksum_address
 from decimal import Decimal
 from typing import Any, Iterable, Protocol, runtime_checkable
 
@@ -47,6 +49,8 @@ __all__ = [
     "ACPNotConfigured",
     "AgentNotRegistered",
     "require_registered",
+    "build_handover",
+    "verify_handover",
     "sync_job_history",
     "job_history_from_memory",
 ]
@@ -426,4 +430,93 @@ def job_history_from_memory(memory: Any) -> ACPJobHistory:
         jobs=tuple(jobs),
         fetched_at=registration.get("synced_at", ""),
         source="memory",
+    )
+
+# -- standing handover ----------------------------------------------------
+
+#: Domain tag for a handover attestation. Distinct from the provenance and
+#: evaluation domains so one can never be replayed as another.
+HANDOVER_DOMAIN = "Succession/1.0/acp-handover"
+
+
+def build_handover(
+    *,
+    agent_identity: str,
+    entity_id: int | str,
+    agent_wallet: str,
+    buyer_identity: str,
+    buyer_address: str,
+    settlement_reference: str,
+    verified_hash: str,
+    private_key: str,
+) -> dict[str, Any]:
+    """A signed statement that a lineage's ACP standing passes to a buyer.
+
+    **This does not transfer a registration, and nothing can.** A Virtuals ACP
+    entity is issued to a wallet through the Virtuals app, and the SDK surface
+    is entirely reads, job initiation and evaluation: `browse_agents`,
+    `get_agent`, `get_completed_jobs` and so on. There is no reassign, no
+    change-owner, and no update-wallet call to make. A library that claimed
+    otherwise would be lying about someone else's system.
+
+    So this is the closest honest thing. The seller signs, with the key the
+    contract recorded as the seller, a statement naming the entity whose job
+    history is inside the memory, the buyer receiving it, and the settlement
+    that paid for it. The buyer registers their own entity and presents this as
+    evidence of where the record came from.
+
+    What the buyer actually gets is therefore in two parts, and they are worth
+    keeping distinct:
+
+    * the *record* of what the agent earned, inside the memory, hashed into the
+      Merkle tree and provable against the committed root
+    * a signed attestation of succession, which is a claim a third party can
+      verify the origin of but which no registry is obliged to honour
+
+    What they do not get is the seller's position on the registry. Stating that
+    plainly is worth more than a mechanism that implies otherwise.
+    """
+    from eth_account import Account
+    from eth_account.messages import encode_defunct
+
+    from .canonical import canonical_json
+
+    statement = {
+        "domain": HANDOVER_DOMAIN,
+        "agent_identity": agent_identity,
+        "acp_entity_id": str(entity_id),
+        "acp_agent_wallet": to_checksum_address(agent_wallet),
+        "succeeded_by": buyer_identity,
+        "succeeded_by_address": to_checksum_address(buyer_address),
+        "settlement_reference": settlement_reference,
+        "verified_hash": verified_hash,
+        "issued_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "transfers_registration": False,
+        "note": (
+            "Attests succession of the job history carried in this memory. It "
+            "does not transfer the ACP registration, which is issued to a "
+            "wallet and cannot be reassigned."
+        ),
+    }
+    signed = Account.sign_message(
+        encode_defunct(text=f"{HANDOVER_DOMAIN}\n{canonical_json(statement)}"),
+        private_key,
+    )
+    return {**statement, "signature": "0x" + signed.signature.hex().removeprefix("0x")}
+
+
+def verify_handover(handover: dict[str, Any]) -> str:
+    """Recover who signed a handover. Raises on anything malformed."""
+    from eth_account import Account
+    from eth_account.messages import encode_defunct
+
+    from .canonical import canonical_json
+
+    signature = handover.get("signature")
+    if not signature:
+        raise ValueError("handover carries no signature")
+    statement = {k: v for k, v in handover.items() if k != "signature"}
+    return Account.recover_message(
+        encode_defunct(text=f"{HANDOVER_DOMAIN}\n{canonical_json(statement)}"),
+        signature=signature,
     )

@@ -67,13 +67,22 @@ class ProvenanceEntry:
     owner: str
     acquired_at: str
     verified_hash: str
+    #: The memory's version at the moment it changed hands. Carried so a later
+    #: reader can tell whether each owner grew the memory or bought it and let
+    #: it sit, which is the difference between a lineage and a chain of resales.
+    #: Omitted from the dict when unknown, so entries written before this field
+    #: existed stay byte-identical and older packages keep verifying.
+    memory_version: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        entry: dict[str, Any] = {
             "owner": self.owner,
             "acquired_at": self.acquired_at,
             "verified_hash": self.verified_hash,
         }
+        if self.memory_version is not None:
+            entry["memory_version"] = self.memory_version
+        return entry
 
 
 def build_header(
@@ -148,7 +157,12 @@ def verify_header(header: dict[str, Any], expected_signer: str) -> str:
 
 
 def append_owner(
-    header: dict[str, Any], *, owner: str, verified_hash: str, acquired_at: str | None = None
+    header: dict[str, Any],
+    *,
+    owner: str,
+    verified_hash: str,
+    acquired_at: str | None = None,
+    memory_version: int | None = None,
 ) -> list[dict[str, Any]]:
     """The provenance chain a buyer's next export should carry.
 
@@ -162,5 +176,6 @@ def append_owner(
             owner=owner,
             acquired_at=acquired_at or utc_now(),
             verified_hash=verified_hash,
+            memory_version=memory_version,
         ).to_dict(),
     ]
