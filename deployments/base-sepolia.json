@@ -1,0 +1,11 @@
+{
+  "network": "base-sepolia",
+  "chain_id": 84532,
+  "listing_contract": "0xBE16BD086BF00c90B2E1e49E5393b3C18519927E",
+  "identity_registry": "0x7177a6867296406881E20d6647232314736Dd09A",
+  "identity_registry_is_mock": false,
+  "payment_token": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  "arbiter": "0x6485B4B339E90970AD3ebb421748Fab76E52d8ed",
+  "deployer": "0x6485B4B339E90970AD3ebb421748Fab76E52d8ed",
+  "explorer": "https://sepolia.basescan.org/address/0xBE16BD086BF00c90B2E1e49E5393b3C18519927E"
+}

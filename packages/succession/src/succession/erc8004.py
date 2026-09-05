@@ -66,6 +66,8 @@ from eth_utils import keccak, to_checksum_address
 
 from .canonical import canonical_json
 
+from .chain import await_chain_state
+
 __all__ = [
     "BASE_SEPOLIA_IDENTITY_REGISTRY",
     "BASE_SEPOLIA_CHAIN_ID",
@@ -382,7 +384,13 @@ class IdentityRegistry:
         tx = fn.build_transaction(
             {
                 "from": account.address,
-                "nonce": self.w3.eth.get_transaction_count(account.address),
+                # "pending", not the default "latest". A real node does not
+                # always reflect a just-mined transaction in its latest count by
+                # the time the next one is built, so back-to-back writes from one
+                # key reuse a nonce and the second is rejected. py-evm mines
+                # instantly and hides this entirely, which is why it only
+                # appeared against Base Sepolia. `chain.py` already does this.
+                "nonce": self.w3.eth.get_transaction_count(account.address, "pending"),
                 "chainId": self.w3.eth.chain_id,
             }
         )
@@ -396,6 +404,7 @@ class IdentityRegistry:
                 f"identity registry call reverted "
                 f"({receipt['transactionHash'].hex()})"
             )
+        await_chain_state(self.w3, receipt)
         return receipt
 
     def register(self, registration: AgentRegistration, private_key: str) -> int:
@@ -451,11 +460,37 @@ class IdentityRegistry:
         ``ListingContract.list`` checks this at listing time rather than at
         settlement, so a listing that could never settle never reaches a buyer.
         """
+        operator = to_checksum_address(operator)
         receipt = self._send(
-            self.contract.functions.approve(to_checksum_address(operator), agent_id),
-            private_key,
+            self.contract.functions.approve(operator, agent_id), private_key
         )
+        self._await_approval(operator, agent_id)
         return receipt["transactionHash"].hex()
+
+    def _await_approval(self, operator: str, agent_id: int, tries: int = 20) -> None:
+        """Block until a read actually reflects the approval just written.
+
+        A receipt means the transaction was mined, not that the next RPC call
+        will see its effect. Public endpoints are load balanced across nodes,
+        and the very next `eth_estimate_gas` is routinely served by one a block
+        behind, which makes `ListingContract.list` revert `RegistryNotApproved`
+        against an approval that is demonstrably on chain.
+
+        Polling the read back is the only honest fix. Retrying the listing would
+        paper over it, and pre-computing gas to dodge the estimate would hide a
+        real lag behind a guessed limit. py-evm never showed this because it
+        mines and serves from one in-process chain.
+        """
+        import time
+
+        for attempt in range(tries):
+            if self.get_approved(agent_id).lower() == operator.lower():
+                return
+            time.sleep(min(0.4 * (attempt + 1), 3.0))
+        raise RuntimeError(
+            f"approval of {operator} for agent {agent_id} was mined but is still "
+            f"not visible to reads after {tries} attempts"
+        )
 
     def set_metadata(
         self, agent_id: int, key: str, value: bytes, private_key: str

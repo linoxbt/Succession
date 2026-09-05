@@ -57,6 +57,35 @@ _STATES = (
 )
 
 
+def await_chain_state(w3: Any, receipt: Any, tries: int = 25) -> None:
+    """Block until the node we are talking to has caught up to a mined write.
+
+    A receipt proves a transaction was mined. It does not prove that the next
+    RPC call will see its effect: public endpoints are load balanced across
+    nodes, and the very next `eth_call` or `eth_estimate_gas` is routinely
+    served by one a block or two behind. That produced two different failures
+    here, both against state that was demonstrably already on chain, and both
+    invisible to the test suite because py-evm mines and serves from a single
+    in-process chain.
+
+    Waiting for the reported head to reach the receipt's block is the honest
+    fix. Retrying the failed read would hide a real lag behind a loop, and
+    pre-supplying a gas limit to dodge the estimate would hide it behind a
+    guess.
+    """
+    import time
+
+    target = receipt["blockNumber"]
+    for attempt in range(tries):
+        try:
+            if w3.eth.block_number >= target:
+                return
+        except Exception:  # noqa: BLE001 - a transient RPC error is worth retrying
+            pass
+        time.sleep(min(0.3 * (attempt + 1), 2.5))
+    # Not fatal on its own: the caller's next read may still succeed.
+
+
 def load_artifact(name: str, path: str | Path | None = None) -> dict[str, Any]:
     source = Path(path) if path else _ARTIFACTS
     if not source.exists():
@@ -157,6 +186,8 @@ class ChainSettlement:
             raise SettlementError(
                 f"transaction {tx_hash.hex()} reverted on chain"
             )
+        # Every caller here reads back what it just wrote.
+        await_chain_state(self.w3, receipt)
         return receipt
 
     def attest(self, listing_id: str, agent_id: int, commitment: str, key: str) -> bytes:
