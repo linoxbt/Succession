@@ -28,11 +28,31 @@ from typing import Any, Callable, Iterable
 from .publish import PublishError, SellerVault, StoredListing
 from .settlement import ListingState, SettlementError
 
-__all__ = ["Fulfilment", "FulfilmentError", "release_for", "watch"]
+__all__ = [
+    "DeliveryError",
+    "Fulfilment",
+    "FulfilmentError",
+    "release_for",
+    "watch",
+]
 
 
 class FulfilmentError(Exception):
     """A key could not be released."""
+
+
+class DeliveryError(FulfilmentError):
+    """The key was cleared for release but could not be handed over.
+
+    Distinct in meaning from its parent: `FulfilmentError` says the chain does
+    not permit a release, while this says the decision was right and the
+    transport failed. It subclasses anyway so `watch` treats it as it treats any
+    other release failure, logging and retrying on the next poll rather than
+    tearing down a seller's long-running watcher over a network blip.
+
+    Retrying is safe: nothing was consumed. The key is still in the vault and
+    the contract is still the thing that decides whether it may leave.
+    """
 
 
 @dataclass(frozen=True)

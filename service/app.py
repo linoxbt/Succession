@@ -778,6 +778,53 @@ def overview() -> dict[str, Any]:
     }
 
 
+@app.get("/api/activity")
+def activity(limit: int = 100) -> dict[str, Any]:
+    """What has happened, as opposed to what is true now.
+
+    Every other read here reports current state. This reports the events that
+    produced it: when a listing was made, when escrow landed, who bought, which
+    transaction settled it, and whether a listing that now reads `refunded` was
+    refunded or cancelled. That last one cannot be answered any other way,
+    because `cancel()` writes the same state a refund does and differs only in
+    the event it emits.
+
+    On-chain events only. A demonstration listing emits nothing, so this ledger
+    is structurally incapable of reporting one, which is a stronger guarantee
+    than remembering to filter.
+    """
+    try:
+        chain, record = CHAIN_PROVIDER()
+    except HTTPException:
+        return {
+            "chain": False,
+            "explanation": (
+                "No contract deployed. Activity is read from contract events, "
+                "so there is nothing to report."
+            ),
+            "events": [],
+            "count": 0,
+        }
+
+    try:
+        events = chain.activity(limit=max(1, min(limit, 250)))
+    except Exception as exc:  # noqa: BLE001 - a refused scan degrades, not 500s
+        return {
+            "chain": True,
+            "explanation": f"The log scan did not complete ({exc}).",
+            "events": [],
+            "count": 0,
+        }
+
+    return {
+        "chain": True,
+        "explanation": "Read from ListingContract events on Base Sepolia.",
+        "events": events,
+        "count": len(events),
+        "explorer": record.get("explorer", ""),
+    }
+
+
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "workdir": str(STORE.workdir)}

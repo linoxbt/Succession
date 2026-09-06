@@ -12,11 +12,13 @@
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 
-import { formatAmount, type AgentsHeld, type Overview } from "../api";
+import { formatAmount, type Activity, type AgentsHeld, type Overview } from "../api";
 import { service } from "../services";
 import { explorerAddress } from "../chain/config";
 import { Badge, Empty, Figure, Hash, Note, PageHead, Section, Table, Td } from "../ui";
 import { Reveal } from "../motion";
+import Ledger from "../app/Ledger";
+import { Skeleton } from "../app/ui";
 
 const STATE_TONE: Record<string, "neutral" | "escrow" | "closed" | "void"> = {
   open: "neutral",
@@ -34,6 +36,7 @@ export default function Dashboard({
   const [error, setError] = useState<string | null>(null);
   const { address, isConnected } = useAccount();
   const [held, setHeld] = useState<AgentsHeld | null>(null);
+  const [activity, setActivity] = useState<Activity | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -41,6 +44,17 @@ export default function Dashboard({
       .overview()
       .then((body) => live && setData(body))
       .catch((e) => live && setError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let live = true;
+    service
+      .activity()
+      .then((body) => live && setActivity(body))
+      .catch(() => live && setActivity(null));
     return () => {
       live = false;
     };
@@ -276,8 +290,83 @@ export default function Dashboard({
         ))}
       </Section>
 
+      {/* --- everything that has happened --------------------------------- */}
+      <Section index="06" title="Activity" className="mt-chapter">
+        {!activity ? (
+          <Skeleton rows={4} />
+        ) : (
+          <>
+            <p className="mb-8 max-w-measure text-micro text-muted">
+              {activity.explanation} Read from contract events rather than from
+              this service's records, so every row traces to a transaction and a
+              demonstration listing cannot appear here at all.
+            </p>
+            <Ledger
+              events={activity.events}
+              emptyNote="No contract events in the scanned range yet. A listing, a purchase or a settlement appears here the moment it is mined."
+            />
+          </>
+        )}
+      </Section>
+
+      {/* --- where the work actually happens ------------------------------ */}
+      <Section index="07" title="Where the work happens" className="mt-chapter">
+        <p className="mb-12 max-w-measure text-lede text-muted">
+          Memory does not move through this page, and cannot. Sibyl is
+          local-only, so an agent's store is a file on its owner's machine. That
+          constraint is also the only arrangement in which "plaintext never
+          leaves the seller before escrow" is a fact rather than a promise.
+        </p>
+
+        <div className="grid gap-12 lg:grid-cols-2">
+          <div>
+            <h3 className="mb-6 font-mono text-label uppercase tracking-[0.14em] text-faint">
+              In the owner's terminal
+            </h3>
+            <dl className="border-t border-hairline">
+              {[
+                ["succession inventory", "What the agent actually holds, per directory, split by consent."],
+                ["succession list", "Filter, serialise, hash, encrypt, and commit the root on Base."],
+                ["succession fulfil", "Watch for funded escrow, then release the content key."],
+                ["succession claim", "Collect, decrypt, import into your own store, re-derive the root."],
+                ["succession prove", "Export, import to a throwaway store, and compare every subroot."],
+              ].map(([command, line]) => (
+                <div key={command} className="border-b border-hairline py-4">
+                  <dt className="evidence-type text-body text-ink">{command}</dt>
+                  <dd className="mt-1 max-w-measure text-micro text-muted">{line}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          <div>
+            <h3 className="mb-6 font-mono text-label uppercase tracking-[0.14em] text-faint">
+              In this browser
+            </h3>
+            <dl className="border-t border-hairline">
+              {[
+                ["approve", "Permit the contract to draw the asking price."],
+                ["buy", "Fund escrow. The money is held, not paid."],
+                ["confirmTransfer", "Release payment, move the identity, seal the seller."],
+                ["Everything else", "Reading: listings, data rooms, valuations, provenance, this ledger."],
+              ].map(([command, line]) => (
+                <div key={command} className="border-b border-hairline py-4">
+                  <dt className="evidence-type text-body text-ink">{command}</dt>
+                  <dd className="mt-1 max-w-measure text-micro text-muted">{line}</dd>
+                </div>
+              ))}
+            </dl>
+            <Note>
+              The browser never holds a content key or a plaintext record, and
+              never computes a root. It can fetch the encrypted envelope, which
+              is inert without the key.
+            </Note>
+          </div>
+        </div>
+      </Section>
+
       {/* --- what it settles on ------------------------------------------ */}
-      <Section index="06" title="Settlement" className="mt-chapter">
+      <Section index="08" title="Settlement" className="mt-chapter">
         {!deployment ? (
           <Note>No contract deployed.</Note>
         ) : (

@@ -483,3 +483,173 @@ def test_listing_detail_matches_the_marketplace_row_shape(market):
     assert set(detail) == set(row)
     assert detail["agent_identity"] == row["agent_identity"]
     assert detail["has_metadata"] == row["has_metadata"] is True
+
+
+def test_a_sale_completes_across_two_machines(market, tmp_path, monkeypatch):
+    """The whole path, end to end, over a real socket and into a second store.
+
+    This is the test the product needs and did not have. `succession fulfil`
+    used to call `watch()` without a `deliver` callback, so it read the content
+    key out of the vault, logged "key released" and transmitted nothing; the
+    buyer's `succession claim` then 404ed on the key. Every existing test passed
+    throughout, because each one exercised a single hop.
+
+    Two things here are deliberate and are what give the test its teeth:
+
+    * **A real HTTP server.** `TestClient` speaks ASGI in-process, which the CLI
+      does not; the CLI uses `urllib`. Serving the same app object through
+      uvicorn on a loopback port means the key genuinely crosses a socket, the
+      seller signature genuinely travels in a header, and the marketplace URL is
+      genuinely a URL.
+    * **A separate store file.** The buyer imports into a database that did not
+      exist when the test began, which is the closest a single process gets to
+      the second machine this is meant to model.
+
+    Only the chain wiring is substituted, because `_chain_backend` wants an RPC
+    endpoint and a deployment file on disk. Everything the fix touched — the
+    callback, the signature, the POST, the collection, the decrypt, the import
+    and the re-derivation — runs for real.
+    """
+    import threading
+    import time
+
+    import uvicorn
+
+    from succession import cli, publish as publish_module
+    from succession.memory.sibyl import open_tenant
+
+    _publish(market)
+    listing_id = market["stored"].listing_id
+
+    from service import app as app_module
+
+    config = uvicorn.Config(
+        app_module.app, host="127.0.0.1", port=0, log_level="error"
+    )
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+
+    deadline = time.monotonic() + 20
+    while not server.started and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert server.started, "the marketplace never came up"
+    base = f"http://127.0.0.1:{server.servers[0].sockets[0].getsockname()[1]}"
+
+    try:
+        # The buyer funds escrow. Until this lands the key must not move, and
+        # the service checks that itself on both the accept and the serve.
+        market["backend"].buy(listing_id, buyer=market["buyer"], amount=PRICE)
+
+        # `SellerVault()` resolves a module-level default captured at import, so
+        # the fixture's vault has to be named here for the CLI to find what it
+        # published.
+        monkeypatch.setattr(publish_module, "VAULT", tmp_path / "vault")
+        monkeypatch.setattr(
+            cli, "_chain_backend", lambda a, k: (market["backend"], market["record"])
+        )
+        monkeypatch.setenv("SUCCESSION_SIGNING_KEY", market["seller_key"])
+
+        # Seller's machine.
+        assert cli.main(
+            ["fulfil", "--listing", listing_id, "--once", "--marketplace", base]
+        ) == 0
+
+        # Buyer's machine: a store that did not exist a moment ago.
+        buyer_db = tmp_path / "second-machine" / "memory.db"
+        buyer_db.parent.mkdir(parents=True, exist_ok=True)
+        assert cli.main(
+            [
+                "claim",
+                "--listing", listing_id,
+                "--db", str(buyer_db),
+                "--tenant", "tenant-successor",
+                "--marketplace", base,
+            ]
+        ) == 0, "claim returns non-zero when the re-derived root does not match"
+
+        # `claim` exits 0 only on a verified import, so the assertion above is
+        # already the hash check. This confirms the records are really resident
+        # rather than the exit code being incidental.
+        landed = open_tenant(buyer_db, "tenant-successor")
+        records = (
+            len(landed.entities())
+            + len(landed.events())
+            + len(landed.states())
+            + len(landed.references())
+        )
+        assert records > 0, "the buyer's store is empty after a verified claim"
+    finally:
+        server.should_exit = True
+        thread.join(timeout=15)
+
+
+def test_fulfil_without_delivery_leaves_the_buyer_stranded(market, monkeypatch):
+    """The regression guard, stated as the failure it prevents.
+
+    `release_for` hands the key to `deliver` and returns released either way, so
+    a caller that omits the callback gets a success report and moves nothing.
+    That is precisely what the CLI did. This pins the behaviour so the next
+    person to touch `cmd_fulfil` sees why the callback is not optional there.
+    """
+    from succession.fulfil import release_for
+
+    _publish(market)
+    listing_id = market["stored"].listing_id
+    market["backend"].buy(listing_id, buyer=market["buyer"], amount=PRICE)
+
+    outcome = release_for(listing_id, market["backend"], vault=market["vault"])
+    assert outcome.released is True, "the chain does permit release"
+
+    # And yet nothing reached the marketplace, so the buyer cannot collect.
+    assert market["client"].get(f"/api/listing/{listing_id}/key").status_code == 404
+
+
+def test_activity_reports_events_not_just_state(market):
+    """The ledger says what happened, in order, with transactions attached."""
+    _publish(market)
+    listing_id = market["stored"].listing_id
+    market["backend"].buy(listing_id, buyer=market["buyer"], amount=PRICE)
+
+    body = market["client"].get("/api/activity").json()
+    assert body["chain"] is True
+
+    kinds = [e["event"] for e in body["events"]]
+    assert "Listed" in kinds and "Escrowed" in kinds
+
+    # Newest first, so the escrow that just happened precedes the listing.
+    assert kinds.index("Escrowed") < kinds.index("Listed")
+
+    for event in body["events"]:
+        assert event["tx"], "every row must trace to a transaction"
+        assert event["block"] > 0
+        # Bytes have to survive the JSON boundary as hex, not as a repr.
+        for value in event["args"].values():
+            assert not isinstance(value, (bytes, bytearray))
+
+    escrowed = next(e for e in body["events"] if e["event"] == "Escrowed")
+    assert escrowed["listing_id"] == listing_id
+    assert escrowed["args"]["buyer"] == market["buyer"]
+
+
+def test_activity_distinguishes_a_cancellation_from_a_refund(market):
+    """The reason this endpoint exists.
+
+    `cancel()` sets state to `Refunded` and emits `Cancelled`, so the listing
+    struct cannot tell the two apart. Only the event can, and a marketplace that
+    reported a seller's withdrawal as a failed delivery would be describing
+    something that did not happen.
+    """
+    _publish(market)
+    listing_id = market["stored"].listing_id
+    market["backend"].cancel(listing_id)
+
+    assert market["backend"].get(listing_id).state.value == "refunded"
+
+    kinds = [
+        e["event"]
+        for e in market["client"].get("/api/activity").json()["events"]
+        if e["listing_id"] == listing_id
+    ]
+    assert "Cancelled" in kinds
+    assert "Refunded" not in kinds, "a cancellation must not read as a refund"

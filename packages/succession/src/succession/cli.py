@@ -185,13 +185,64 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_fulfil(args: argparse.Namespace) -> int:
-    """Release content keys for listings whose escrow has landed."""
-    from .fulfil import watch
+    """Release content keys for listings whose escrow has landed.
+
+    The key has to actually go somewhere. `release_for` decides *whether* it may
+    leave the vault, guarding on the chain's own state and on the commitment
+    matching what was listed; this decides *how*, which is a POST to the
+    marketplace the buyer will collect from. Keeping the two apart is what makes
+    only the first one security-critical.
+
+    Without the callback below the command still reported "key released" and
+    transmitted nothing, so `succession claim` on the buyer's machine 404ed on
+    the key. That is the whole point of this hop.
+    """
+    import urllib.error
+    import urllib.request
+
+    from .fulfil import DeliveryError, watch
+    from .publish import StoredListing, seller_auth_header
 
     key = _require_key()
     backend, _ = _chain_backend(args, key)
+    base = args.marketplace.rstrip("/")
+
+    def deliver(stored: StoredListing, content_key: bytes, buyer: str) -> None:
+        """Hand the key to the marketplace, which gates it on escrow itself.
+
+        The service re-reads the contract before accepting and again before
+        serving, so this is not the only thing standing between a key and a
+        stranger. Sending it is safe precisely because both ends check.
+        """
+        body = json.dumps({"content_key": content_key.hex()}).encode()
+        request = urllib.request.Request(
+            f"{base}/api/listing/{stored.listing_id}/key",
+            data=body,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                **seller_auth_header(key, stored.listing_id),
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                json.load(response)
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", "replace")[:200]
+            raise DeliveryError(
+                f"marketplace refused the key for {stored.listing_id}: "
+                f"{exc.code} {detail}"
+            ) from exc
+        except OSError as exc:
+            raise DeliveryError(
+                f"could not reach {base} to deliver the key for "
+                f"{stored.listing_id}: {exc}"
+            ) from exc
+
+    print(f"delivering released keys to {base}")
     results = watch(
         backend,
+        deliver=deliver,
         interval=args.interval,
         once=args.once,
         listings=[args.listing] if args.listing else None,
@@ -476,6 +527,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--listing", default=None, help="just this one (default: all)")
     p.add_argument("--interval", type=int, default=30, help="seconds between polls")
     p.add_argument("--once", action="store_true", help="check once and exit")
+    # The same marketplace the buyer's `claim` will read from. Without it the
+    # key is released from the vault and goes nowhere, which is exactly the
+    # shape this command had before: it reported success and the buyer got a
+    # 404.
+    p.add_argument("--marketplace", default=os.environ.get(
+        "SUCCESSION_MARKETPLACE", "http://127.0.0.1:8000"
+    ), help="marketplace base URL")
     p.set_defaults(func=cmd_fulfil)
 
     p = sub.add_parser("claim", help="collect, import and verify memory you bought")

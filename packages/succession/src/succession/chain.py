@@ -117,6 +117,26 @@ def listing_id_to_bytes32(listing_id: str) -> bytes:
 def bytes32_to_listing_id(raw: bytes) -> str:
     return bytes(raw).rstrip(b"\x00").decode("utf-8", errors="replace")
 
+def _plain(value: Any) -> Any:
+    """Make a decoded event argument JSON-safe without losing what it is."""
+    if isinstance(value, (bytes, bytearray)):
+        return "0x" + bytes(value).hex()
+    return value
+
+
+def _listing_of(args: Any) -> str:
+    """The listing an event belongs to, or empty for one that names an agent.
+
+    `AgentSealed` is keyed by agent id rather than by listing, so it has no
+    listing to report. Returning empty rather than inventing one keeps the
+    caller from joining a seal onto the wrong sale.
+    """
+    raw = dict(args).get("listingId")
+    if raw is None:
+        return ""
+    return bytes32_to_listing_id(bytes(raw))
+
+
 
 class ChainSettlement:
     """Drives ``ListingContract`` on Base (or any EVM) through web3.py."""
@@ -371,6 +391,92 @@ class ChainSettlement:
     #: The public Base Sepolia endpoint refuses `eth_getLogs` over wider spans
     #: with a 413. Measured, not guessed: 50,000 fails and 10,000 succeeds.
     LOG_SPAN = 9_000
+
+    #: The events that constitute the ledger, in the order a sale emits them.
+    #: `Cancelled` is here for a reason that is easy to miss: `cancel()` writes
+    #: state `Refunded`, so a cancellation and a genuine refund are
+    #: indistinguishable from the listing struct alone. Only the event separates
+    #: them, which makes this scan the sole way to report either honestly.
+    ACTIVITY_EVENTS = (
+        "Listed",
+        "Escrowed",
+        "TransferConfirmed",
+        "Refunded",
+        "Cancelled",
+        "AgentSealed",
+    )
+
+    def activity(
+        self,
+        *,
+        lookback_blocks: int = 120_000,
+        span: int | None = None,
+        limit: int = 250,
+    ) -> list[dict[str, Any]]:
+        """Every state change the contract has emitted, newest first.
+
+        The listing views answer "what is true now". This answers "what
+        happened", which is a different question and the only one that can say
+        when a sale settled, who bought it, and in which transaction.
+
+        Paged and bounded exactly as `listed_ids` is, and for the same measured
+        reason: the public endpoint refuses wide ranges with a 413. Windows walk
+        backwards from the head so a scan that stops early has returned the most
+        recent activity rather than an arbitrary slice, and one refused window is
+        skipped rather than being allowed to empty the whole ledger.
+
+        Decoded through the contract's own event ABIs rather than by matching raw
+        topics, because the arguments are the point here; `listed_ids` only ever
+        needed the indexed id.
+        """
+        head = self.w3.eth.block_number
+        step = span or self.LOG_SPAN
+        floor = max(0, head - lookback_blocks)
+
+        raw: list[Any] = []
+        upper = head
+        while upper > floor and len(raw) < limit:
+            lower = max(floor, upper - step)
+            for name in self.ACTIVITY_EVENTS:
+                try:
+                    raw.extend(
+                        getattr(self.contract.events, name)().get_logs(
+                            from_block=lower, to_block=upper
+                        )
+                    )
+                except Exception:  # noqa: BLE001 - a refused window is not fatal
+                    continue
+            upper = lower
+
+        # Newest first. Ordering on (block, log index) rather than on the block
+        # alone keeps two events from one transaction — a confirm and its seal —
+        # in the order the contract actually emitted them.
+        raw.sort(key=lambda log: (log["blockNumber"], log["logIndex"]), reverse=True)
+        raw = raw[:limit]
+
+        # One timestamp lookup per block rather than per log. A settled sale
+        # emits three events in the same block, and asking three times is three
+        # round trips for one answer.
+        stamps: dict[int, int] = {}
+        for number in {log["blockNumber"] for log in raw}:
+            try:
+                stamps[number] = self.w3.eth.get_block(number)["timestamp"]
+            except Exception:  # noqa: BLE001 - a missing stamp is not a missing event
+                continue
+
+        return [
+            {
+                "event": log["event"],
+                "listing_id": _listing_of(log["args"]),
+                "block": log["blockNumber"],
+                "timestamp": stamps.get(log["blockNumber"]),
+                "tx": log["transactionHash"].hex()
+                if hasattr(log["transactionHash"], "hex")
+                else str(log["transactionHash"]),
+                "args": {k: _plain(v) for k, v in dict(log["args"]).items()},
+            }
+            for log in raw
+        ]
 
     def listed_ids(
         self, *, lookback_blocks: int = 120_000, span: int | None = None

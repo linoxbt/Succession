@@ -19,6 +19,7 @@ import {
   market,
   type AgentsHeld,
   type ChainStatus,
+  type Activity,
   type MarketRow,
   type Overview,
 } from "../api";
@@ -36,6 +37,7 @@ export interface Listings {
 export interface SuccessionService {
   readonly kind: "http" | "mock";
   overview(): Promise<Overview>;
+  activity(limit?: number): Promise<Activity>;
   listings(): Promise<Listings>;
   listing(id: string): Promise<MarketRow>;
   agents(owner: string): Promise<AgentsHeld>;
@@ -46,6 +48,8 @@ export const HttpService: SuccessionService = {
   kind: "http",
 
   overview: () => market.overview(),
+
+  activity: (limit) => market.activity(limit),
 
   listings: async () => {
     const body = await market.listings();
@@ -153,6 +157,13 @@ export const MockService: SuccessionService = {
       grades: [],
       does_not_transfer: [],
     },
+  }),
+
+  activity: async () => ({
+    chain: false,
+    explanation: "Local fixtures. No contract is being read.",
+    events: [],
+    count: 0,
   }),
 
   listings: async () => ({ real: [], demo: [fixtureRow()], chain: false }),

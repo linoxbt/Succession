@@ -87,6 +87,31 @@ export interface ReputationModel {
   does_not_transfer: { item: string; why: string }[];
 }
 
+/** One contract event: what happened, when, and in which transaction. */
+export interface ActivityEvent {
+  event:
+    | "Listed"
+    | "Escrowed"
+    | "TransferConfirmed"
+    | "Refunded"
+    | "Cancelled"
+    | "AgentSealed";
+  /** Empty for AgentSealed, which is keyed by agent rather than by listing. */
+  listing_id: string;
+  block: number;
+  timestamp: number | null;
+  tx: string;
+  args: Record<string, string | number | boolean>;
+}
+
+export interface Activity {
+  chain: boolean;
+  explanation: string;
+  events: ActivityEvent[];
+  count: number;
+  explorer?: string;
+}
+
 export interface AgentHolding {
   agent_id: number;
   identity: string;
@@ -325,6 +350,9 @@ export const market = {
   chain: () => request<ChainStatus>("/api/chain"),
   /** Everything the service knows, in one read. */
   overview: () => request<Overview>("/api/overview"),
+  /** The event ledger: what happened, rather than what is true now. */
+  activity: (limit = 100) =>
+    request<Activity>(`/api/activity?limit=${limit}`),
   /** Which ERC-8004 agents a wallet holds, for choosing a successor. */
   agents: (owner: string) => request<AgentsHeld>(`/api/agents/${owner}`),
 };
