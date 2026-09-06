@@ -145,6 +145,25 @@ export function WalletBar(_props: { status?: ChainStatus | null }) {
  * Reown appears only when a project id was built in, so the list never offers a
  * route that would fail at the relay with an error nobody can act on.
  */
+/**
+ * What each route actually is, in one line.
+ *
+ * Keyed on connector `id` rather than on `name`, because EIP-6963 discovery
+ * replaces `name` with the wallet's own ("MetaMask", "Rabby") and a name-keyed
+ * lookup would quietly stop matching the moment a visitor installs one.
+ *
+ * WalletConnect names Reown explicitly. The connector is called WalletConnect
+ * because the protocol still is; Reown is the company it was renamed to, and
+ * it is the word printed on the dashboard where the project id is issued. A
+ * visitor who configured one and then looked for it here found three bare
+ * words and no way to tell which was which.
+ */
+const CONNECTOR_NOTE: Record<string, string> = {
+  baseAccount: "Passkey. No extension, no seed phrase.",
+  injected: "The wallet already in this browser",
+  walletConnect: "QR code and mobile wallets, via Reown",
+};
+
 function ConnectButton() {
   const { connect, connectors, isPending, error } = useConnect();
   const [open, setOpen] = useState(false);
@@ -176,19 +195,27 @@ function ConnectButton() {
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-full z-50 mt-2 min-w-[13rem] border border-rule bg-paper">
-          {connectors.map((c) => (
-            <button
-              key={c.uid}
-              onClick={() => {
-                setOpen(false);
-                connect({ connector: c });
-              }}
-              className="block w-full border-b border-hairline px-5 py-3 text-left text-micro text-ink transition-colors duration-400 last:border-b-0 hover:bg-shade"
-            >
-              {c.name}
-            </button>
-          ))}
+        <div className="absolute right-0 top-full z-50 mt-2 min-w-[16rem] border border-rule bg-paper">
+          {connectors.map((c) => {
+            // An unlisted id falls through to the bare name rather than being
+            // hidden, so a wallet discovered at runtime still appears.
+            const note = CONNECTOR_NOTE[c.id];
+            return (
+              <button
+                key={c.uid}
+                onClick={() => {
+                  setOpen(false);
+                  connect({ connector: c });
+                }}
+                className="block w-full border-b border-hairline px-5 py-3 text-left transition-colors duration-400 last:border-b-0 hover:bg-shade"
+              >
+                <span className="block text-micro text-ink">{c.name}</span>
+                {note ? (
+                  <span className="mt-0.5 block text-label text-faint">{note}</span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
       ) : null}
 

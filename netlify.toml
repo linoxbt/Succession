@@ -55,7 +55,24 @@
     #
     # If VITE_BASE_SEPOLIA_RPC_URL points somewhere else, add that host here too
     #, the allowlist has to name it, the build variable is not enough.
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://sepolia.base.org https://*.base.org https://keys.coinbase.com https://*.coinbase.com wss://*.coinbase.com https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.com wss://*.walletconnect.org https://*.reown.com; frame-src 'self' https://keys.coinbase.com https://verify.walletconnect.com https://verify.walletconnect.org; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
+    #
+    # Reown's modal needs four things the wildcards above do not cover, and each
+    # one fails differently:
+    #
+    #   api.web3modal.org      the wallet registry. Not a *.walletconnect.*
+    #                          host, so the wildcards miss it and the modal
+    #                          opens with an empty wallet list.
+    #   blob:                  in img-src. Wallet icons are fetched as blobs and
+    #                          rendered from object URLs, not from remote src
+    #                          attributes, so without this every logo is blank
+    #                          even though the fetch succeeded.
+    #   rpc/pulse              the fallback JSON-RPC and the telemetry batch
+    #                          endpoint the relay client posts to.
+    #   secure.walletconnect   an iframe AppKit mounts only when its remote
+    #                          feature config turns on email or social login.
+    #                          That config is fetched at runtime, so the origin
+    #                          has to be allowed before it is ever needed.
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://api.web3modal.org; connect-src 'self' https://sepolia.base.org https://*.base.org https://keys.coinbase.com https://*.coinbase.com wss://*.coinbase.com https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.com wss://*.walletconnect.org https://*.reown.com https://api.web3modal.org https://rpc.walletconnect.org https://pulse.walletconnect.org; frame-src 'self' https://keys.coinbase.com https://verify.walletconnect.com https://verify.walletconnect.org https://secure.walletconnect.org https://secure-mobile.walletconnect.org https://secure-mobile.walletconnect.com; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
 
 # Hashed bundle filenames are content-addressed, so they can be cached forever.
 [[headers]]
