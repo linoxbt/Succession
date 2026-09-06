@@ -39,15 +39,19 @@ class SuccessionBuildHook(BuildHookInterface):
             encoding="utf-8",
         )
 
-        missing = [name for name, path in SOURCES.items() if not path.is_file()]
-        if missing:
-            raise RuntimeError(
-                "cannot build a working wheel without "
-                + ", ".join(missing)
-                + ". Run `npm run build` in contracts/ first; a wheel without "
-                "the ABI installs cleanly and then fails on every chain "
-                "command, which is worse than a failed build."
-            )
-
+        # The copies under `data/` are tracked in git, which is what makes
+        # `pip install git+https://…` work: a build from a clone has no
+        # `contracts/out/` because that directory is a gitignored Foundry
+        # output. So a missing source here refreshes nothing rather than
+        # failing, and the tracked copy ships as-is.
         for name, path in SOURCES.items():
-            shutil.copyfile(path, DATA / name)
+            if path.is_file():
+                shutil.copyfile(path, DATA / name)
+            elif not (DATA / name).is_file():
+                raise RuntimeError(
+                    f"{name} is neither built nor tracked. Run `npm run build` "
+                    "in contracts/ and commit "
+                    f"packages/succession/src/succession/data/{name}; a wheel "
+                    "without it installs cleanly and then fails on every chain "
+                    "command, which is worse than a failed build."
+                )

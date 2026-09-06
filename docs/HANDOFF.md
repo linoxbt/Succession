@@ -15,7 +15,7 @@ environment did not.
 
 REPO      https://github.com/linoxbt/Succession
 BRANCH    claude/session-3993th   (work on this branch, push to it)
-STATE     248 Python tests and 28 Foundry tests passing, web build clean.
+STATE     329 Python tests and 28 Foundry tests passing, web build clean.
           The UI is deployed at https://successmarket.netlify.app, which
           builds this branch. The contract is not deployed and ACP is not
           registered — both need credentials, not code.

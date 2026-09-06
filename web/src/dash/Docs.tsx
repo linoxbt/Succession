@@ -50,7 +50,7 @@ const DOCS: Doc[] = [
           items={[
             ["Export", "The seller's tenant is filtered, serialized and hashed into a Succession Memory Package, signed with the key holding the agent's ERC-8004 identity."],
             ["List", "The Merkle root is committed to ListingContract on Base, before any buyer exists."],
-            ["Preview", "A buyer sees aggregate statistics only, counts, never record bodies, beside verifiable ACP job history."],
+            ["Preview", "A buyer sees aggregate statistics only, counts, never record bodies, beside whatever ACP job history the agent carries."],
             ["Escrow", "The buyer funds the contract. Nothing has moved: the seller cannot touch the money, the buyer holds no identity."],
             ["Deliver", "The package travels encrypted. The content key is released only against funded escrow."],
             ["Re-key", "It imports into a brand-new tenant under the buyer's tenant id."],
@@ -188,16 +188,29 @@ const DOCS: Doc[] = [
           × task_performance     ACP outcomes, else the journal
           × recency_weight       time since the last write`}</Pre>
         <P className="mt-6">
-          <Code>task_performance</Code> prefers the real completed-versus-
-          cancelled ratio from Virtuals ACP over reading English out of the
-          seller's own journal. It falls back on a thin sample rather than
-          treating two-for-two as a perfect record.
+          <Code>task_performance</Code> prefers a completed-versus-cancelled
+          ratio from Virtuals ACP over reading English out of the seller's own
+          journal. It falls back on a thin sample rather than treating
+          two-for-two as a perfect record.
         </P>
+        <Callout>
+          The ACP reader is built and tested, but against a recorded snapshot
+          rather than the live registry: this agent is not yet registered with
+          Virtuals, which needs a whitelisted wallet and an entity id. Every
+          figure sourced that way is labelled with its provenance, and a
+          listing with no ACP history scores from its journal instead. Nothing
+          on a listing claims live earnings that were not fetched.
+        </Callout>
         <Callout tone="escrow">
-          There is no buyer-demand term and no memory-reputation score. Those are
-          real inputs at protocol scale and meaningless in a single-listing demo,
-          and a hardcoded "12 buyers watching" is exactly the pattern a technical
-          reader probes first.
+          There is no buyer-demand term in the valuation. Demand is a real input
+          at protocol scale and meaningless in a market this size, and a
+          hardcoded "12 buyers watching" is exactly the pattern a technical
+          reader probes first. Reputation is deliberately kept out of the price
+          for a different reason: it is derived from the provenance chain and
+          recomputed on every read, so folding it into a figure the seller
+          publishes would let a seller assert their own standing. It is shown
+          beside the price instead, and a buyer re-derives it from the package
+          they received.
         </Callout>
       </>
     ),

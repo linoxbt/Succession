@@ -181,7 +181,7 @@ export default function Claim({
                   <div className="mt-8 space-y-6">
                     <div>
                       <p className="chapter-mark mb-3">1, Install</p>
-                      <Copyable text="pipx install succession" />
+                      <Copyable text={'pipx install "git+https://github.com/linoxbt/Succession#subdirectory=packages/succession"[chain]'} />
                     </div>
 
                     <div>
@@ -192,7 +192,8 @@ export default function Claim({
                         text={`succession claim \\
     --listing ${row.listing.listing_id} \\
     --db ~/.sibyl-memory/memory.db \\
-    --tenant <the agent that inherits>`}
+    --tenant <the agent that inherits> \\
+    --marketplace ${window.location.origin}`}
                       />
                       <Note>
                         It prints the hash the seller committed and the one

@@ -84,3 +84,59 @@ jobs:
         run: |
           forge build
           forge test -vv
+
+  # Installs the way a stranger would. The `test` job uses `pip install -e` and
+  # pre-builds the ABI by hand, so it proves nothing about whether a published
+  # wheel works: for a long time it did not, because the contract ABI resolved
+  # by walking up from __file__ to a repo root that does not exist inside a
+  # virtualenv.
+  wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Compile the contracts
+        working-directory: contracts
+        run: npm install && npm run build
+
+      # The packaged ABI is tracked so `pip install git+https://…` works from a
+      # clone, where contracts/out/ does not exist. Tracked means it can go
+      # stale, so it is regenerated and compared, exactly as the frontend ABI is.
+      - name: The shipped ABI matches the compiled one
+        run: |
+          cp contracts/out/artifacts.json packages/succession/src/succession/data/artifacts.json
+          cp deployments/base-sepolia.json packages/succession/src/succession/data/base-sepolia.json
+          git diff --exit-code -- packages/succession/src/succession/data \
+            || (echo "::error::the shipped ABI or deployment record is stale; commit the regenerated files" && exit 1)
+
+      - name: Build a wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel --outdir dist packages/succession
+
+      - name: Install it somewhere else entirely
+        run: |
+          python -m venv /tmp/stranger
+          /tmp/stranger/bin/pip install "$(ls dist/*.whl)[chain]"
+
+      - name: The command exists, and reaches what it needs
+        working-directory: /tmp
+        run: |
+          /tmp/stranger/bin/succession --help
+          /tmp/stranger/bin/python -c "
+          from succession.chain import load_artifact
+          abi = load_artifact('ListingContract')['abi']
+          assert abi, 'the ABI did not ship in the wheel'
+          print(f'ABI loaded from site-packages: {len(abi)} entries')
+          "
+
+      - name: Every claim the project makes, from the installed package
+        working-directory: /tmp
+        run: /tmp/stranger/bin/succession audit
+

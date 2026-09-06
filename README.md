@@ -13,7 +13,7 @@ and verified by the buyer re-hashing their own store.
 [Overview](#overview) · [How it works](#how-a-sale-works) · [Quick start](#quick-start) ·
 [Architecture](#architecture) · [Security](#security-model) · [Roadmap](docs/ROADMAP.md)
 
-`259 tests` · `Python 3.11+` · `Solidity 0.8.28` · `React 18`
+`329 tests` · `Python 3.11+` · `Solidity 0.8.28` · `React 18`
 
 </div>
 
@@ -86,7 +86,7 @@ git clone https://github.com/linoxbt/Succession && cd Succession
 
 python -m venv .venv
 .venv/bin/pip install -e "packages/succession[test,service,acp,chain]"
-.venv/bin/python -m pytest packages/succession/tests        # 259 tests
+.venv/bin/python -m pytest packages/succession/tests        # 329 tests
 
 ( cd contracts && npm install && npm run build )            # solc → artifacts
 .venv/bin/python -m succession.demo                         # the whole workflow
@@ -237,20 +237,21 @@ redesign. A flat hash would have needed one.
 
 ### The marketplace
 
-Six listings, each a real export of a real store. The committed root, record
-count, memory size and valuation are computed by the pipeline — nothing on that
-screen is written down. A marketplace of hardcoded rows would look identical and
-mean nothing, which is exactly the pattern this project argues against.
+The index is the chain. `Listed` events decide what exists and the contract
+decides each listing's state, price and seller; this service only adds what the
+contract has no field for — the data-room counts, the reference valuation, the
+display name — and every one of those rows is signed by the address the contract
+records as that listing's seller.
 
-The archetypes differ along the axes the valuation reads — tenure, journal
-density, counterparty breadth, win rate, recency — so the spread of prices comes
-out of the data rather than out of a designer's sense of what looks good. One is
-deliberately stale and one deliberately has too few resolved outcomes to score,
-because a market where every listing looks healthy teaches a buyer nothing.
+That is a change from an earlier build, which shipped six seeded archetypes.
+They are gone. A listing appears here because someone paid gas to commit its
+root, so an empty marketplace is a true answer rather than a broken fetch.
 
-Asking prices are derived as a ratio of each agent's own valuation, so the two
-can never contradict each other, and the resulting spread (−12% to +18%) is a
-real signal a buyer can sort on.
+Alongside the real listings the console shows a small set of clearly labelled
+demonstration rows, so the interface can be judged at a realistic size while the
+live market is small. They travel in their own API field rather than mixed into
+`listings`, their seller is the zero address, and no total, volume or capability
+count includes them. A test asserts exactly that.
 
 ### Valuation
 
@@ -279,7 +280,7 @@ buyers watching" is exactly the pattern a technical reader probes first.
 | Stack | Where it does work | Status |
 |---|---|---|
 | **Sibyl Memory** | The asset itself. Five tiers export, hash, transfer and re-key; the successor agent retrieves through the FTS5 index. Delete this layer and there is no product. | Executed |
-| **Base** | `ListingContract.sol` holds escrow and, in one transaction, releases payment, transfers the ERC-8004 identity and sets the sealed flag. `chain.py` drives it over web3; the browser funds escrow through Wagmi and the Base Account connector. Identity is a real ERC-8004 registry on Base Sepolia (`0x7177a686…36Dd09A`), verified on chain rather than assumed, and payment moves in Circle's USDC. | Built; contract executed against real bytecode in py-evm, registry verified live. **Not yet deployed to Base Sepolia** — needs a funded key. |
+| **Base** | `ListingContract.sol` holds escrow and, in one transaction, releases payment, transfers the ERC-8004 identity and sets the sealed flag. `chain.py` drives it over web3; the browser funds escrow through Wagmi and the Base Account connector. Identity is a real ERC-8004 registry on Base Sepolia (`0x7177a686…36Dd09A`), verified on chain rather than assumed, and payment moves in Circle's USDC. | **Deployed to Base Sepolia** at `0xBE16BD086BF00c90B2E1e49E5393b3C18519927E`, with 5 sales settled on chain (4 verified, 1 refunded on a deliberate hash mismatch). Also executed against the same bytecode in py-evm. |
 | **Virtuals ACP** | `acp.py` reads job history through `virtuals-acp` and makes it the data room's quality-of-earnings signal, the valuation's `task_performance` input, and part of the transferred memory. | Built. **Not yet registered** — needs a whitelisted wallet and entity id. |
 
 Base Sepolia and `acpx.virtuals.gg` are both reachable now, and the ERC-8004
@@ -367,7 +368,7 @@ bytes; it was the right to *be* that agent.
 ## Testing
 
 ```bash
-.venv/bin/python -m pytest packages/succession/tests   # 259
+.venv/bin/python -m pytest packages/succession/tests   # 329
 ( cd contracts && forge test )                         # 28, the mirrored Foundry suite
 ```
 
@@ -394,9 +395,14 @@ compiled bytecode. The Python suite rebuilds the artifacts itself when a `.sol`
 file is newer than the last build, so a stale `contracts/out` cannot make the
 contract look broken.
 
-Both suites cover the same scenarios and both are green. They are worth keeping
-that way in opposite directions: the Foundry suite catches what only a cheatcode
-can reach, and the py-evm suite is what runs where Foundry cannot be installed.
+The two suites overlap heavily but are not identical, and it is worth being
+precise about that rather than claiming a parity that does not hold. Foundry
+alone covers a fee-taking token, escrow isolation between listings, and a fuzz
+case over the delivered hash; py-evm alone covers a token that returns false
+rather than reverting, a double purchase, and the registration URI carried by
+the identity. They are worth keeping that way: the Foundry suite catches what
+only a cheatcode can reach, and the py-evm suite is what runs where Foundry
+cannot be installed.
 
 ---
 

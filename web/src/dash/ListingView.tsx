@@ -320,7 +320,8 @@ export default function ListingView({
                   text={`succession claim \\
     --listing ${listing.listing_id} \\
     --db ~/.sibyl-memory/memory.db \\
-    --tenant ${successor ? successor.replace(/[:]/g, "-") : "<pick an agent above>"}`}
+    --tenant ${successor ? successor.replace(/[:]/g, "-") : "<pick an agent above>"} \\
+    --marketplace ${window.location.origin}`}
                 />
               </div>
               <div className="mt-4">

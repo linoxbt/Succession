@@ -74,6 +74,7 @@ export default function Sell({ chainStatus }: { chainStatus: ChainStatus | null 
     `    --db ${db || "<your store>"} \\`,
     `    --tenant ${tenant || "<your tenant>"} \\`,
     `    --agent ${agent || "erc8004:84532:<your agent id>"} \\`,
+    `    --marketplace ${typeof window === "undefined" ? "" : window.location.origin} \\`,
     ...(partial ? [`    --scope ${scope || "<nothing selected>"} \\`] : []),
     `    --price ${minor}`,
   ].join("\n");
@@ -288,7 +289,7 @@ export default function Sell({ chainStatus }: { chainStatus: ChainStatus | null 
           over when it lands:
         </p>
         <div className="mt-6">
-          <Copyable text="succession fulfil" />
+          <Copyable text={`succession fulfil --marketplace ${window.location.origin}`} />
         </div>
         <Note>
           If you are offline when a buyer funds escrow, they wait. That is a real

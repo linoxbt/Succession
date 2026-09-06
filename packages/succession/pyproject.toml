@@ -60,6 +60,7 @@ test = [
 [project.scripts]
 succession = "succession.cli:main"
 succession-acp = "succession.acp_cli:main"
+succession-mcp = "succession.mcp_server:main"
 
 [build-system]
 requires = ["hatchling"]

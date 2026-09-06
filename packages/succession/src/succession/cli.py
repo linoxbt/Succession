@@ -505,12 +505,17 @@ def cmd_prove(args: argparse.Namespace) -> int:
     from .smp import DATA_CATEGORIES
 
     key = _require_key()
+    scope = _parse_scope(getattr(args, "scope", None))
+    if args.categories and scope is not None:
+        raise SystemExit("pass --categories or --scope, not both")
+
     source = open_tenant(args.db, args.tenant)
     export = export_tenant(
         source,
         agent_identity=args.agent,
         private_key=key,
         categories=args.categories or None,
+        scope=scope,
     )
 
     from eth_account import Account
@@ -527,6 +532,9 @@ def cmd_prove(args: argparse.Namespace) -> int:
             committed_root=export.root_hex,
             expected_signer=signer,
         )
+        # The buyer's store holds only what the scope selected, so re-exporting
+        # it whole is right: applying the scope again would take a percentage of
+        # a percentage and compare unequal sets.
         back = export_tenant(
             sink,
             agent_identity=args.agent,
@@ -541,7 +549,12 @@ def cmd_prove(args: argparse.Namespace) -> int:
         }
 
     sent, landed = subroots(export.package), subroots(back.package)
-    selected = tuple(args.categories) if args.categories else DATA_CATEGORIES
+    if args.categories:
+        selected = tuple(args.categories)
+    elif scope is not None:
+        selected = tuple(scope.categories)
+    else:
+        selected = DATA_CATEGORIES
 
     print(f"committed   {export.root_hex}")
     print(f"re-derived  {result.reimported_root}")
@@ -571,6 +584,42 @@ def cmd_prove(args: argparse.Namespace) -> int:
         return 1
     print(f"All {len(selected)} categories transferred intact.")
     return 0
+
+
+def cmd_audit(args: argparse.Namespace) -> int:
+    """Check every claim this project makes, and exit non-zero if one fails.
+
+    Runs against a memory it builds itself, so it needs no repository, no
+    frontend, no wallet and no network. Pass --marketplace to additionally
+    compare every published Merkle root against its on-chain commitment.
+    """
+    from .audit import run_audit
+
+    results = run_audit(marketplace=getattr(args, "marketplace", None) if
+                        getattr(args, "check_chain", False) else None)
+
+    if args.json:
+        print(json.dumps([r.to_dict() for r in results], indent=2))
+    else:
+        mark = {"passed": "PASS", "failed": "FAIL", "skipped": "SKIP"}
+        print("Succession, self-audit")
+        print()
+        for result in results:
+            print(f"  [{mark.get(result.status, '????')}]  {result.name}")
+            print(f"          {result.claim}")
+            print(f"          {result.detail}")
+            for key, value in result.evidence.items():
+                print(f"            {key}: {value}")
+            print()
+
+    failed = [r for r in results if r.status == "failed"]
+    skipped = [r for r in results if r.status == "skipped"]
+    passed = [r for r in results if r.status == "passed"]
+    if not args.json:
+        print(f"{len(passed)} passed, {len(failed)} failed, {len(skipped)} skipped")
+        if skipped:
+            print("A skipped check is not a passed one.")
+    return 1 if failed else 0
 
 
 def cmd_listings(args: argparse.Namespace) -> int:
@@ -714,7 +763,21 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--agent", required=True)
     p.add_argument("--categories", nargs="*", choices=DATA_CATEGORIES,
                    help="check only these (default: all six)")
+    # Without this, the shape the Sell page actually generates — a percentage
+    # of each directory — could not be proved at all. `prove` could only ever
+    # certify whole-category sales, which is not what most sellers list.
+    p.add_argument("--scope", default=None,
+                   help="prove a partial sale, e.g. relationships=60,history=100")
     p.set_defaults(func=cmd_prove)
+
+    p = sub.add_parser(
+        "audit", help="check every claim this project makes about itself"
+    )
+    marketplace_arg(p)
+    p.add_argument("--check-chain", action="store_true",
+                   help="also compare published roots to their on-chain commitments")
+    p.add_argument("--json", action="store_true", help="machine-readable output")
+    p.set_defaults(func=cmd_audit)
 
     p = sub.add_parser("listings", help="what you have listed")
     p.set_defaults(func=cmd_listings)
