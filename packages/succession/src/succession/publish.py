@@ -155,9 +155,27 @@ class SellerVault:
         *,
         envelope: SealedEnvelope,
         content_key: bytes,
+        integrity: dict[str, Any] | None = None,
+        provenance: dict[str, Any] | None = None,
     ) -> Path:
+        """Everything the seller needs to publish this listing, or re-publish it.
+
+        The Merkle manifest and the signed provenance header are kept alongside
+        the ciphertext because they are only derivable at export time. Without
+        them here, a marketplace that was unreachable when the seller listed
+        could never be given the proofs afterwards, and the buyer would be asked
+        to trust a root nobody had shown them.
+        """
         directory = self.path(stored.listing_id)
         directory.mkdir(parents=True, exist_ok=True)
+        if integrity:
+            (directory / "integrity.json").write_text(
+                json.dumps(integrity, indent=2) + "\n", encoding="utf-8"
+            )
+        if provenance:
+            (directory / "provenance.json").write_text(
+                json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
+            )
         (directory / "meta.json").write_text(
             json.dumps(stored.to_dict(), indent=2) + "\n", encoding="utf-8"
         )
@@ -169,6 +187,25 @@ class SellerVault:
         # The one file here that is actually a secret.
         key_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
         return directory
+
+    def proofs(self, listing_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        """The manifest and header, or empty dicts for a listing made before them."""
+        directory = self.path(listing_id)
+        out = []
+        for name in ("integrity.json", "provenance.json"):
+            path = directory / name
+            try:
+                out.append(json.loads(path.read_text("utf-8")) if path.is_file() else {})
+            except (OSError, ValueError):
+                out.append({})
+        return out[0], out[1]
+
+    def envelope(self, listing_id: str) -> SealedEnvelope:
+        """The sealed package, read back for a re-publish."""
+        path = self.path(listing_id) / "envelope.json"
+        if not path.is_file():
+            raise PublishError(f"no envelope in the vault for {listing_id}")
+        return SealedEnvelope.from_dict(json.loads(path.read_text("utf-8")))
 
     def read(self, listing_id: str) -> StoredListing:
         path = self.path(listing_id) / "meta.json"
@@ -313,5 +350,12 @@ def publish_listing(
         valuation_reference=str(valuation.to_dict()["amount"]),
         preview=asset.preview.to_dict(),
     )
-    vault.write(stored, envelope=asset.envelope, content_key=asset.content_key)
+    package = getattr(asset.export, "package", None)
+    vault.write(
+        stored,
+        envelope=asset.envelope,
+        content_key=asset.content_key,
+        integrity=getattr(package, "integrity", None),
+        provenance=getattr(package, "header", None),
+    )
     return stored, asset

@@ -518,7 +518,6 @@ def test_a_sale_completes_across_two_machines(market, tmp_path, monkeypatch):
     from succession import cli, publish as publish_module
     from succession.memory.sibyl import open_tenant
 
-    _publish(market)
     listing_id = market["stored"].listing_id
 
     from service import app as app_module
@@ -550,7 +549,26 @@ def test_a_sale_completes_across_two_machines(market, tmp_path, monkeypatch):
         )
         monkeypatch.setenv("SUCCESSION_SIGNING_KEY", market["seller_key"])
 
-        # Seller's machine.
+        # Seller's machine. The fixture put the listing on chain; this is the
+        # step that publishes it to the marketplace, and it is deliberately the
+        # product's own code rather than the test helper `_publish`. Driving the
+        # helper here is what hid the missing envelope upload: the test
+        # performed a step no shipped command performed.
+        assert cli.main(
+            [
+                "publish",
+                "--listing", listing_id,
+                "--marketplace", base,
+                "--vault", str(tmp_path / "vault"),
+            ]
+        ) == 0, "the seller's own publish step must upload metadata and ciphertext"
+
+        # The buyer can now reach the ciphertext. Before the fix this 404ed.
+        assert (
+            market["client"].get(f"/api/listing/{listing_id}/envelope").status_code
+            == 200
+        ), "the encrypted package must be published, or a paid buyer has nothing"
+
         assert cli.main(
             ["fulfil", "--listing", listing_id, "--once", "--marketplace", base]
         ) == 0

@@ -1,15 +1,35 @@
 [project]
-name = "succession"
-version = "0.1.0"
+# The command is `succession`; the distribution cannot be. That name has been
+# taken on PyPI since 2016 by an unrelated library, so `pipx install succession`
+# installs someone else's linked lists and no succession command at all — which
+# is exactly what the app used to tell buyers to run.
+name = "succession-cli"
+version = "0.2.0"
 description = "The property layer for agent memory — SMP export/hash/import, provenance, valuation, sealing, and transfer."
 readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["agent", "memory", "erc-8004", "provenance", "merkle", "base"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security :: Cryptography",
+]
+
 dependencies = [
     "sibyl-memory-client>=0.8.0",
     "eth-account>=0.13.0",
     "eth-utils>=5.0.0",
     "pycryptodome>=3.20",
 ]
+
+[project.urls]
+Homepage = "https://github.com/linoxbt/Succession"
+Source = "https://github.com/linoxbt/Succession"
+Issues = "https://github.com/linoxbt/Succession/issues"
 
 [project.optional-dependencies-note]
 # virtuals-acp is an extra rather than a hard dependency: it pulls a socket
@@ -21,6 +41,7 @@ dev = ["pytest>=8.0", "pytest-cov>=5.0"]
 service = ["fastapi>=0.115", "uvicorn>=0.32", "httpx>=0.27"]
 acp = ["virtuals-acp>=0.3.23"]
 chain = ["web3>=7.0"]
+mcp = ["mcp>=1.2", "web3>=7.0"]
 # Everything the full suite needs. `dev` alone runs the pure-pipeline tests;
 # `test` additionally executes the compiled contract bytecode in py-evm and
 # drives the FastAPI layer through starlette's TestClient, which needs httpx.
@@ -46,6 +67,15 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/succession"]
+# `data/` is gitignored because it is copied in from the repo at build time, and
+# hatchling honours VCS ignores when selecting files. `artifacts` is the
+# override for exactly this case: build products that must ship anyway.
+artifacts = ["src/succession/data/*.json", "src/succession/data/__init__.py"]
+
+# The ABI and the deployment record are copied in from the repo at build time.
+# Without them an installed CLI cannot reach the chain at all. See hatch_build.py.
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

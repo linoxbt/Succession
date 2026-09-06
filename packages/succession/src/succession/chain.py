@@ -43,9 +43,35 @@ __all__ = ["ChainSettlement", "load_artifact", "ATTESTATION_DOMAIN"]
 #: Must match ``ListingContract.attestationDigest``'s domain tag exactly.
 ATTESTATION_DOMAIN = "Succession/1.0/listing-attestation"
 
-_ARTIFACTS = (
-    Path(__file__).resolve().parents[4] / "contracts" / "out" / "artifacts.json"
-)
+def _artifact_candidates() -> tuple[Path, ...]:
+    """Where to look for the contract ABI, in order of authority.
+
+    This used to be a single `parents[4]` walk, which is the repo root from a
+    source checkout and the *virtualenv root* from an installed package. Since
+    `contracts/out/` is a gitignored build product that never shipped in the
+    wheel, and nothing passed `artifacts_path`, an installed CLI could not reach
+    an ABI by any means: no flag, no environment variable, no bundled copy.
+    Every chain command was unreachable for anyone who had not cloned the repo.
+
+    So: an explicit override wins, then the copy shipped inside the package,
+    then the checkout's build output. A developer with a freshly compiled
+    contract still gets theirs, because they will have set neither of the first
+    two and the checkout path resolves.
+    """
+    here = Path(__file__).resolve()
+    candidates = []
+    override = os.environ.get("SUCCESSION_ARTIFACTS")
+    if override:
+        candidates.append(Path(override).expanduser())
+    # A checkout's freshly compiled output wins over the bundled copy, or a
+    # developer who just changed a contract would silently keep testing against
+    # the ABI that was current when the wheel was last built. For an installed
+    # package this path lands in the virtualenv and does not exist, so the
+    # bundled copy is reached.
+    candidates.append(here.parents[4] / "contracts" / "out" / "artifacts.json")
+    # Shipped with the wheel by `hatch_build.py`, so a pip install is complete.
+    candidates.append(here.parent / "data" / "artifacts.json")
+    return tuple(candidates)
 
 #: Solidity ``State`` enum, in declaration order.
 _STATES = (
@@ -87,10 +113,20 @@ def await_chain_state(w3: Any, receipt: Any, tries: int = 25) -> None:
 
 
 def load_artifact(name: str, path: str | Path | None = None) -> dict[str, Any]:
-    source = Path(path) if path else _ARTIFACTS
-    if not source.exists():
+    if path:
+        candidates: tuple[Path, ...] = (Path(path),)
+    else:
+        candidates = _artifact_candidates()
+
+    source = next((c for c in candidates if c.exists()), None)
+    if source is None:
+        looked = "\n  ".join(str(c) for c in candidates)
         raise SettlementError(
-            f"contract artifacts not found at {source}; run `npm run build` in contracts/"
+            "contract artifacts not found. Looked in:\n  " + looked +
+            "\n\nIf you installed this package, that is a packaging fault — "
+            "please report it. From a checkout, run `npm run build` in "
+            "contracts/. You can also point at one with --artifacts or "
+            "SUCCESSION_ARTIFACTS."
         )
     artifacts = json.loads(source.read_text())
     if name not in artifacts:

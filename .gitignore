@@ -40,3 +40,4 @@ deployments/transfers-local.json
 
 # Recording scratch
 .record-state/
+packages/succession/src/succession/data/
