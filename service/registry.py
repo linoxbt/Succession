@@ -45,6 +45,16 @@ CREATE TABLE IF NOT EXISTS listing_metadata (
 CREATE INDEX IF NOT EXISTS listing_metadata_seller ON listing_metadata (seller);
 """
 
+#: Columns added after the table first shipped. `CREATE TABLE IF NOT EXISTS`
+#: does nothing to a table that already exists, so a deployed database — and
+#: this one is on a Railway volume, so it does persist — would keep the old
+#: shape and every read of a new column would raise. Each entry is applied only
+#: when absent, which makes startup idempotent.
+_ADDED_COLUMNS: dict[str, str] = {
+    "integrity": "TEXT NOT NULL DEFAULT '{}'",
+    "provenance": "TEXT NOT NULL DEFAULT '{}'",
+}
+
 
 class ListingMetadata(dict):
     """A metadata row. A dict because it is passed straight through to JSON."""
@@ -56,6 +66,15 @@ class MetadataRegistry:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._conn() as conn:
             conn.executescript(_SCHEMA)
+            existing = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(listing_metadata)")
+            }
+            for column, decl in _ADDED_COLUMNS.items():
+                if column not in existing:
+                    conn.execute(
+                        f"ALTER TABLE listing_metadata ADD COLUMN {column} {decl}"
+                    )
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
@@ -80,6 +99,8 @@ class MetadataRegistry:
         valuation: str = "",
         preview: dict[str, Any] | None = None,
         envelope: dict[str, Any] | None = None,
+        integrity: dict[str, Any] | None = None,
+        provenance: dict[str, Any] | None = None,
         posted_at: str,
     ) -> None:
         """Upsert one listing's metadata.
@@ -89,16 +110,25 @@ class MetadataRegistry:
         only when they have seen escrow funded on chain themselves. Holding it
         here means a buyer can fetch it the moment they pay rather than waiting
         on the seller's connection for the bytes as well as the key.
+
+        `integrity` and `provenance` are the Merkle manifest and the signed
+        provenance header. Both are safe to hold here because neither contains
+        a record body: the manifest is roots and counts, and the header is the
+        ownership chain with the signature that proves the seller wrote it. A
+        buyer can check both before paying, which is the point of publishing
+        them at all.
         """
         with self._conn() as conn:
             conn.execute(
                 "INSERT INTO listing_metadata (listing_id, seller, agent_identity, "
                 "committed_root, chain_id, contract, name, vertical, valuation, "
-                "preview, envelope, posted_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) "
+                "preview, envelope, integrity, provenance, posted_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
                 "ON CONFLICT(listing_id) DO UPDATE SET "
                 "name=excluded.name, vertical=excluded.vertical, "
                 "valuation=excluded.valuation, preview=excluded.preview, "
-                "envelope=excluded.envelope, posted_at=excluded.posted_at",
+                "envelope=excluded.envelope, integrity=excluded.integrity, "
+                "provenance=excluded.provenance, posted_at=excluded.posted_at",
                 (
                     listing_id,
                     seller,
@@ -111,6 +141,8 @@ class MetadataRegistry:
                     valuation,
                     json.dumps(preview or {}),
                     json.dumps(envelope) if envelope else "",
+                    json.dumps(integrity or {}),
+                    json.dumps(provenance or {}),
                     posted_at,
                 ),
             )
@@ -158,6 +190,8 @@ class MetadataRegistry:
             vertical=row["vertical"],
             valuation=row["valuation"],
             preview=json.loads(row["preview"] or "{}"),
+            integrity=json.loads(row["integrity"] or "{}"),
+            provenance=json.loads(row["provenance"] or "{}"),
             posted_at=row["posted_at"],
             # The ciphertext is deliberately not in the listing view: it is
             # bulk, and it has its own route.

@@ -28,39 +28,57 @@ export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      // Every colour resolves through a CSS variable rather than a literal, so
+      // one subtree of the document can carry a different palette without a
+      // second set of class names. `:root` in index.css holds the values that
+      // used to sit here, so the marketing pages render exactly as before; the
+      // console overrides the same names under `[data-surface="app"]`.
+      //
+      // The channel-triplet form is not decoration. Around fifteen call sites
+      // use alpha modifiers (`bg-paper/95`, `bg-ink/25`, `border-escrow/40`),
+      // and a plain `var(--x)` holding a hex would silently drop the alpha and
+      // leave those surfaces opaque.
       colors: {
-        // Paper and carbon, both warm. The ground carries a little brown
-        // rather than sitting neutral, so the page reads as stock rather than
-        // as a white screen, and the dark chapters are a deep umber rather
-        // than a near-black: an inversion of the same paper, not a different
-        // material.
-        paper: "#EFE9DE",
-        // A half-step off the page for an inset region. Not a card surface,
-        // there are no cards.
-        shade: "#E3DACA",
-        carbon: "#1C1611",
+        // Paper and carbon. On the marketing pages both are warm: the ground
+        // carries a little brown so it reads as stock rather than as a white
+        // screen. In the console the same two names carry a dark institutional
+        // ground and its elevated panel.
+        paper: "rgb(var(--c-paper) / <alpha-value>)",
+        // A half-step off the page for an inset region.
+        shade: "rgb(var(--c-shade) / <alpha-value>)",
+        carbon: "rgb(var(--c-carbon) / <alpha-value>)",
         // One step up from carbon, for hairlines on inverted sections.
-        carbonRule: "#352B22",
+        carbonRule: "rgb(var(--c-carbon-rule) / <alpha-value>)",
 
-        ink: "#201A14",
-        // Secondary and tertiary ink, mixed toward the page rather than grey,
+        ink: "rgb(var(--c-ink) / <alpha-value>)",
+        // Secondary and tertiary ink, mixed toward the ground rather than grey,
         // so type never looks like it is floating on a different background.
-        muted: "#5A5044",
-        faint: "#8C8172",
-        rule: "#C7BCA8",
-        hairline: "#D9D0BD",
+        muted: "rgb(var(--c-muted) / <alpha-value>)",
+        faint: "rgb(var(--c-faint) / <alpha-value>)",
+        rule: "rgb(var(--c-rule) / <alpha-value>)",
+        hairline: "rgb(var(--c-hairline) / <alpha-value>)",
 
         // Inverted equivalents, for type on carbon.
-        chalk: "#F1EBE0",
-        chalkMuted: "#A79C8A",
-        chalkFaint: "#6F6453",
+        chalk: "rgb(var(--c-chalk) / <alpha-value>)",
+        chalkMuted: "rgb(var(--c-chalk-muted) / <alpha-value>)",
+        chalkFaint: "rgb(var(--c-chalk-faint) / <alpha-value>)",
 
-        // State. The only colours in the system that mean anything, and the
-        // only ones untouched by the warming above: they have to stay
-        // separable from the ground, not harmonised into it.
-        escrow: "#2E4A6B",
-        closed: "#3C6E4A",
-        void: "#8A4038",
+        // State. These mean something: funds held, hash verified, mismatch.
+        // The console re-tints them for legibility on a dark ground; it does
+        // not repurpose them, and nothing else in the system is allowed to
+        // borrow them.
+        escrow: "rgb(var(--c-escrow) / <alpha-value>)",
+        closed: "rgb(var(--c-closed) / <alpha-value>)",
+        void: "rgb(var(--c-void) / <alpha-value>)",
+
+        // Two names that exist so the console can differ without the marketing
+        // pages moving. `signal` is the console's accent, and resolves to the
+        // escrow blue at `:root` so that a stray use outside the app stays on
+        // system rather than introducing a colour. `press` replaces a literal
+        // `bg-black` in the primary button, and is black at `:root`, so the
+        // marketing pages keep the button they had.
+        signal: "rgb(var(--c-signal) / <alpha-value>)",
+        press: "rgb(var(--c-press) / <alpha-value>)",
       },
       // One family. `display`, `sans` and `mono` all resolve to it so existing
       // markup keeps working, and hierarchy is carried entirely by size, weight

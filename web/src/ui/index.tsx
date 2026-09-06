@@ -250,8 +250,11 @@ export function Button({
   const pointer = useCursorState("link");
 
   const variants = {
+    // `press` rather than a literal black: it resolves to black on the
+    // marketing pages, and to white in the console, where this button is
+    // near-white on a dark ground and hovering to black would invert it.
     primary:
-      "bg-ink text-paper hover:bg-black border border-ink",
+      "bg-ink text-paper hover:bg-press border border-ink",
     ghost:
       "border border-rule text-ink hover:border-ink bg-transparent",
     quiet:

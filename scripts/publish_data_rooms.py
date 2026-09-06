@@ -33,10 +33,62 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "packages" / "succession" / "src"))
 
 from succession.dataroom import build_preview  # noqa: E402
+from succession.export import build_package, memory_version_of  # noqa: E402
 from succession.memory.sibyl import open_tenant  # noqa: E402
+from succession.provenance import build_header, sign_header  # noqa: E402
 from succession.publish import seller_auth_header  # noqa: E402
+from succession.merkle import to_hex  # noqa: E402
 
 DEFAULT_SERVICE = "https://marketplace-production-e49e.up.railway.app"
+
+
+def _proofs(
+    source: Any,
+    entry: dict[str, Any],
+    key: str | None,
+    listing_id: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The Merkle manifest and signed provenance header, or nothing.
+
+    Both are recomputed from the seller's store, which means the tree built here
+    has to be the tree that was committed. If it is not, the store has moved
+    since the sale or the export used a different scope, and publishing the
+    manifest anyway would put a root on the buyer's screen that disagrees with
+    the chain. A buyer seeing "manifest disagrees" would be right to walk away
+    from a sale that is actually sound, so the honest failure is to publish
+    neither and say which listing was skipped.
+
+    Nothing here reveals a record body: the manifest is roots and counts, and
+    the header is the ownership chain plus the signature over it.
+    """
+    committed = entry["committed_root"].lower()
+    try:
+        package, _report = build_package(source)
+        tree = package.tree()
+    except Exception as exc:  # noqa: BLE001 - a listing without proofs still lists
+        print(f"  note  {listing_id}: could not rebuild the tree ({exc})")
+        return {}, {}
+
+    root = to_hex(tree.root).lower()
+    if root != committed:
+        print(
+            f"  note  {listing_id}: rebuilt root {root[:18]}… does not match the "
+            f"commitment {committed[:18]}…, publishing no proofs"
+        )
+        return {}, {}
+
+    manifest = tree.to_manifest()
+    header: dict[str, Any] = build_header(
+        agent_identity=entry["agent_id"],
+        integrity_root=to_hex(tree.root),
+        memory_version=memory_version_of(source),
+        categories=list(package.categories),
+        permissions={},
+        provenance_chain=None,
+    )
+    if key:
+        header = sign_header(header, key)
+    return manifest, header
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -71,6 +123,7 @@ def main(argv: list[str] | None = None) -> int:
             agent_identity=entry["agent_id"],
             committed_root=entry["committed_root"],
         )
+        integrity, provenance = _proofs(source, entry, key, listing_id)
         body = {
             "listing_id": listing_id,
             "agent_identity": entry["agent_id"],
@@ -86,6 +139,8 @@ def main(argv: list[str] | None = None) -> int:
                 preview.valuation, dict
             ) else str(preview.valuation or ""),
             "preview": preview.to_dict(),
+            "integrity": integrity,
+            "provenance": provenance,
         }
 
         if args.dry_run:

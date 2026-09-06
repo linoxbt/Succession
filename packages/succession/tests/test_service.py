@@ -394,3 +394,92 @@ def test_overview_publishes_the_reputation_weights_it_actually_uses(market):
     }
     assert sum(float(w) for w in published.values()) == pytest.approx(1.0)
     assert model["does_not_transfer"], "ACP standing must stay listed as non-transferable"
+
+
+def test_demo_listings_are_excluded_from_every_figure(market):
+    """The demo rows appear in the grid and in none of the numbers.
+
+    This is the wall the whole demo-data decision rests on. If it ever comes
+    down, the marketplace reports volume that nobody paid and a record count
+    nobody accumulated, which is precisely the failure this project exists to
+    argue against.
+    """
+    from service.demo import DEMO_PREFIX, demo_rows
+
+    _publish(market)
+    body = market["client"].get("/api/overview").json()
+
+    real = body["listings"]
+    demos = body["demo_listings"]
+
+    assert len(demos) == len(demo_rows()), "demo rows must reach the client"
+    assert demos, "the fixture is pointless if there are no demo rows"
+
+    # The separation is structural: they are not in `listings` at all.
+    assert all(not r["listing"]["listing_id"].startswith(DEMO_PREFIX) for r in real)
+    # And each row still says what it is, so a client that concatenates the two
+    # for display can still tell them apart afterwards.
+    assert all(r["demo"] is True for r in demos)
+    assert all(r["demo"] is False for r in real)
+
+    # And none of them is counted anywhere.
+    assert body["totals"]["listings"] == len(real)
+    assert body["totals"]["volume_open"] == sum(
+        int(r["listing"]["price"])
+        for r in real
+        if r["listing"]["state"] in ("open", "escrowed")
+    )
+    assert body["totals"]["volume_settled"] == sum(
+        int(r["listing"]["price"]) for r in real if r["listing"]["state"] == "confirmed"
+    )
+    assert body["totals"]["with_data_room"] == sum(1 for r in real if r["has_metadata"])
+
+    demo_sellable = sum(
+        sum(v["sellable"] for v in r["preview"]["category_transferability"].values())
+        for r in demos
+    )
+    assert demo_sellable > 0, "demo rows carry records, or they prove nothing here"
+    assert (
+        sum(c["records_sellable"] for c in body["capabilities"]) < demo_sellable
+    ), "capability counts must not include demo records"
+
+
+def test_a_demo_listing_cannot_be_bought(market):
+    """No key produces the demo seller, so no chain write can be authorised.
+
+    The UI disables the buttons, but a disabled button is a courtesy. The
+    guarantee is that the seller address is unspendable.
+    """
+    from service.demo import demo_rows
+
+    for row in demo_rows():
+        assert row["listing"]["seller"] == "0x" + "0" * 40
+        assert row["listing"]["buyer"] == ""
+        # Nothing is escrowed against a demo row that is not also declared open.
+        if row["listing"]["state"] == "open":
+            assert row["listing"]["escrow_balance"] == 0
+
+
+def test_a_demo_listing_resolves_by_url(market):
+    """Listings are addressable now, so a demo listing needs an address too."""
+    from service.demo import demo_rows
+
+    target = demo_rows()[0]["listing"]["listing_id"]
+    body = market["client"].get(f"/api/listing/{target}").json()
+    assert body["listing"]["listing_id"] == target
+    assert body["demo"] is True
+    assert market["client"].get("/api/listing/demo-does-not-exist").status_code == 404
+
+
+def test_listing_detail_matches_the_marketplace_row_shape(market):
+    """A detail page must not render less than the row that linked to it."""
+    _publish(market)
+    listing_id = market["stored"].listing_id
+
+    grid = market["client"].get("/api/marketplace").json()["listings"]
+    row = next(r for r in grid if r["listing"]["listing_id"] == listing_id)
+    detail = market["client"].get(f"/api/listing/{listing_id}").json()
+
+    assert set(detail) == set(row)
+    assert detail["agent_identity"] == row["agent_identity"]
+    assert detail["has_metadata"] == row["has_metadata"] is True

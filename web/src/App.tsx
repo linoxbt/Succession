@@ -13,15 +13,19 @@
  * file on their own disk that no web page can read. The honest interface hands
  * them the command instead of pretending otherwise, which is what `Sell` does.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider } from "wagmi";
 
 import { config as wagmiConfig } from "./chain/config";
 import { WalletBar, useChainStatus } from "./chain/Wallet";
-import { market, type MarketRow } from "./api";
+import { type MarketRow } from "./api";
+// Views reach the backend through this seam rather than through `api.ts`, so a
+// screen can be built against a shape the service does not serve yet.
+import { service } from "./services";
 import { Landing } from "./landing/Landing";
-import Shell, { type View } from "./dash/Shell";
+import { to, useNavigation } from "./router";
+import Shell from "./dash/Shell";
 import Dashboard from "./dash/Overview";
 import Marketplace from "./dash/Marketplace";
 import ListingView from "./dash/ListingView";
@@ -56,33 +60,36 @@ export default function App() {
 const queryClient = new QueryClient();
 
 function Surface() {
-  const [route, setRoute] = useState<"landing" | "console">(
-    window.location.pathname.startsWith("/app") ? "console" : "landing",
-  );
-  const [view, setView] = useState<View>("overview");
+  const { route, navigate } = useNavigation();
+  const view = route.kind === "app" ? route.view : "overview";
+  const listingId = route.kind === "app" ? route.listingId : null;
+
   const [rows, setRows] = useState<MarketRow[]>([]);
-  const [selected, setSelected] = useState<MarketRow | null>(null);
+  const [demo, setDemo] = useState<MarketRow[]>([]);
+  const [fetched, setFetched] = useState<MarketRow | null>(null);
   const [onChain, setOnChain] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const chainStatus = useChainStatus();
 
-  const navigate = useCallback((next: "landing" | "console") => {
-    window.history.pushState({}, "", next === "console" ? "/app" : "/");
-    setRoute(next);
-  }, []);
-
-  useEffect(() => {
-    const onPop = () =>
-      setRoute(window.location.pathname.startsWith("/app") ? "console" : "landing");
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
+  // The console's palette is scoped by an attribute on the root element rather
+  // than by a wrapper class, because the body background, the native
+  // `color-scheme`, the fixed cursor layer, the focus ring and ::selection all
+  // live outside the app's own tree. `main.tsx` sets the same attribute before
+  // the first paint so a direct load of /app never flashes the light ground.
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (route.kind === "app") root.dataset.surface = "app";
+    else delete root.dataset.surface;
+  }, [route.kind]);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
-      const body = await market.listings();
-      setRows(body.listings);
+      const body = await service.listings();
+      setRows(body.real);
+      setDemo(body.demo);
       setOnChain(body.chain);
       setError(null);
     } catch (e) {
@@ -90,8 +97,11 @@ function Surface() {
       // Filling the screen from a cached recording is the pattern this project
       // argues against, so there is deliberately no fallback here.
       setRows([]);
+      setDemo([]);
       setOnChain(false);
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -99,35 +109,48 @@ function Surface() {
     void load();
   }, [load]);
 
-  const open = useCallback((row: MarketRow) => {
-    setSelected(row);
-    setView("listing");
-  }, []);
+  // A listing is now addressed by URL, so the row is resolved from the address
+  // rather than carried in state by whoever clicked. That is what makes
+  // /app/listing/listing-672 work in a fresh tab.
+  const selected = useMemo(() => {
+    if (!listingId) return null;
+    const known = [...rows, ...demo].find(
+      (r) => r.listing.listing_id === listingId,
+    );
+    if (known) return known;
+    return fetched?.listing.listing_id === listingId ? fetched : null;
+  }, [listingId, rows, demo, fetched]);
 
-  // The dashboard hands back a listing id rather than a row, because it holds
-  // its own copy of the market from /api/overview. Resolve against what is
-  // already loaded, and fall back to fetching the one listing if the two views
-  // have drifted.
+  // Fetch the single listing only when the market has not already loaded it.
+  // The ref records which id was attempted so a listing the service cannot
+  // resolve is asked for once, not on every render of a failed lookup.
+  const attempted = useRef<string | null>(null);
+  useEffect(() => {
+    if (!listingId) return;
+    if ([...rows, ...demo].some((r) => r.listing.listing_id === listingId)) return;
+    if (attempted.current === listingId) return;
+    attempted.current = listingId;
+
+    let live = true;
+    void service
+      .listing(listingId)
+      .then((row) => live && setFetched(row))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [listingId, rows, demo]);
+
+  const open = useCallback(
+    (row: MarketRow) => navigate(to.listing(row.listing.listing_id)),
+    [navigate],
+  );
   const openById = useCallback(
-    (listingId: string) => {
-      const known = rows.find((r) => r.listing.listing_id === listingId);
-      if (known) {
-        setSelected(known);
-        setView("listing");
-        return;
-      }
-      void market
-        .listing(listingId)
-        .then((row) => {
-          setSelected(row);
-          setView("listing");
-        })
-        .catch(() => setView("market"));
-    },
-    [rows],
+    (id: string) => navigate(to.listing(id)),
+    [navigate],
   );
 
-  if (route === "landing") {
+  if (route.kind === "landing") {
     return (
       <>
         {/* The curtain owns the first paint and lifts itself. The landing is
@@ -135,11 +158,8 @@ function Surface() {
             already running as the curtain clears rather than starting after. */}
         <Preloader onDone={() => undefined} />
         <Landing
-          onEnter={() => navigate("console")}
-          onDocs={() => {
-            setView("docs");
-            navigate("console");
-          }}
+          onEnter={() => navigate(to.view("overview"))}
+          onDocs={() => navigate(to.view("docs"))}
         />
       </>
     );
@@ -148,8 +168,8 @@ function Surface() {
   return (
     <Shell
       view={view}
-      onView={setView}
-      onHome={() => navigate("landing")}
+      onView={(next) => navigate(to.view(next))}
+      onHome={() => navigate(to.landing())}
       wallet={<WalletBar status={chainStatus} />}
     >
       {error && view === "market" ? (
@@ -160,14 +180,19 @@ function Surface() {
         </Note>
       ) : null}
 
-      <Transition routeKey={view}>
+      {/* Keyed on the address, not just the view, so moving between two
+          listings animates as a navigation rather than swapping content
+          underneath a stationary page. */}
+      <Transition routeKey={`${view}:${listingId ?? ""}`}>
       {view === "overview" ? <Dashboard onOpenListing={openById} /> : null}
       {view === "market" ? (
         <Marketplace
           rows={rows}
+          demo={demo}
           onChain={onChain}
+          loading={loading}
           onOpen={open}
-          onSell={() => setView("sell")}
+          onSell={() => navigate(to.view("sell"))}
           onRefresh={load}
         />
       ) : null}
@@ -175,8 +200,8 @@ function Surface() {
         <ListingView
           row={selected}
           chainStatus={chainStatus}
-          onBack={() => setView("market")}
-          onClaim={() => setView("claim")}
+          onBack={() => navigate(to.view("market"))}
+          onClaim={() => navigate(to.view("claim"))}
           onRefresh={load}
         />
       ) : null}

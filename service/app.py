@@ -56,6 +56,7 @@ from succession.reputation import (
 from succession.settlement import ListingState, SettlementError
 from succession.smp import DATA_CATEGORIES, GENERATED_CATEGORIES
 
+from .demo import demo_rows, is_demo
 from .registry import MetadataRegistry
 
 WORKDIR = Path(os.environ.get("SUCCESSION_WORKDIR", "marketplace-state"))
@@ -213,6 +214,11 @@ class ListingPost(BaseModel):
     valuation: str = ""
     preview: dict[str, Any] = {}
     envelope: dict[str, Any] | None = None
+    # The Merkle manifest and the signed provenance header. Optional because a
+    # listing published before these existed is still a valid listing; the UI
+    # shows what is there and says so when they are absent.
+    integrity: dict[str, Any] = {}
+    provenance: dict[str, Any] = {}
 
 
 class KeyPost(BaseModel):
@@ -297,6 +303,8 @@ def post_listing(body: ListingPost, request: Request) -> dict[str, Any]:
         valuation=body.valuation,
         preview=body.preview,
         envelope=body.envelope,
+        integrity=body.integrity,
+        provenance=body.provenance,
         posted_at=_now(),
     )
     return {"listing_id": body.listing_id, "published": True}
@@ -322,8 +330,13 @@ def marketplace() -> dict[str, Any]:
     except HTTPException:
         # No chain configured. An empty marketplace is the honest answer;
         # inventing rows to fill the screen is the pattern this project argues
-        # against.
-        return {"listings": [], "count": 0, "chain": False}
+        # against. The demo listings ride in their own field, never in this one.
+        return {
+            "listings": [],
+            "count": 0,
+            "chain": False,
+            "demo_listings": demo_rows(),
+        }
 
     # Discovery is the union of both sources, because neither is guaranteed
     # complete. The log scan is bounded and can miss an old listing; the
@@ -351,35 +364,69 @@ def marketplace() -> dict[str, Any]:
         except SettlementError:
             continue
         meta = STORE.registry.get(listing_id) or {}
-        rows.append(
-            {
-                "listing": on_chain.to_dict(),
-                "preview": meta.get("preview", {}),
-                "name": meta.get("name", ""),
-                "vertical": meta.get("vertical", ""),
-                "valuation": meta.get("valuation", ""),
-                # The chain knows the agent even when nobody published metadata,
-                # so a bare listing still says whose memory it is.
-                "agent_identity": meta.get("agent_identity") or on_chain.agent_id,
-                "has_envelope": bool(meta.get("has_envelope")),
-                "has_metadata": bool(meta),
-            }
-        )
-    return {"listings": rows, "count": len(rows), "chain": True}
+        rows.append(_row_of(on_chain, meta))
+
+    # Demo listings travel in their own field rather than mixed into this one.
+    # Sharing the array would make every consumer, every route and every test
+    # responsible for remembering to filter, and the first one to forget would
+    # report volume nobody paid. `listings` and `count` mean real listings, as
+    # they always have.
+    return {
+        "listings": rows,
+        "count": len(rows),
+        "chain": True,
+        "demo_listings": demo_rows(),
+    }
+
+
+def _row_of(on_chain: Any, meta: dict[str, Any]) -> dict[str, Any]:
+    """One marketplace row: the chain for truth, the metadata table for the rest.
+
+    Assembled here rather than inline because three routes return this shape and
+    two of them used to disagree about it. `/api/listing/{id}` omitted
+    `has_envelope` and `has_metadata` and returned an empty `agent_identity`
+    where the marketplace fell back to the on-chain value, which made a detail
+    page render less than the row that linked to it.
+    """
+    return {
+        "listing": on_chain.to_dict(),
+        "preview": meta.get("preview", {}),
+        "name": meta.get("name", ""),
+        "vertical": meta.get("vertical", ""),
+        "valuation": meta.get("valuation", ""),
+        # The chain knows the agent even when nobody published metadata, so a
+        # bare listing still says whose memory it is.
+        "agent_identity": meta.get("agent_identity") or on_chain.agent_id,
+        "has_envelope": bool(meta.get("has_envelope")),
+        "has_metadata": bool(meta),
+        # The Merkle manifest and the signed provenance header, when the seller
+        # published them. Neither carries a record body: the manifest is roots
+        # and counts, the header is the ownership chain and its signature.
+        "integrity": meta.get("integrity") or {},
+        "provenance": meta.get("provenance") or {},
+        # Stated on every row, not only on the demo ones. A field that is
+        # present-or-absent invites `row.demo === undefined` to read as false in
+        # one place and as missing in another.
+        "demo": False,
+    }
 
 
 @app.get("/api/listing/{listing_id}")
 def listing(listing_id: str) -> dict[str, Any]:
+    """One listing, in exactly the shape the marketplace returns for it.
+
+    A demo listing resolves here too. Without that, opening one by URL would
+    404 while the same row rendered fine in the grid, and a demo listing has an
+    address like any other now that listings are addressable.
+    """
+    if is_demo(listing_id):
+        for row in demo_rows():
+            if row["listing"]["listing_id"] == listing_id:
+                return row
+        raise HTTPException(404, f"no demo listing {listing_id}")
+
     on_chain, _chain, _record = _seller_of(listing_id)
-    meta = STORE.registry.get(listing_id)
-    return {
-        "listing": on_chain.to_dict(),
-        "preview": (meta or {}).get("preview", {}),
-        "name": (meta or {}).get("name", ""),
-        "vertical": (meta or {}).get("vertical", ""),
-        "valuation": (meta or {}).get("valuation", ""),
-        "agent_identity": (meta or {}).get("agent_identity", ""),
-    }
+    return _row_of(on_chain, STORE.registry.get(listing_id) or {})
 
 
 @app.get("/api/listing/{listing_id}/envelope")
@@ -669,6 +716,7 @@ def overview() -> dict[str, Any]:
             ),
             "totals": {},
             "listings": [],
+            "demo_listings": demo_rows(),
             "deployment": None,
             # The capability model is a property of the software, not of the
             # chain, so it is answered even here. A dashboard that goes blank
@@ -679,6 +727,8 @@ def overview() -> dict[str, Any]:
         }
 
     body = marketplace()
+    # `listings` is real rows by construction, so every total below is computed
+    # from the actual market without needing to filter anything out.
     rows = body.get("listings", [])
 
     by_state: dict[str, int] = {}
@@ -721,6 +771,7 @@ def overview() -> dict[str, Any]:
             "with_data_room": described,
         },
         "listings": rows,
+        "demo_listings": demo_rows(),
         "deployment": record,
         "capabilities": _capability_model(rows),
         "reputation_model": _reputation_model(),

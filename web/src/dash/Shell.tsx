@@ -21,15 +21,11 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { Wordmark } from "../brand/Logo";
 import { useScrollProgress, useScrolled } from "../motion";
+import type { AppView } from "../router";
 
-export type View =
-  | "overview"
-  | "market"
-  | "listing"
-  | "sell"
-  | "claim"
-  | "walkthrough"
-  | "docs";
+// The set of destinations is the router's, not the shell's. Two declarations
+// would let the navigation offer a view that has no address.
+export type View = AppView;
 
 // "Walkthrough" reads as what it is. Naming it something like "Demo" beside
 // "Marketplace" would invite exactly the confusion its banner then has to undo.

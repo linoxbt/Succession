@@ -61,6 +61,8 @@ export interface Overview {
     with_data_room?: number;
   };
   listings: MarketRow[];
+  /** Demonstration rows, kept out of `listings` and out of `totals`. */
+  demo_listings?: MarketRow[];
   deployment: ChainStatus["deployment"];
   capabilities: Capability[];
   reputation_model: ReputationModel;
@@ -107,13 +109,63 @@ export interface Reputation {
   grade: string;
   links: number;
   basis: string;
+  /** When the score was derived. It is recomputed per read, never stored, so
+   *  this is the age of the answer rather than the age of a record. */
+  computed_at?: string;
   factors: {
     name: string;
     value: string;
     weight: string;
     contribution: string;
+    /** The raw and intermediate numbers the factor was computed from, so the
+     *  score can be re-derived by hand rather than taken on faith. */
+    inputs?: Record<string, unknown>;
     explanation: string;
   }[];
+}
+
+/** One SMP directory as the seller's own store reports it.
+ *
+ *  The two withheld counts are not interchangeable. `withheld_by_seller` is a
+ *  choice and could be reversed by listing again; `withheld_without_consent` is
+ *  a record a counterparty never agreed to move, and no price changes it. */
+export interface CategoryInventory {
+  category: string;
+  sellable: number;
+  withheld_by_seller: number;
+  withheld_without_consent: number;
+  total: number;
+  depth: "empty" | "thin" | "moderate" | "deep";
+  offerable: boolean;
+  newest: string;
+  oldest: string;
+}
+
+/** The two-level Merkle manifest: one subroot per directory, one global root. */
+export interface IntegrityManifest {
+  algorithm?: string;
+  construction?: string;
+  root?: string;
+  leaf_count?: number;
+  categories?: { category: string; subroot: string; leaf_count: number }[];
+}
+
+/** The signed provenance header, and the chain of owners inside it. */
+export interface ProvenanceHeader {
+  smp_version?: string;
+  agent_identity?: string;
+  created_at?: string;
+  memory_version?: number;
+  categories?: string[];
+  provenance_chain?: {
+    owner: string;
+    acquired_at: string;
+    verified_hash: string;
+    memory_version?: number;
+  }[];
+  integrity_root?: string;
+  permissions_hash?: string;
+  signature?: string | null;
 }
 
 export interface Preview {
@@ -129,6 +181,9 @@ export interface Preview {
    *  A directory with `sellable: 0` cannot form part of any transfer, which is
    *  what the scope selector greys out. */
   category_transferability?: Record<string, { sellable: number; withheld: number }>;
+  /** Per directory, with the two withheld reasons kept apart. Served by the
+   *  data room since it existed; it simply had no type here before. */
+  inventory?: Record<string, CategoryInventory>;
   disclosure: string;
   committed_root?: string;
   acp: AcpHistory | null;
@@ -199,6 +254,16 @@ export interface MarketRow {
   has_envelope?: boolean;
   /** False when the seller published nothing beyond the on-chain listing. */
   has_metadata?: boolean;
+  /** Published alongside the data room. Empty when the seller listed before
+   *  these were part of the format, which the UI reports rather than hides. */
+  integrity?: IntegrityManifest;
+  provenance?: ProvenanceHeader;
+  /** True only for the demonstration listings. The service keeps them in their
+   *  own field so no total can count them; this flag survives the point where
+   *  a screen concatenates the two lists for display. */
+  demo?: boolean;
+  /** What a demo row says about itself on screen. */
+  notice?: string;
 }
 
 export class ApiError extends Error {
@@ -248,9 +313,12 @@ export type { ChainStatus };
 
 export const market = {
   listings: () =>
-    request<{ listings: MarketRow[]; count: number; chain: boolean }>(
-      "/api/marketplace",
-    ),
+    request<{
+      listings: MarketRow[];
+      count: number;
+      chain: boolean;
+      demo_listings?: MarketRow[];
+    }>("/api/marketplace"),
   listing: (id: string) => request<MarketRow>(`/api/listing/${id}`),
   /** Ciphertext. Public on purpose, inert without the content key. */
   envelope: (id: string) => request<unknown>(`/api/listing/${id}/envelope`),

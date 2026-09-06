@@ -16,6 +16,82 @@
  */
 
 @layer base {
+  /* The marketing palette. These are the values that used to live as literals
+     in tailwind.config.js, unchanged to the channel, so every page that does
+     not opt into the console renders exactly as it did before. */
+  :root {
+    --c-paper: 239 233 222;
+    --c-shade: 227 218 202;
+    --c-carbon: 28 22 17;
+    --c-carbon-rule: 53 43 34;
+
+    --c-ink: 32 26 20;
+    --c-muted: 90 80 68;
+    --c-faint: 140 129 114;
+    --c-rule: 199 188 168;
+    --c-hairline: 217 208 189;
+
+    --c-chalk: 241 235 224;
+    --c-chalk-muted: 167 156 138;
+    --c-chalk-faint: 111 100 83;
+
+    --c-escrow: 46 74 107;
+    --c-closed: 60 110 74;
+    --c-void: 138 64 56;
+
+    /* Out here `signal` is the escrow blue, so a stray use introduces no new
+       colour, and `press` is the black the primary button always hovered to. */
+    --c-signal: 46 74 107;
+    --c-press: 0 0 0;
+  }
+
+  /* The console. Set on the root element rather than on the app's own wrapper,
+     because five things render outside it and would otherwise stay light: the
+     body background, the native `color-scheme` that drives scrollbars and form
+     controls, the fixed cursor layer, the global focus ring and ::selection.
+
+     This subtree takes one deliberate exception to the system's first rule,
+     that colour encodes transaction state and nothing else. The console has an
+     accent, `signal`. It is spent on interactive affordance and the mark, never
+     on decoration, and the three state colours keep their meanings untouched:
+     they are re-tinted to stay separable from a dark ground, not repurposed. */
+  :root[data-surface="app"] {
+    color-scheme: dark;
+
+    /* Ground, and the one step up from it that a panel sits on. */
+    --c-paper: 11 13 15;
+    --c-shade: 20 24 27;
+    /* Inverted bands go deeper here rather than lighter, so the footer reads
+       as bedrock under the page instead of as another panel on it. */
+    --c-carbon: 5 6 7;
+    --c-carbon-rule: 30 34 38;
+
+    --c-ink: 232 236 239;
+    --c-muted: 155 164 172;
+    --c-faint: 107 116 124;
+    --c-rule: 42 48 54;
+    --c-hairline: 28 33 38;
+
+    --c-chalk: 232 236 239;
+    --c-chalk-muted: 139 148 156;
+    --c-chalk-faint: 90 98 106;
+
+    /* Lifted off the dark ground. The light-mode values fail contrast here. */
+    --c-escrow: 96 154 214;
+    --c-closed: 74 190 124;
+    --c-void: 226 106 94;
+
+    --c-signal: 45 212 191;
+    /* The primary button inverts on this ground: near-white on dark, pressing
+       to pure white rather than to black. */
+    --c-press: 255 255 255;
+
+    /* Logo.tsx already reads this variable for the successor half of the mark,
+       with the escrow blue as its fallback, so the seam turns accent in the
+       console and nowhere else without touching that file. */
+    --mark-accent: rgb(45 212 191);
+  }
+
   html {
     color-scheme: light;
     -webkit-font-smoothing: antialiased;
