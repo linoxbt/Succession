@@ -206,7 +206,13 @@ function Surface() {
         />
       ) : null}
       {view === "sell" ? <Sell chainStatus={chainStatus} /> : null}
-      {view === "claim" ? <Claim listingId={selected?.listing.listing_id ?? ""} /> : null}
+      {view === "claim" ? (
+        <Claim
+          listingId={selected?.listing.listing_id ?? ""}
+          rows={rows}
+          onOpenListing={openById}
+        />
+      ) : null}
       {view === "walkthrough" ? <Walkthrough /> : null}
       {view === "docs" ? <Docs /> : null}
       </Transition>

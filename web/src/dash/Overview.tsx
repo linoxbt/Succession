@@ -12,7 +12,8 @@
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 
-import { formatAmount, market, type AgentsHeld, type Overview } from "../api";
+import { formatAmount, type AgentsHeld, type Overview } from "../api";
+import { service } from "../services";
 import { explorerAddress } from "../chain/config";
 import { Badge, Empty, Figure, Hash, Note, PageHead, Section, Table, Td } from "../ui";
 import { Reveal } from "../motion";
@@ -36,7 +37,7 @@ export default function Dashboard({
 
   useEffect(() => {
     let live = true;
-    market
+    service
       .overview()
       .then((body) => live && setData(body))
       .catch((e) => live && setError(e instanceof Error ? e.message : String(e)));
@@ -51,7 +52,7 @@ export default function Dashboard({
       return;
     }
     let live = true;
-    market
+    service
       .agents(address)
       .then((body) => live && setHeld(body))
       .catch(() => live && setHeld(null));
@@ -187,7 +188,7 @@ export default function Dashboard({
         )}
       </Section>
 
-      {/* --- the market -------------------------------------------------- */}
+      {/* --- the market --------------------------------------------------- */}
       <Section index="04" title="The market" className="mt-chapter">
         {!data ? (
           <Empty>Reading the contract.</Empty>
@@ -233,6 +234,14 @@ export default function Dashboard({
             ))}
           </Table>
         )}
+        {data?.demo_listings?.length ? (
+          <Note>
+            {data.demo_listings.length} demonstration listing
+            {data.demo_listings.length === 1 ? " is" : "s are"} shown in the
+            marketplace and excluded from every figure above. They are not on
+            chain and cannot be bought.
+          </Note>
+        ) : null}
       </Section>
 
       {/* --- the portable score ------------------------------------------- */}
