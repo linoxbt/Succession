@@ -62,6 +62,27 @@ export interface Overview {
   };
   listings: MarketRow[];
   deployment: ChainStatus["deployment"];
+  capabilities: Capability[];
+  reputation_model: ReputationModel;
+}
+
+/** One SMP directory, and how much of it the market currently offers. */
+export interface Capability {
+  category: string;
+  transferable: boolean;
+  status: "live" | "coming-soon";
+  note: string;
+  records_sellable: number;
+  records_withheld: number;
+  listings: number;
+}
+
+/** The weights the portable score is built from, published rather than hidden. */
+export interface ReputationModel {
+  basis: string;
+  factors: { name: string; weight: string; note: string }[];
+  grades: string[];
+  does_not_transfer: { item: string; why: string }[];
 }
 
 export interface AgentHolding {

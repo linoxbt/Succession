@@ -43,7 +43,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 
 from succession.publish import recover_seller_auth
+from succession.reputation import (
+    LINEAGE_TARGET,
+    MIN_RESOLVED,
+    SPAN_TARGET_DAYS,
+    W_CONTINUITY,
+    W_EARNINGS,
+    W_INTEGRITY,
+    W_LINEAGE,
+    W_SPAN,
+)
 from succession.settlement import ListingState, SettlementError
+from succession.smp import DATA_CATEGORIES, GENERATED_CATEGORIES
 
 from .registry import MetadataRegistry
 
@@ -509,6 +520,133 @@ def chain_status() -> dict[str, Any]:
     }
 
 
+#: What each SMP directory carries, in one line. The names are not repeated
+#: here: they come from ``smp.py`` so this table cannot describe a directory
+#: the packager does not build, or miss one it does.
+CATEGORY_NOTES: dict[str, str] = {
+    "identity": "Who the agent is, and the ERC-8004 token that says so.",
+    "relationships": "Counterparties it knows, and the edges between them.",
+    "preferences": "Standing choices it has been taught to make.",
+    "history": "What it did, including settled ACP jobs.",
+    "commitments": "Obligations still outstanding at the moment of sale.",
+    "learned-behaviors": "Heuristics it adapted rather than arrived with.",
+    "provenance": "The chain of custody, written at build time.",
+    "permissions": "Consent, per record, for what may change hands.",
+    "integrity-proof": "The Merkle tree a buyer re-derives to check the sale.",
+}
+
+#: The three generated directories describe the package rather than the memory,
+#: so they are not sold and not selectable. Listing them anyway is the point:
+#: a buyer should be able to see what exists but is not on offer.
+COMING_SOON = frozenset(GENERATED_CATEGORIES)
+
+
+def _capability_model(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The nine directories, each with what the market currently offers of it.
+
+    Read from ``category_transferability`` rather than ``counts``: that field is
+    keyed by SMP directory and already split by consent, so the table can say
+    what is actually for sale instead of how many records happen to exist.
+    ``counts`` is keyed by source tier and would have silently summed to nothing
+    here, which is the kind of zero that looks like an empty market rather than
+    a wrong lookup.
+
+    The figures come from the previews sellers published, so a directory reads
+    zero when nothing describes it rather than when nothing exists. That
+    distinction is what ``with_data_room`` reports beside it.
+    """
+    sellable: dict[str, int] = {}
+    withheld: dict[str, int] = {}
+    listed_in: dict[str, int] = {}
+
+    for row in rows:
+        breakdown = (row.get("preview") or {}).get("category_transferability") or {}
+        for name, split in breakdown.items():
+            if not isinstance(split, dict):
+                continue
+            try:
+                ok = int(split.get("sellable", 0))
+                no = int(split.get("withheld", 0))
+            except (TypeError, ValueError):
+                continue
+            if ok <= 0 and no <= 0:
+                continue
+            sellable[name] = sellable.get(name, 0) + ok
+            withheld[name] = withheld.get(name, 0) + no
+            if ok > 0:
+                listed_in[name] = listed_in.get(name, 0) + 1
+
+    model = []
+    for name in (*DATA_CATEGORIES, *GENERATED_CATEGORIES):
+        model.append(
+            {
+                "category": name,
+                "transferable": name not in COMING_SOON,
+                "status": "coming-soon" if name in COMING_SOON else "live",
+                "note": CATEGORY_NOTES.get(name, ""),
+                "records_sellable": sellable.get(name, 0),
+                "records_withheld": withheld.get(name, 0),
+                "listings": listed_in.get(name, 0),
+            }
+        )
+    return model
+
+
+def _reputation_model() -> dict[str, Any]:
+    """The weights the score is built from, read from the scorer itself.
+
+    Published because a score whose weighting is private is an assertion. These
+    are the same constants ``reputation.py`` computes with, so the screen cannot
+    document a formula the code does not use.
+    """
+    return {
+        "basis": (
+            "Recomputed from the package on every read. Never stored, never "
+            "supplied by the seller, so a buyer derives the same figure from "
+            "the memory they received."
+        ),
+        "factors": [
+            {
+                "name": "integrity",
+                "weight": str(W_INTEGRITY),
+                "note": "Transfers whose delivered hash matched the commitment.",
+            },
+            {
+                "name": "lineage",
+                "weight": str(W_LINEAGE),
+                "note": f"Verified handovers, saturating at {LINEAGE_TARGET}.",
+            },
+            {
+                "name": "continuity",
+                "weight": str(W_CONTINUITY),
+                "note": "Whether owners grew the memory or sat on it.",
+            },
+            {
+                "name": "earnings",
+                "weight": str(W_EARNINGS),
+                "note": f"Settled ACP outcomes, abstaining below {MIN_RESOLVED}.",
+            },
+            {
+                "name": "span",
+                "weight": str(W_SPAN),
+                "note": f"Custody age, saturating at {SPAN_TARGET_DAYS} days.",
+            },
+        ],
+        "grades": ["unproven", "early", "developing", "proven", "established"],
+        "does_not_transfer": [
+            {
+                "item": "Virtuals ACP standing",
+                "why": (
+                    "The registry exposes reads, job initiation and evaluation. "
+                    "It has no transfer call, so standing is re-earned by the "
+                    "buyer. A signed handover attestation records the lineage "
+                    "instead of pretending the registration moved."
+                ),
+            },
+        ],
+    }
+
+
 @app.get("/api/overview")
 def overview() -> dict[str, Any]:
     """Everything the service knows, in one read.
@@ -532,6 +670,12 @@ def overview() -> dict[str, Any]:
             "totals": {},
             "listings": [],
             "deployment": None,
+            # The capability model is a property of the software, not of the
+            # chain, so it is answered even here. A dashboard that goes blank
+            # when the contract is unset would hide what the app does behind a
+            # configuration problem.
+            "capabilities": _capability_model([]),
+            "reputation_model": _reputation_model(),
         }
 
     body = marketplace()
@@ -578,6 +722,8 @@ def overview() -> dict[str, Any]:
         },
         "listings": rows,
         "deployment": record,
+        "capabilities": _capability_model(rows),
+        "reputation_model": _reputation_model(),
     }
 
 

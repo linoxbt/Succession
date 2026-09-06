@@ -323,3 +323,74 @@ def test_chain_route_reports_the_deployment(market):
 
 def test_health(market):
     assert market["client"].get("/api/health").json()["status"] == "ok"
+
+
+def test_overview_totals_are_derived_from_the_listings(market):
+    """The dashboard's figures come from the rows, not from a stored tally.
+
+    A second source of truth is the thing this project argues against, so the
+    check is that the aggregate equals the listings it summarises rather than
+    that it equals some number written down when the listing was made.
+    """
+    _publish(market)
+    body = market["client"].get("/api/overview").json()
+
+    assert body["chain"] is True
+    rows = body["listings"]
+    assert body["totals"]["listings"] == len(rows)
+    assert body["totals"]["volume_open"] == sum(
+        int(r["listing"]["price"])
+        for r in rows
+        if r["listing"]["state"] in ("open", "escrowed")
+    )
+    assert body["totals"]["with_data_room"] == sum(
+        1 for r in rows if r["has_metadata"]
+    )
+
+
+def test_overview_publishes_the_capability_model(market):
+    """All nine directories appear, and the three generated ones are not for sale.
+
+    Sourced from ``smp.py`` rather than restated, so this fails if the packager
+    ever builds a directory the dashboard would not mention.
+    """
+    from succession.smp import DATA_CATEGORIES, GENERATED_CATEGORIES
+
+    _publish(market)
+    caps = market["client"].get("/api/overview").json()["capabilities"]
+
+    assert [c["category"] for c in caps] == [
+        *DATA_CATEGORIES,
+        *GENERATED_CATEGORIES,
+    ]
+    live = {c["category"] for c in caps if c["transferable"]}
+    assert live == set(DATA_CATEGORIES)
+    assert all(c["status"] == "coming-soon" for c in caps if not c["transferable"])
+
+    # The published listing described itself, so at least one directory has to
+    # report records. A capability table that reads zero everywhere would pass a
+    # weaker assertion while showing an empty screen.
+    assert sum(c["records_sellable"] for c in caps) > 0
+    assert all(c["note"] for c in caps)
+
+
+def test_overview_publishes_the_reputation_weights_it_actually_uses(market):
+    """The weights on screen are the constants the scorer computes with.
+
+    A score whose weighting is documented separately can drift from the score,
+    which is the same failure as a stored tally.
+    """
+    from succession import reputation as rep
+
+    model = market["client"].get("/api/overview").json()["reputation_model"]
+    published = {f["name"]: f["weight"] for f in model["factors"]}
+
+    assert published == {
+        "integrity": str(rep.W_INTEGRITY),
+        "lineage": str(rep.W_LINEAGE),
+        "continuity": str(rep.W_CONTINUITY),
+        "earnings": str(rep.W_EARNINGS),
+        "span": str(rep.W_SPAN),
+    }
+    assert sum(float(w) for w in published.values()) == pytest.approx(1.0)
+    assert model["does_not_transfer"], "ACP standing must stay listed as non-transferable"

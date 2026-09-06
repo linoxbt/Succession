@@ -115,8 +115,46 @@ export default function Dashboard({
         ) : null}
       </Section>
 
+      {/* --- what actually transfers ------------------------------------- */}
+      <Section index="02" title="What transfers" className="mt-chapter">
+        <Table head={["Directory", "Status", "Sellable", "Withheld", "In listings"]}>
+          {(data?.capabilities ?? []).map((c) => (
+            <tr key={c.category} className="border-b border-hairline">
+              <Td>
+                <span className="evidence-type text-ink">{c.category}</span>
+                <span className="mt-1 block max-w-prose text-micro text-muted">
+                  {c.note}
+                </span>
+              </Td>
+              <Td>
+                <Badge tone={c.transferable ? "closed" : "neutral"}>
+                  {c.transferable ? "live" : "coming soon"}
+                </Badge>
+              </Td>
+              <Td className="tnum">
+                {c.transferable ? c.records_sellable : ""}
+              </Td>
+              <Td className="tnum">
+                {c.transferable ? c.records_withheld : ""}
+              </Td>
+              <Td className="tnum">{c.transferable ? c.listings : ""}</Td>
+            </tr>
+          ))}
+        </Table>
+        <Note>
+          Six directories carry memory and are the selectable units of a sale,
+          each with its own Merkle subroot, so a seller can part with a
+          percentage of one without touching another. The last three describe
+          the package rather than the memory, so they are built rather than
+          sold. Withheld counts records a counterparty never consented to move, so
+          the seller cannot offer them at any price. Both figures come from
+          published data rooms, which is why they read zero while sellers list
+          on chain and describe nothing.
+        </Note>
+      </Section>
+
       {/* --- your agents ------------------------------------------------ */}
-      <Section index="02" title="Your agents" className="mt-chapter">
+      <Section index="03" title="Your agents" className="mt-chapter">
         {!isConnected ? (
           <Note>Connect a wallet to see the ERC-8004 agents it holds.</Note>
         ) : !held ? (
@@ -150,7 +188,7 @@ export default function Dashboard({
       </Section>
 
       {/* --- the market -------------------------------------------------- */}
-      <Section index="03" title="The market" className="mt-chapter">
+      <Section index="04" title="The market" className="mt-chapter">
         {!data ? (
           <Empty>Reading the contract.</Empty>
         ) : data.listings.length === 0 ? (
@@ -197,8 +235,40 @@ export default function Dashboard({
         )}
       </Section>
 
+      {/* --- the portable score ------------------------------------------- */}
+      <Section index="05" title="Reputation" className="mt-chapter">
+        <div className="border-t border-hairline">
+          {(data?.reputation_model.factors ?? []).map((f) => (
+            <div
+              key={f.name}
+              className="flex flex-col gap-1 border-b border-hairline py-4 sm:flex-row sm:items-baseline sm:gap-10"
+            >
+              <span className="w-full shrink-0 font-mono text-label uppercase text-faint sm:w-40">
+                {f.name}
+              </span>
+              <span className="tnum w-16 shrink-0 text-ink">{f.weight}</span>
+              <span className="max-w-prose text-micro text-muted">{f.note}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-8 flex flex-wrap gap-3">
+          {(data?.reputation_model.grades ?? []).map((g) => (
+            <Badge key={g}>{g}</Badge>
+          ))}
+        </div>
+
+        {data ? <Note>{data.reputation_model.basis}</Note> : null}
+
+        {(data?.reputation_model.does_not_transfer ?? []).map((d) => (
+          <Note key={d.item}>
+            Does not transfer, {d.item}. {d.why}
+          </Note>
+        ))}
+      </Section>
+
       {/* --- what it settles on ------------------------------------------ */}
-      <Section index="04" title="Settlement" className="mt-chapter">
+      <Section index="06" title="Settlement" className="mt-chapter">
         {!deployment ? (
           <Note>No contract deployed.</Note>
         ) : (
