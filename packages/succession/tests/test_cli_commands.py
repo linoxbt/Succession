@@ -156,3 +156,83 @@ def test_listings_is_honest_about_an_empty_vault(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr(publish_module, "VAULT", tmp_path / "empty-vault")
     assert cli.main(["listings"]) == 0
     assert "no listings" in capsys.readouterr().out.lower()
+
+
+# --- status --------------------------------------------------------------
+
+
+def test_status_names_all_four_systems(capsys, monkeypatch):
+    """The command exists to stop someone inferring connectivity from a failure."""
+    monkeypatch.delenv("WHITELISTED_WALLET_PRIVATE_KEY", raising=False)
+    assert cli.main(["status", "--marketplace", "http://127.0.0.1:1"]) == 0
+    out = capsys.readouterr().out
+    for system in ("Sibyl", "Base", "Marketplace", "Virtuals ACP"):
+        assert system in out
+
+
+def test_status_says_plainly_that_sibyl_has_no_sync(capsys, tmp_path, monkeypatch):
+    """The claim people most often assume the other way round."""
+    monkeypatch.setenv("SIBYL_CREDENTIALS", str(tmp_path / "none.json"))
+    cli.main(["status", "--marketplace", "http://127.0.0.1:1"])
+    out = capsys.readouterr().out
+    assert "no sync endpoint" in out
+    assert "5 MB" in out, "the free-tier consequence must be stated"
+
+
+def test_status_lists_the_missing_acp_variables_by_name(capsys, monkeypatch):
+    """'Not connected' is useless without saying what would connect it."""
+    for name in ("WHITELISTED_WALLET_PRIVATE_KEY", "AGENT_WALLET_ADDRESS", "ACP_ENTITY_ID"):
+        monkeypatch.delenv(name, raising=False)
+    cli.main(["status", "--marketplace", "http://127.0.0.1:1"])
+    out = capsys.readouterr().out
+    assert "WHITELISTED_WALLET_PRIVATE_KEY" in out
+    assert "ACP_ENTITY_ID" in out
+
+
+def test_status_does_not_print_a_session_token(capsys, tmp_path, monkeypatch):
+    import json as _json
+
+    path = tmp_path / "credentials.json"
+    path.write_text(_json.dumps({
+        "tier": "pro", "account_id": "acct-1", "session_token": "do-not-print-me",
+    }))
+    monkeypatch.setenv("SIBYL_CREDENTIALS", str(path))
+    cli.main(["status", "--marketplace", "http://127.0.0.1:1"])
+    assert "do-not-print-me" not in capsys.readouterr().out
+
+
+# --- the ACP entry point, which had no coverage at all -------------------
+
+
+def test_acp_status_diagnoses_missing_credentials(capsys, monkeypatch):
+    """`succession-acp` was entirely untested; this is its first test.
+
+    Without Virtuals credentials the command must say which ones, rather than
+    raising something a reader has to interpret.
+    """
+    from succession import acp_cli
+
+    for name in ("WHITELISTED_WALLET_PRIVATE_KEY", "AGENT_WALLET_ADDRESS", "ACP_ENTITY_ID"):
+        monkeypatch.delenv(name, raising=False)
+
+    code = acp_cli.main(["status"])
+    combined = capsys.readouterr()
+    text = combined.out + combined.err
+    assert code != 0 or "missing" in text.lower()
+
+
+def test_acp_show_reports_an_agent_with_no_job_history(capsys, seller, tmp_path):
+    """The honest empty case: a listing with no ACP history says so.
+
+    This is why the live listings carry `acp: null` — those agents have never
+    done a Virtuals job and are not registered, so there is nothing to report
+    and nothing is invented.
+    """
+    from succession import acp_cli
+
+    code = acp_cli.main([
+        "show", "--db", str(tmp_path / "seller.db"), "--tenant", "tenant-seller",
+    ])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "registered" in out.lower() or "jobs" in out.lower()

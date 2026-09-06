@@ -363,5 +363,16 @@ def open_tenant(
     two-machine rehearsal the spec insists on uses separate files on separate
     hosts; a single file with two tenants is the fast local loop.
     """
-    client = MemoryClient.local(db_path, tenant_id=tenant_id, tier=tier)
+    # Credentials the Sibyl CLI already wrote, if there are any. Without them
+    # the SDK enforces a strict local 5 MB cap and gates off the paid features,
+    # so a customer on a plan was being silently treated as free tier. An
+    # explicit `tier=` argument still wins, because callers that pass one mean it.
+    from .credentials import load_credentials
+
+    found = load_credentials()
+    options = found.kwargs()
+    if tier != "free":
+        options["tier"] = tier
+
+    client = MemoryClient.local(db_path, tenant_id=tenant_id, **options)
     return SibylMemory(client)

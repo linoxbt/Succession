@@ -1,0 +1,66 @@
+# Publishing to PyPI without a token anywhere.
+#
+# PyPI's Trusted Publishing mints a short-lived credential from GitHub's OIDC
+# identity for this exact repository and workflow. There is no secret to paste,
+# leak, or rotate, which matters for a project whose argument is that you should
+# not have to take anyone's word for anything.
+#
+# One-time setup, at https://pypi.org/manage/account/publishing/ :
+#   PyPI project name  succession-cli
+#   Owner              linoxbt
+#   Repository         Succession
+#   Workflow           release.yml
+#   Environment        pypi
+#
+# Add it as a *pending* publisher before the first release; PyPI creates the
+# project on first upload.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      # The whole point: this is what mints the credential.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # A wheel without the contract ABI installs cleanly and then fails on
+      # every chain command, so the ABI is compiled and checked before build.
+      - name: Compile the contracts
+        working-directory: contracts
+        run: npm install && npm run build
+
+      - name: The shipped ABI matches the compiled one
+        run: |
+          cp contracts/out/artifacts.json packages/succession/src/succession/data/artifacts.json
+          cp deployments/base-sepolia.json packages/succession/src/succession/data/base-sepolia.json
+          git diff --exit-code -- packages/succession/src/succession/data \
+            || (echo "::error::the shipped ABI is stale; commit the regenerated files" && exit 1)
+
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --outdir dist packages/succession
+
+      # Prove the artifact works before it becomes permanent. A PyPI version
+      # cannot be replaced or re-uploaded, so this is the last chance.
+      - name: The wheel works when installed like a stranger would
+        run: |
+          python -m venv /tmp/stranger
+          /tmp/stranger/bin/pip install "$(ls dist/*.whl)[chain]"
+          cd /tmp && /tmp/stranger/bin/succession audit
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

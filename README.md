@@ -13,7 +13,7 @@ and verified by the buyer re-hashing their own store.
 [Overview](#overview) · [How it works](#how-a-sale-works) · [Quick start](#quick-start) ·
 [Architecture](#architecture) · [Security](#security-model) · [Roadmap](docs/ROADMAP.md)
 
-`329 tests` · `Python 3.11+` · `Solidity 0.8.28` · `React 18`
+`341 tests` · `Python 3.11+` · `Solidity 0.8.28` · `React 18`
 
 </div>
 
@@ -86,7 +86,7 @@ git clone https://github.com/linoxbt/Succession && cd Succession
 
 python -m venv .venv
 .venv/bin/pip install -e "packages/succession[test,service,acp,chain]"
-.venv/bin/python -m pytest packages/succession/tests        # 329 tests
+.venv/bin/python -m pytest packages/succession/tests        # 341 tests
 
 ( cd contracts && npm install && npm run build )            # solc → artifacts
 .venv/bin/python -m succession.demo                         # the whole workflow
@@ -160,6 +160,24 @@ succession publish --listing listing-…                 # re-publish after an o
 succession-acp status
 succession-acp sync --db seller.db --tenant t-seller
 ```
+
+### What this installation is connected to
+
+```bash
+succession status
+```
+
+Four systems connect in different ways, and conflating them is easy. **Sibyl**
+is a local SQLite file and nothing else: the SDK's entire network surface is a
+capacity check and a heartbeat carrying an integer operation count, with no sync
+endpoint in either direction. That is what makes "plaintext never leaves the
+seller before escrow" a fact rather than a promise. If `sibyl init` has written
+`~/.sibyl-memory/credentials.json`, Succession reads it, so a paid tier stays
+paid; without it the SDK enforces a strict 5 MB cap and the paid features gate
+off. **Base** is JSON-RPC to a deployed contract. **The marketplace** is HTTP.
+**Virtuals ACP** needs a whitelisted wallet, and until it has one a listing
+carries no ACP history and the valuation scores from the journal, which the data
+room states rather than hides.
 
 ### Checking the claims
 
@@ -425,7 +443,7 @@ bytes; it was the right to *be* that agent.
 ## Testing
 
 ```bash
-.venv/bin/python -m pytest packages/succession/tests   # 329
+.venv/bin/python -m pytest packages/succession/tests   # 341
 ( cd contracts && forge test )                         # 28, the mirrored Foundry suite
 ```
 

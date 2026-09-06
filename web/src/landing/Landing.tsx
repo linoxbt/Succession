@@ -469,7 +469,7 @@ function Commitment() {
 
 /** Figures at display scale, counted up once as they arrive. */
 function Proof() {
-  const tests = useCountUp(329);
+  const tests = useCountUp(341);
   const contracts = useCountUp(28);
 
   return (

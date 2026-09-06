@@ -586,6 +586,81 @@ def cmd_prove(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_status(args: argparse.Namespace) -> int:
+    """What this installation is actually connected to, and what it is not.
+
+    Four systems, and they connect in different ways that are easy to conflate:
+    Sibyl through a local SQLite file, Base over JSON-RPC, the marketplace over
+    HTTP, and Virtuals ACP over its own contracts. This prints the state of each
+    rather than leaving someone to infer it from a failure three commands later.
+    """
+    from .memory.credentials import load_credentials
+
+    print("Sibyl")
+    creds = load_credentials()
+    print(f"  {creds.describe()}")
+    print("  memory is a local SQLite file; the SDK has no sync endpoint, so")
+    print("  nothing about a store crosses the network in either direction.")
+    if getattr(args, "db", None):
+        store = Path(args.db).expanduser()
+        size = store.stat().st_size if store.is_file() else 0
+        print(f"  store {store} ({size:,} bytes)" if size else f"  store {store} (absent)")
+
+    print()
+    print("Base")
+    record_path = _deployment_path(args)
+    if record_path is None:
+        print("  no deployment record found; chain commands will stop rather than pretend")
+    else:
+        record = json.loads(record_path.read_text("utf-8"))
+        print(f"  contract  {record.get('listing_contract')}")
+        print(f"  registry  {record.get('identity_registry')} "
+              f"({'real' if not record.get('identity_registry_is_mock') else 'mock'})")
+        print(f"  chain id  {record.get('chain_id')}")
+    rpc = os.environ.get("BASE_SEPOLIA_RPC_URL")
+    print(f"  rpc       {rpc if rpc else 'BASE_SEPOLIA_RPC_URL is not set'}")
+
+    print()
+    print("Marketplace")
+    print(f"  {args.marketplace}")
+    from .marketplace import MarketplaceError, get
+
+    try:
+        chain = get(args.marketplace, "/api/chain")
+        print(f"  reachable, mode {chain.get('mode')}")
+    except MarketplaceError as exc:
+        print(f"  unreachable: {exc}")
+
+    print()
+    print("Virtuals ACP")
+    from .acp import LiveACP
+
+    missing = [name for name in LiveACP.ENV if not os.environ.get(name)]
+    if missing:
+        print(f"  not connected; missing {', '.join(missing)}")
+        print("  Registration needs a whitelisted wallet from Virtuals. Until then")
+        print("  a listing carries no ACP history and task_performance scores from")
+        print("  the journal instead, which the data room states rather than hides.")
+    else:
+        print("  credentials present; run `succession-acp status` to fetch")
+    return 0
+
+
+def _deployment_path(args: argparse.Namespace) -> Path | None:
+    """The deployment record, by the same search the chain commands use."""
+    here = Path(__file__).resolve()
+    for candidate in (
+        Path(args.deployment) if getattr(args, "deployment", None) else None,
+        Path(os.environ["SUCCESSION_DEPLOYMENT"])
+        if os.environ.get("SUCCESSION_DEPLOYMENT") else None,
+        here.parents[4] / "deployments" / "base-sepolia.json",
+        here.parent / "data" / "base-sepolia.json",
+    ):
+        if candidate is not None and candidate.is_file():
+            return candidate
+    return None
+
+
 def cmd_audit(args: argparse.Namespace) -> int:
     """Check every claim this project makes, and exit non-zero if one fails.
 
@@ -769,6 +844,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--scope", default=None,
                    help="prove a partial sale, e.g. relationships=60,history=100")
     p.set_defaults(func=cmd_prove)
+
+    p = sub.add_parser(
+        "status", help="what this installation is connected to"
+    )
+    deployment_arg(p)
+    marketplace_arg(p)
+    p.add_argument("--db", type=Path, default=None, help="a store to report on")
+    p.set_defaults(func=cmd_status)
 
     p = sub.add_parser(
         "audit", help="check every claim this project makes about itself"
