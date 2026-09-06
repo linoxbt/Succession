@@ -68,13 +68,18 @@
 
     --c-ink: 232 236 239;
     --c-muted: 155 164 172;
-    --c-faint: 107 116 124;
+    /* `faint` and `chalk-faint` are set by contrast, not by taste. They carry
+       the 11px uppercase labels that annotate almost every value in the
+       console, and the values that looked right on a dark ground measured 3.75
+       and 2.88 against the surfaces they actually sit on. These clear 4.6,
+       which is the threshold for text this small. */
+    --c-faint: 122 131 139;
     --c-rule: 42 48 54;
     --c-hairline: 28 33 38;
 
     --c-chalk: 232 236 239;
     --c-chalk-muted: 139 148 156;
-    --c-chalk-faint: 90 98 106;
+    --c-chalk-faint: 114 122 130;
 
     /* Lifted off the dark ground. The light-mode values fail contrast here. */
     --c-escrow: 96 154 214;

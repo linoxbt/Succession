@@ -29,10 +29,12 @@ export type View = AppView;
 
 // "Walkthrough" reads as what it is. Naming it something like "Demo" beside
 // "Marketplace" would invite exactly the confusion its banner then has to undo.
+// `listing` is deliberately absent. A listing is reached by its own address
+// now, so a destination called "Listing" would either lead nowhere or lead to
+// whichever one happened to be in memory. It stays a route, not a destination.
 const NAV: { id: View; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "market", label: "Marketplace" },
-  { id: "listing", label: "Listing" },
   { id: "sell", label: "Sell" },
   { id: "claim", label: "Claim" },
   { id: "walkthrough", label: "Walkthrough" },
@@ -119,18 +121,26 @@ export default function Shell({
         }`}
       >
         <div className="gutter flex h-full flex-col justify-center gap-1">
-          {NAV.map((item, i) => (
-            <button
-              key={item.id}
-              onClick={() => go(item.id)}
-              style={{ transitionDelay: open ? `${i * 45}ms` : "0ms" }}
-              className={`display-type text-left text-title transition-all duration-700 ease-enter ${
-                open ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
-              } ${view === item.id ? "text-ink" : "text-faint"}`}
-            >
-              {item.label}
-            </button>
-          ))}
+          {NAV.map((item, i) => {
+            // A listing belongs to the marketplace, so the marketplace reads as
+            // current while one is open. Otherwise no destination would be lit
+            // on the screen a visitor is most likely to be looking at.
+            const current =
+              view === item.id || (view === "listing" && item.id === "market");
+            return (
+              <button
+                key={item.id}
+                onClick={() => go(item.id)}
+                aria-current={current ? "page" : undefined}
+                style={{ transitionDelay: open ? `${i * 45}ms` : "0ms" }}
+                className={`display-type text-left text-title transition-all duration-700 ease-enter ${
+                  open ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
+                } ${current ? "text-ink" : "text-faint"}`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 

@@ -43,7 +43,7 @@ export function Panel({
 }) {
   return (
     <Tag
-      className={`rounded-sm border border-hairline bg-shade/40 ${
+      className={`rounded-sm border border-hairline bg-shade ${
         interactive
           ? "transition-colors duration-200 ease-swift hover:border-rule"
           : ""
