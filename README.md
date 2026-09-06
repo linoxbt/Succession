@@ -123,6 +123,28 @@ chain and there is deliberately no offline mode for it: `LocalSettlement`
 mirrors the contract's state machine closely enough that a seller could watch
 every screen say "listed" while nothing had touched a chain.
 
+### Installing it
+
+```bash
+pipx install "git+https://github.com/linoxbt/Succession#subdirectory=packages/succession"[chain]
+```
+
+The distribution is `succession-cli`; the command is `succession`. The `chain`
+extra pulls `web3`, which `list`, `publish`, `fulfil` and `claim` need. The
+contract ABI and the deployment record ship inside the wheel, so an installed
+CLI reaches the chain without a checkout.
+
+Three commands cross the network and share one setting, because a sale where the
+seller published to one marketplace and the buyer read from another silently
+does not complete:
+
+```bash
+export SUCCESSION_MARKETPLACE=https://successmarket.netlify.app
+```
+
+or pass `--marketplace` to each. It defaults to `http://127.0.0.1:8000`, which
+is right for local development and wrong for everything else.
+
 ### The rest of the command line
 
 ```bash
@@ -132,10 +154,45 @@ succession import  pkg --db buyer.db --tenant t-buyer --root 0x… --signer 0x�
 succession value   --db seller.db --tenant t-seller
 succession preview --db seller.db --tenant t-seller --agent erc8004:84532:0417
 succession listings                                  # what you have listed
+succession inventory --db seller.db --tenant t-seller  # what is sellable, per directory
+succession publish --listing listing-…                 # re-publish after an outage
 
 succession-acp status
 succession-acp sync --db seller.db --tenant t-seller
 ```
+
+### Checking the claims
+
+```bash
+succession audit                                     # every claim, from a memory it builds
+succession audit --check-chain --marketplace https://successmarket.netlify.app
+succession prove --db seller.db --tenant t-seller --agent erc8004:84532:0417
+succession prove … --scope relationships=60,history=100   # prove a partial sale
+```
+
+`audit` needs no repository, no frontend, no wallet and no network. It builds a
+memory, sells it to itself, and measures seven claims: that all six directories
+survive with identical Merkle subroots, that a non-transferable record leaves no
+trace in the tree, that the preview carries no record bodies, that every
+valuation factor recomputes from its published inputs, that a percentage sale
+takes the newest records, that a sealed tenant rejects every write, and — with
+`--check-chain` — that every published root equals its on-chain commitment. It
+exits non-zero if any fails, and a check that could not run reports as skipped
+rather than passed.
+
+### For an agent rather than a person
+
+```bash
+pipx install "git+https://github.com/linoxbt/Succession#subdirectory=packages/succession"[mcp]
+succession-mcp
+```
+
+An MCP server over the same surface. Reading and verifying — `inventory`,
+`preview`, `value`, `prove`, `audit`, and the marketplace reads — are always
+available. The three tools that spend money, release a decryption key or
+permanently seal an agent refuse unless `SUCCESSION_MCP_ALLOW_WRITES=1` is set.
+Sealing has no undo, so an agent enumerating its tools should not reach it by
+accident.
 
 Export writes a package to disk; verify and import read it back in separate
 invocations against a separate store. That is deliberately the path a
