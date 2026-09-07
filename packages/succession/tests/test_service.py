@@ -671,3 +671,164 @@ def test_activity_distinguishes_a_cancellation_from_a_refund(market):
     ]
     assert "Cancelled" in kinds
     assert "Refunded" not in kinds, "a cancellation must not read as a refund"
+
+
+# --- the buyer's half, driven from the terminal ---------------------------
+#
+# ChainSettlement supported buy, confirm, refund and cancel from the start and
+# no CLI command exposed any of them, so a buyer could not finish a purchase
+# without opening the browser. These drive the commands that close that.
+
+from succession import cli  # noqa: E402
+
+def test_market_lists_what_is_for_sale(market, capsys, monkeypatch):
+    """A seller could always see their own listings; a buyer could see none."""
+    _publish(market)
+    base = _serve(market, monkeypatch)
+
+    assert cli.main(["market", "--marketplace", base]) == 0
+    out = capsys.readouterr().out
+    assert market["stored"].listing_id in out
+    assert "USDC" in out
+
+
+def test_market_filters_by_state(market, capsys, monkeypatch):
+    _publish(market)
+    base = _serve(market, monkeypatch)
+
+    assert cli.main(["market", "--marketplace", base, "--state", "confirmed"]) == 0
+    assert "No listings match" in capsys.readouterr().out
+
+
+def test_show_reports_the_data_room_and_the_proof(market, capsys, monkeypatch):
+    _publish(market)
+    base = _serve(market, monkeypatch)
+    listing_id = market["stored"].listing_id
+
+    assert cli.main(["show", "--listing", listing_id, "--marketplace", base]) == 0
+    out = capsys.readouterr().out
+    assert listing_id in out
+    assert "committed root" in out
+    assert "What transfers" in out
+
+
+def test_buy_describes_the_transactions_before_sending_them(market, capsys, monkeypatch):
+    """Funding escrow is irreversible from the buyer's side.
+
+    Without --yes the command must explain and stop, because a mistyped listing
+    id should not cost money.
+    """
+    from succession import cli as cli_module
+
+    monkeypatch.setenv("SUCCESSION_BUYER_KEY", market["buyer_key"])
+    monkeypatch.setattr(
+        cli_module, "_buyer_backend", lambda a, k: (market["backend"], market["record"])
+    )
+
+    code = cli.main(["buy", "--listing", market["stored"].listing_id])
+    out = capsys.readouterr().out
+    assert code == 1, "no --yes means nothing was sent"
+    assert "two transactions" in out
+    assert "irreversible" in out
+    assert market["backend"].get(market["stored"].listing_id).state.value == "open"
+
+
+def test_buy_funds_escrow_when_confirmed(market, capsys, monkeypatch):
+    from succession import cli as cli_module
+
+    monkeypatch.setenv("SUCCESSION_BUYER_KEY", market["buyer_key"])
+    monkeypatch.setattr(
+        cli_module, "_buyer_backend", lambda a, k: (market["backend"], market["record"])
+    )
+
+    listing_id = market["stored"].listing_id
+    assert cli.main(["buy", "--listing", listing_id, "--yes"]) == 0
+    assert market["backend"].get(listing_id).state.value == "escrowed"
+    assert "escrowed" in capsys.readouterr().out
+
+
+def test_buy_refuses_a_listing_that_is_not_open(market, monkeypatch):
+    from succession import cli as cli_module
+
+    monkeypatch.setenv("SUCCESSION_BUYER_KEY", market["buyer_key"])
+    monkeypatch.setattr(
+        cli_module, "_buyer_backend", lambda a, k: (market["backend"], market["record"])
+    )
+    listing_id = market["stored"].listing_id
+    market["backend"].buy(listing_id, buyer=market["buyer"], amount=PRICE)
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["buy", "--listing", listing_id, "--yes"])
+    assert "escrowed" in str(exc.value)
+
+
+def test_confirm_warns_loudly_on_a_mismatched_root(market, capsys, monkeypatch):
+    """Submitting a wrong root refunds and abandons the sale.
+
+    That is correct for a bad delivery and expensive on a good one, so the
+    command has to say which it is looking at before it sends anything.
+    """
+    from succession import cli as cli_module
+
+    monkeypatch.setenv("SUCCESSION_BUYER_KEY", market["buyer_key"])
+    monkeypatch.setattr(
+        cli_module, "_buyer_backend", lambda a, k: (market["backend"], market["record"])
+    )
+    listing_id = market["stored"].listing_id
+    market["backend"].buy(listing_id, buyer=market["buyer"], amount=PRICE)
+
+    code = cli.main([
+        "confirm", "--listing", listing_id, "--root", "0x" + "00" * 32,
+    ])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "MISMATCH" in out
+    assert market["backend"].get(listing_id).state.value == "escrowed", "nothing was sent"
+
+
+def test_confirm_settles_on_the_committed_root(market, capsys, monkeypatch):
+    from succession import cli as cli_module
+
+    monkeypatch.setenv("SUCCESSION_BUYER_KEY", market["buyer_key"])
+    monkeypatch.setattr(
+        cli_module, "_buyer_backend", lambda a, k: (market["backend"], market["record"])
+    )
+    listing_id = market["stored"].listing_id
+    market["backend"].buy(listing_id, buyer=market["buyer"], amount=PRICE)
+
+    assert cli.main([
+        "confirm", "--listing", listing_id,
+        "--root", market["stored"].committed_root, "--yes",
+    ]) == 0
+    out = capsys.readouterr().out
+    assert "released" in out
+    assert market["backend"].get(listing_id).state.value == "confirmed"
+
+
+def _serve(market, monkeypatch) -> str:
+    """A real socket for the marketplace, torn down with the test."""
+    import threading
+    import time
+
+    import uvicorn
+
+    from service import app as app_module
+
+    config = uvicorn.Config(app_module.app, host="127.0.0.1", port=0, log_level="error")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 20
+    while not server.started and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert server.started
+
+    def stop():
+        server.should_exit = True
+        thread.join(timeout=15)
+
+    monkeypatch.undo  # keep a reference so the fixture ordering is explicit
+    import atexit
+
+    atexit.register(stop)
+    return f"http://127.0.0.1:{server.servers[0].sockets[0].getsockname()[1]}"

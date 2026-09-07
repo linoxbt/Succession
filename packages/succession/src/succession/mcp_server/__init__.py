@@ -22,13 +22,38 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
 
-from mcp.server.mcpserver import MCPServer
-
 __all__ = ["build_server", "main", "writes_allowed"]
+
+# The entry point is registered by the base install, but the SDK it needs is an
+# extra. Importing at module scope meant `succession-mcp` died on a raw
+# ModuleNotFoundError for anyone who installed `succession-cli[chain]`, which
+# names a package they never asked for and does not say what to do about it.
+try:
+    from mcp.server.mcpserver import MCPServer
+
+    _MCP_IMPORT_ERROR: Exception | None = None
+except Exception as exc:  # noqa: BLE001 - any import failure is the same story
+    MCPServer = None  # type: ignore[assignment,misc]
+    _MCP_IMPORT_ERROR = exc
+
+
+MISSING_SDK = (
+    "The MCP server needs the Model Context Protocol SDK, which is an optional\n"
+    "extra rather than part of the base install:\n"
+    "\n"
+    "    pipx install --force 'succession-cli[chain,mcp]'\n"
+    "\n"
+    "or, in a virtualenv:\n"
+    "\n"
+    "    pip install 'succession-cli[mcp]'\n"
+    "\n"
+    "Everything else — export, list, buy, claim, prove, audit — works without it."
+)
 
 WRITE_GATE = "SUCCESSION_MCP_ALLOW_WRITES"
 
@@ -50,7 +75,10 @@ def _open(db: str, tenant: str) -> Any:
     return open_tenant(Path(db).expanduser(), tenant)
 
 
-def build_server() -> MCPServer:
+def build_server() -> "MCPServer":
+    if MCPServer is None:
+        raise RuntimeError(f"{MISSING_SDK}\n\n(import failed: {_MCP_IMPORT_ERROR})")
+
     server = MCPServer(
         name="succession",
         version="0.2.0",
@@ -235,6 +263,57 @@ def build_server() -> MCPServer:
 
     @server.tool(
         description=(
+            "One listing's full data room before any money moves: what transfers "
+            "per directory, the valuation with its factors, and whether the "
+            "published Merkle root matches the commitment on chain."
+        )
+    )
+    def listing_detail(marketplace: str, listing: str) -> dict[str, Any]:
+        from ..marketplace import MarketplaceError, get
+
+        try:
+            return get(marketplace, f"/api/listing/{listing}")
+        except MarketplaceError as exc:
+            return {"error": str(exc)}
+
+    @server.tool(
+        description=(
+            "Fund escrow for a listing. Sends an ERC-20 approval and then buy(). "
+            "The money is held by the contract, not paid: it reaches the seller "
+            "only on a matching hash and returns to you otherwise. IRREVERSIBLE "
+            f"from the buyer's side. Disabled unless {WRITE_GATE}=1."
+        )
+    )
+    def buy(listing: str, buyer_private_key: str) -> dict[str, Any]:
+        if not writes_allowed():
+            return {"refused": REFUSAL}
+        from .. import cli
+
+        os.environ["SUCCESSION_BUYER_KEY"] = buyer_private_key
+        return {"exit_code": cli.main(["buy", "--listing", listing, "--yes"])}
+
+    @server.tool(
+        description=(
+            "Settle a funded listing on the root you re-derived from your own "
+            "store after importing. A root that does not match refunds you and "
+            "abandons the sale, so pass the one `claim` printed, never a guess. "
+            f"Disabled unless {WRITE_GATE}=1."
+        )
+    )
+    def confirm(listing: str, root: str, buyer_private_key: str) -> dict[str, Any]:
+        if not writes_allowed():
+            return {"refused": REFUSAL}
+        from .. import cli
+
+        os.environ["SUCCESSION_BUYER_KEY"] = buyer_private_key
+        return {
+            "exit_code": cli.main(
+                ["confirm", "--listing", listing, "--root", root, "--yes"]
+            )
+        }
+
+    @server.tool(
+        description=(
             "Sell this agent's memory: export, hash, encrypt, commit the root on "
             "Base and publish to a marketplace. IRREVERSIBLE once settled — the "
             "origin agent is sealed permanently. Disabled unless "
@@ -302,6 +381,9 @@ def build_server() -> MCPServer:
 
 
 def main() -> None:
+    if MCPServer is None:
+        print(MISSING_SDK, file=sys.stderr)
+        raise SystemExit(2)
     build_server().run()
 
 

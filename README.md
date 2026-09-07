@@ -13,7 +13,7 @@ and verified by the buyer re-hashing their own store.
 [Overview](#overview) · [How it works](#how-a-sale-works) · [Quick start](#quick-start) ·
 [Architecture](#architecture) · [Security](#security-model) · [Roadmap](docs/ROADMAP.md)
 
-`344 tests` · `Python 3.11+` · `Solidity 0.8.28` · `React 18`
+`354 tests` · `Python 3.11+` · `Solidity 0.8.28` · `React 18`
 
 </div>
 
@@ -86,7 +86,7 @@ git clone https://github.com/linoxbt/Succession && cd Succession
 
 python -m venv .venv
 .venv/bin/pip install -e "packages/succession[test,service,acp,chain]"
-.venv/bin/python -m pytest packages/succession/tests        # 344 tests
+.venv/bin/python -m pytest packages/succession/tests        # 354 tests
 
 ( cd contracts && npm install && npm run build )            # solc → artifacts
 .venv/bin/python -m succession.demo                         # the whole workflow
@@ -126,10 +126,12 @@ every screen say "listed" while nothing had touched a chain.
 ### Installing it
 
 ```bash
-pipx install "git+https://github.com/linoxbt/Succession#subdirectory=packages/succession"[chain]
+pipx install "succession-cli[chain,mcp]"
 ```
 
-The distribution is `succession-cli`; the command is `succession`. The `chain`
+Published on PyPI. The distribution is `succession-cli`; the command is
+`succession`. Drop `mcp` if you do not want the agent-facing server; every other
+command works without it. The `chain`
 extra pulls `web3`, which `list`, `publish`, `fulfil` and `claim` need. The
 contract ABI and the deployment record ship inside the wheel, so an installed
 CLI reaches the chain without a checkout.
@@ -153,6 +155,11 @@ succession verify  pkg --root 0x… --signer 0x…
 succession import  pkg --db buyer.db --tenant t-buyer --root 0x… --signer 0x…
 succession value   --db seller.db --tenant t-seller
 succession preview --db seller.db --tenant t-seller --agent erc8004:84532:0417
+succession                                           # a guide to the rest
+succession market                                    # what is for sale
+succession show --listing listing-…                  # one data room, before paying
+succession buy --listing listing-…                   # fund escrow
+succession confirm --listing listing-… --root 0x…    # settle on what you derived
 succession listings                                  # what you have listed
 succession inventory --db seller.db --tenant t-seller  # what is sellable, per directory
 succession publish --listing listing-…                 # re-publish after an outage
@@ -443,7 +450,7 @@ bytes; it was the right to *be* that agent.
 ## Testing
 
 ```bash
-.venv/bin/python -m pytest packages/succession/tests   # 344
+.venv/bin/python -m pytest packages/succession/tests   # 354
 ( cd contracts && forge test )                         # 28, the mirrored Foundry suite
 ```
 

@@ -24,6 +24,9 @@ from .smp import DATA_CATEGORIES, SMPPackage
 from .valuation import value_tenant
 
 KEY_ENV = "SUCCESSION_SIGNING_KEY"
+#: The buyer signs with a different wallet to the seller, and conflating them
+#: is how someone accidentally tries to buy their own listing.
+BUYER_KEY_ENV = "SUCCESSION_BUYER_KEY"
 
 
 def _require_key() -> str:
@@ -342,6 +345,290 @@ def cmd_fulfil(args: argparse.Namespace) -> int:
         # buyer has funded escrow yet.
         return 0
     return 0
+
+
+def _buyer_backend(args: argparse.Namespace, key: str):
+    """A settlement backend that signs as the buyer rather than the seller.
+
+    Every chain command until now signed as a seller, because the buyer's half
+    lived in the browser. That left the terminal unable to finish a sale it
+    could otherwise drive end to end, which is a strange place to stop for a
+    product whose memory transfer is entirely terminal.
+    """
+    from web3 import Web3
+    from web3.middleware import ExtraDataToPOAMiddleware
+
+    from .chain import ChainSettlement
+
+    record_path = _deployment_path(args)
+    if record_path is None:
+        raise SystemExit(
+            "no deployment record found. Buying settles on chain and has no "
+            "offline mode; pass --deployment or set SUCCESSION_DEPLOYMENT."
+        )
+    record = json.loads(record_path.read_text("utf-8"))
+
+    rpc = os.environ.get("BASE_SEPOLIA_RPC_URL")
+    if not rpc:
+        raise SystemExit("set BASE_SEPOLIA_RPC_URL to reach the chain")
+    w3 = Web3(Web3.HTTPProvider(rpc, request_kwargs={"timeout": 30}))
+    w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
+    if not w3.is_connected():
+        raise SystemExit(f"cannot reach {rpc}")
+
+    backend = ChainSettlement(
+        w3,
+        contract_address=record["listing_contract"],
+        buyer_key=key,
+        artifacts_path=getattr(args, "artifacts", None),
+    )
+    return backend, record
+
+
+def cmd_market(args: argparse.Namespace) -> int:
+    """What is for sale, read from a marketplace.
+
+    The seller could always see their own listings with `succession listings`;
+    a buyer had no way to see anyone else's without opening the web app. That
+    made the terminal half of the product buyer-hostile for no reason, since
+    the marketplace serves the same JSON either way.
+    """
+    from .marketplace import MarketplaceError, get
+
+    try:
+        body = get(args.marketplace, "/api/marketplace")
+    except MarketplaceError as exc:
+        raise SystemExit(f"could not read the marketplace: {exc}") from exc
+
+    rows = body.get("listings", [])
+    if args.state:
+        rows = [r for r in rows if r["listing"]["state"] == args.state]
+
+    if args.json:
+        print(json.dumps(rows, indent=2))
+        return 0
+
+    if not body.get("chain"):
+        print("No contract is being read, so there is no live market.")
+    if not rows:
+        print("No listings match." if args.state else "No listings yet.")
+        demo = body.get("demo_listings") or []
+        if demo:
+            print(f"({len(demo)} demonstration listings exist and are not for sale.)")
+        return 0
+
+    print(f"{len(rows)} listing{'' if len(rows) == 1 else 's'}")
+    print()
+    for row in rows:
+        listing = row["listing"]
+        preview = row.get("preview") or {}
+        inventory = preview.get("inventory") or {}
+        sellable = sum(int(v.get("sellable", 0)) for v in inventory.values())
+        price = int(listing.get("price") or 0) / 1_000_000
+
+        print(f"  {listing['listing_id']}   {listing['state']}")
+        print(f"    agent    {row.get('agent_identity') or listing.get('agent_id')}")
+        print(f"    price    {price:,.2f} {listing.get('currency', 'USDC')}")
+        if sellable:
+            print(f"    memory   {sellable:,} records across {len(inventory)} directories")
+        elif not row.get("has_metadata"):
+            print("    memory   on chain and undescribed; the seller published no data room")
+        if row.get("integrity", {}).get("root"):
+            agrees = (
+                row["integrity"]["root"].lower()
+                == listing["hash_commitment"].lower()
+            )
+            print(f"    proof    manifest {'matches' if agrees else 'DISAGREES WITH'} the chain")
+        print()
+
+    print("Inspect one before paying:")
+    print(f"  succession show --listing {rows[0]['listing']['listing_id']}")
+    return 0
+
+
+def cmd_show(args: argparse.Namespace) -> int:
+    """One listing's data room, in full, before any money moves."""
+    from .marketplace import MarketplaceError, get
+
+    try:
+        row = get(args.marketplace, f"/api/listing/{args.listing}")
+    except MarketplaceError as exc:
+        raise SystemExit(f"could not read {args.listing}: {exc}") from exc
+
+    if args.json:
+        print(json.dumps(row, indent=2))
+        return 0
+
+    listing = row["listing"]
+    preview = row.get("preview") or {}
+    print(f"{args.listing}   {listing['state']}")
+    print(f"  agent          {row.get('agent_identity') or listing.get('agent_id')}")
+    print(f"  seller         {listing.get('seller')}")
+    print(f"  price          {int(listing.get('price') or 0) / 1_000_000:,.2f} "
+          f"{listing.get('currency', 'USDC')}")
+    print(f"  committed root {listing.get('hash_commitment')}")
+
+    inventory = preview.get("inventory") or {}
+    if inventory:
+        print()
+        print("  What transfers")
+        for name, entry in sorted(inventory.items()):
+            withheld = int(entry.get("withheld_without_consent", 0))
+            note = f", {withheld} withheld without consent" if withheld else ""
+            print(f"    {name:<20} {entry.get('sellable', 0):>5} records{note}")
+
+    valuation = preview.get("valuation") or {}
+    if valuation:
+        print()
+        print(f"  Valuation      {valuation.get('amount')} {valuation.get('currency')}")
+        for factor in valuation.get("factors", []):
+            print(f"    x {factor['value']:<9} {factor['name']}")
+
+    manifest = row.get("integrity") or {}
+    if manifest.get("root"):
+        agrees = manifest["root"].lower() == listing["hash_commitment"].lower()
+        print()
+        print(f"  Merkle root    {manifest['root']}")
+        print(f"  {'matches' if agrees else 'DISAGREES WITH'} the commitment on chain")
+    else:
+        print()
+        print("  No Merkle manifest published; the per-directory subroots cannot")
+        print("  be checked before purchase. The commitment above still binds.")
+
+    print()
+    print("Fund escrow, which is the first irreversible step:")
+    print(f"  succession buy --listing {args.listing}")
+    return 0
+
+
+def cmd_buy(args: argparse.Namespace) -> int:
+    """Fund escrow from the terminal, approval included.
+
+    Two transactions, and the command says so before sending either. The money
+    is held by the contract, not paid: it reaches the seller only when a
+    matching hash is confirmed, and returns to you if it is not or if the
+    confirmation window expires.
+    """
+    from eth_account import Account
+
+    from .settlement import SettlementError
+
+    key = _require_buyer_key()
+    backend, record = _buyer_backend(args, key)
+    buyer = Account.from_key(key).address
+
+    try:
+        listing = backend.get(args.listing)
+    except SettlementError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    if listing.state.value != "open":
+        raise SystemExit(
+            f"{args.listing} is {listing.state.value}, not open. Only an open "
+            "listing can be funded."
+        )
+    if listing.seller.lower() == buyer.lower():
+        raise SystemExit("you are the seller of this listing; the contract refuses self-purchase")
+
+    price = int(listing.price)
+    print(f"listing {args.listing}")
+    print(f"  seller  {listing.seller}")
+    print(f"  price   {price / 1_000_000:,.2f} {listing.currency}")
+    print(f"  buyer   {buyer}")
+    print()
+
+    if not args.yes:
+        print("This sends two transactions: an ERC-20 approval, then buy().")
+        print("Funding escrow is irreversible from your side; the money is")
+        print("released to the seller on a matching hash, or returned to you.")
+        print()
+        print("Re-run with --yes to send them.")
+        return 1
+
+    token = record.get("payment_token")
+    if not token:
+        raise SystemExit("the deployment record names no payment token")
+
+    print("approving the payment token…")
+    tx = backend.approve_payment(token, buyer, price)
+    print(f"  approved  {tx}")
+
+    print("funding escrow…")
+    try:
+        listing = backend.buy(args.listing, buyer=buyer, amount=price)
+    except SettlementError as exc:
+        raise SystemExit(f"buy failed: {exc}") from exc
+
+    print(f"  escrowed  {listing.escrow_balance / 1_000_000:,.2f} {listing.currency}")
+    print()
+    print("The seller releases the content key once they see this on chain.")
+    print("Then collect and verify what you paid for:")
+    print(f"  succession claim --listing {args.listing} --db <your store> --tenant <successor>")
+    return 0
+
+
+def cmd_confirm(args: argparse.Namespace) -> int:
+    """Submit the root you re-derived, and settle or refund on it.
+
+    This is the transaction that moves ownership. Submitting a root that does
+    not match refunds you and abandons the sale, which is the correct outcome
+    for a bad delivery and an expensive mistake to make on a good one, so the
+    root is not defaulted and has to be passed.
+    """
+    from eth_account import Account
+
+    from .settlement import SettlementError
+
+    key = _require_buyer_key()
+    backend, _record = _buyer_backend(args, key)
+    buyer = Account.from_key(key).address
+
+    listing = backend.get(args.listing)
+    if listing.state.value != "escrowed":
+        raise SystemExit(
+            f"{args.listing} is {listing.state.value}; there is nothing escrowed "
+            "to settle."
+        )
+
+    matches = args.root.lower() == listing.hash_commitment.lower()
+    print(f"listing {args.listing}")
+    print(f"  committed  {listing.hash_commitment}")
+    print(f"  submitting {args.root}")
+    print(f"  {'match' if matches else 'MISMATCH — this will refund you and abandon the sale'}")
+    print()
+    if not args.yes:
+        print("Re-run with --yes to send it.")
+        return 1
+
+    try:
+        receipt = backend.confirm_transfer(
+            args.listing, delivered_hash=args.root, buyer_identity=buyer, caller=buyer
+        )
+    except SettlementError as exc:
+        raise SystemExit(f"confirmTransfer failed: {exc}") from exc
+
+    body = receipt.to_dict()
+    print(f"  outcome    {body['outcome']}")
+    print(f"  amount     {int(body['amount']) / 1_000_000:,.2f}")
+    print(f"  reference  {body['reference']}")
+    if body["outcome"] == "released":
+        print()
+        print("Paid, identity transferred, and the seller's copy sealed.")
+    else:
+        print()
+        print("Refunded. The seller keeps their memory and you keep your money.")
+    return 0
+
+
+def _require_buyer_key() -> str:
+    key = os.environ.get(BUYER_KEY_ENV)
+    if not key:
+        raise SystemExit(
+            f"set {BUYER_KEY_ENV} to the private key of the wallet that will pay. "
+            "It is read from the environment so it does not land in shell history "
+            "or the process table."
+        )
+    return key
 
 
 def cmd_claim(args: argparse.Namespace) -> int:
@@ -732,9 +1019,44 @@ def cmd_listings(args: argparse.Namespace) -> int:
     return 0
 
 
+GUIDE = """succession — the property layer for agent memory
+
+Start here
+  succession status                  what this install is connected to
+  succession audit                   check every claim this project makes
+
+Selling, from your own machine
+  succession inventory --db … --tenant …        what is sellable, per directory
+  succession prove --db … --tenant … --agent …  prove a sale would carry it all
+  succession list --db … --tenant … --agent … --price …   commit the root on Base
+  succession fulfil                             release the key once escrow lands
+
+Buying
+  succession market                  what is for sale
+  succession show --listing …        one listing's data room, before paying
+  succession buy --listing …         fund escrow
+  succession claim --listing … --db … --tenant …   collect, import, re-derive
+  succession confirm --listing … --root …          settle on what you derived
+
+Keys come from the environment, never from an argument:
+  SUCCESSION_SIGNING_KEY   the seller's wallet
+  SUCCESSION_BUYER_KEY     the buyer's wallet
+  SUCCESSION_MARKETPLACE   which marketplace to publish to and read from
+  BASE_SEPOLIA_RPC_URL     how to reach the chain
+
+`succession <command> --help` for any one of them."""
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="succession")
-    sub = parser.add_subparsers(dest="command", required=True)
+    parser = argparse.ArgumentParser(
+        prog="succession",
+        description="The property layer for agent memory.",
+    )
+    # A bare `succession` used to print a usage line and exit 2, which tells a
+    # first-time reader the names of nineteen commands and nothing about which
+    # one to run. Required=False plus the guide below is friendlier and costs
+    # nothing, since every real invocation still routes through a subparser.
+    sub = parser.add_subparsers(dest="command")
 
     def tenant_args(p: argparse.ArgumentParser) -> None:
         p.add_argument("--db", type=Path, required=True, help="Sibyl store path")
@@ -866,6 +1188,35 @@ def main(argv: list[str] | None = None) -> int:
                    help="prove a partial sale, e.g. relationships=60,history=100")
     p.set_defaults(func=cmd_prove)
 
+    p = sub.add_parser("market", help="what is for sale")
+    marketplace_arg(p)
+    p.add_argument("--state", default=None,
+                   choices=["open", "escrowed", "confirmed", "refunded"],
+                   help="only listings in this state")
+    p.add_argument("--json", action="store_true", help="machine-readable output")
+    p.set_defaults(func=cmd_market)
+
+    p = sub.add_parser("show", help="one listing's data room, before paying")
+    marketplace_arg(p)
+    p.add_argument("--listing", required=True, help="the listing to inspect")
+    p.add_argument("--json", action="store_true", help="machine-readable output")
+    p.set_defaults(func=cmd_show)
+
+    p = sub.add_parser("buy", help="fund escrow for a listing")
+    deployment_arg(p)
+    p.add_argument("--listing", required=True, help="the listing to fund")
+    p.add_argument("--yes", action="store_true",
+                   help="send the transactions rather than describing them")
+    p.set_defaults(func=cmd_buy)
+
+    p = sub.add_parser("confirm", help="settle on the root you re-derived")
+    deployment_arg(p)
+    p.add_argument("--listing", required=True, help="the listing to settle")
+    p.add_argument("--root", required=True,
+                   help="the root succession claim re-derived from your own store")
+    p.add_argument("--yes", action="store_true", help="send the transaction")
+    p.set_defaults(func=cmd_confirm)
+
     p = sub.add_parser(
         "status", help="what this installation is connected to"
     )
@@ -888,6 +1239,9 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_listings)
 
     args = parser.parse_args(argv)
+    if not getattr(args, "command", None):
+        print(GUIDE)
+        return 0
     return args.func(args)
 
 

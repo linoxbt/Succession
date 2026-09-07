@@ -20,6 +20,7 @@ from succession import cli
 from succession.demokeys import SELLER
 
 KEY_ENV = "SUCCESSION_SIGNING_KEY"
+PRICE = 25_000_000
 AGENT = "erc8004:84532:0417"
 
 
@@ -236,3 +237,23 @@ def test_acp_show_reports_an_agent_with_no_job_history(capsys, seller, tmp_path)
     assert code == 0
     out = capsys.readouterr().out
     assert "registered" in out.lower() or "jobs" in out.lower()
+
+
+# --- the buyer's half, which had no terminal path at all -----------------
+def test_the_bare_command_guides_rather_than_erroring(capsys):
+    """`succession` alone used to print a usage line and exit 2.
+
+    Nineteen command names and no indication which to run is not help.
+    """
+    assert cli.main([]) == 0
+    out = capsys.readouterr().out
+    assert "Start here" in out
+    assert "succession status" in out
+    assert "SUCCESSION_BUYER_KEY" in out, "the keys have to be discoverable"
+
+
+def test_buy_without_a_key_says_which_variable(monkeypatch):
+    monkeypatch.delenv("SUCCESSION_BUYER_KEY", raising=False)
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["buy", "--listing", "listing-0", "--yes"])
+    assert "SUCCESSION_BUYER_KEY" in str(exc.value)

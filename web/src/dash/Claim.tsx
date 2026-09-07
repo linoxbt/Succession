@@ -181,7 +181,7 @@ export default function Claim({
                   <div className="mt-8 space-y-6">
                     <div>
                       <p className="chapter-mark mb-3">1, Install</p>
-                      <Copyable text={'pipx install "git+https://github.com/linoxbt/Succession#subdirectory=packages/succession"[chain]'} />
+                      <Copyable text={'pipx install "succession-cli[chain]"'} />
                     </div>
 
                     <div>
