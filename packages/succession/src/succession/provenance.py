@@ -94,6 +94,7 @@ def build_header(
     permissions: dict[str, Any],
     provenance_chain: list[dict[str, Any]] | None = None,
     created_at: str | None = None,
+    engine_schema_version: int | None = None,
 ) -> dict[str, Any]:
     """Assemble an unsigned provenance header.
 
@@ -108,6 +109,11 @@ def build_header(
         "agent_identity": agent_identity,
         "created_at": created_at or utc_now(),
         "memory_version": int(memory_version),
+        # The memory engine's own schema version, so a buyer can tell before
+        # paying whether their store can accept this package. Signed with the
+        # rest of the header, because a compatibility claim a seller could edit
+        # afterwards is not a claim.
+        "engine_schema_version": engine_schema_version,
         "categories": sorted(categories),
         "provenance_chain": list(provenance_chain or []),
         "integrity_root": integrity_root,

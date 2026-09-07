@@ -221,6 +221,9 @@ def export_tenant(
         permissions=permissions,
         provenance_chain=provenance_chain,
         created_at=created_at,
+        engine_schema_version=(
+            source.schema_version() if hasattr(source, "schema_version") else None
+        ),
     )
     package.header = sign_header(header, private_key)
     package.permissions = permissions

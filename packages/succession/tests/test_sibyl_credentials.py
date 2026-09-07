@@ -115,3 +115,68 @@ def test_opening_a_store_applies_them(tmp_path, monkeypatch):
     assert seen.get("tier") == "lifetime"
     assert seen.get("account_id") == "a"
     assert seen.get("session_token") == "b"
+
+
+# --- the rest of the SDK surface -----------------------------------------
+
+
+def test_store_health_reports_what_the_engine_knows(tmp_path):
+    """Succession used 17 of MemoryClient's 26 methods and ignored the nine
+    that describe a store's state rather than its contents. For a marketplace
+    those are the interesting ones: capacity, schema, and what is unresolved.
+    """
+    from succession.memory.sibyl import open_tenant
+
+    memory = open_tenant(tmp_path / "s.db", "t")
+    health = memory.store_health()
+
+    assert set(health) == {
+        "tier", "schema_version", "capacity", "pending_skill_proposals", "lint",
+    }
+    assert health["schema_version"] is not None, "the engine reports a schema version"
+
+    capacity = health["capacity"]
+    assert capacity["soft_cap_bytes"] > 0
+    assert 0 <= capacity["pct_used"] <= 1
+    assert capacity["at_or_above_cap"] is False
+
+
+def test_paid_features_degrade_to_none_rather_than_raising(tmp_path):
+    """Three of the four are paid-tier. A free account must still export."""
+    from succession.memory.sibyl import open_tenant
+
+    health = open_tenant(tmp_path / "s.db", "t").store_health()
+    assert health["pending_skill_proposals"] is None
+    assert health["lint"] is None
+
+
+def test_the_package_header_carries_the_engine_schema_version(tmp_path, seller):
+    """A buyer needs to know their store can accept the package before paying.
+
+    Signed with the rest of the header, so it is not a claim the seller could
+    edit after the fact.
+    """
+    from succession.demokeys import SELLER
+    from succession.export import export_tenant
+
+    result = export_tenant(
+        seller, agent_identity="erc8004:84532:0417", private_key=SELLER.private_key
+    )
+    header = result.package.header
+    assert "engine_schema_version" in header
+    assert header["engine_schema_version"] == seller.schema_version()
+
+    # And it is inside the signature, not appended beside it: tampering with
+    # the field has to break verification.
+    from succession.provenance import SignatureError, verify_header
+
+    verify_header(header, expected_signer=SELLER.address)
+
+    forged = dict(header)
+    forged["engine_schema_version"] = 999
+    try:
+        verify_header(forged, expected_signer=SELLER.address)
+    except SignatureError:
+        pass
+    else:
+        raise AssertionError("the schema version is outside the signature")

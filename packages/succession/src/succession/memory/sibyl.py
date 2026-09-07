@@ -61,6 +61,79 @@ class SibylMemory:
     def tenant_id(self) -> str:
         return self._client.get_tenant()
 
+    # -- the rest of the SDK -------------------------------------------
+    #
+    # Succession used seventeen of MemoryClient's twenty-six public methods and
+    # ignored the nine that describe the *state* of a store rather than its
+    # contents. That was a real omission for a marketplace: a seller could not
+    # see that their store was near the tier cap, that the linter had findings
+    # against it, or that skill proposals were sitting unresolved — all of which
+    # a buyer inherits or is denied. Each accessor below degrades to None rather
+    # than raising, because three of the four are paid-tier features and an
+    # export must not fail on a free account.
+
+    def store_health(self) -> dict[str, Any]:
+        """Everything the SDK knows about this store that is not a record.
+
+        Assembled in one call because these are read together — before listing,
+        by `succession status`, and into the data room — and because each one
+        can be absent for a different reason that the caller should not have to
+        distinguish.
+        """
+        return {
+            "tier": self._safe(self._client.get_tier),
+            "schema_version": self._safe(self._client.schema_version),
+            "capacity": self._safe(self._client.free_tier_status),
+            "pending_skill_proposals": self._pending(),
+            "lint": self._lint(),
+        }
+
+    def schema_version(self) -> int | None:
+        """The store's schema version, carried in the package header.
+
+        A buyer importing into a store on a different schema needs to know
+        before they pay, not after the import coerces something.
+        """
+        return self._safe(self._client.schema_version)
+
+    def _pending(self) -> int | None:
+        """How many skill proposals are unresolved.
+
+        Succession could already accept and reject them but never list them, so
+        a seller had no way to see what was outstanding. Proposals are memory
+        the agent has not yet committed to, and selling with them pending hands
+        the buyer a decision the seller declined to make.
+        """
+        try:
+            return len(self._client.list_skill_proposals(status="pending"))
+        except Exception:  # noqa: BLE001 - paid tier, or none at all
+            return None
+
+    def _lint(self) -> dict[str, Any] | None:
+        """The memory linter's findings, when the tier allows it.
+
+        A quality signal computed by the engine rather than asserted by the
+        seller, which is the only kind this marketplace is interested in.
+        """
+        try:
+            report = self._client.lint()
+        except Exception:  # noqa: BLE001 - paid-tier only
+            return None
+        if report is None:
+            return None
+        if hasattr(report, "to_dict"):
+            return report.to_dict()
+        if isinstance(report, dict):
+            return report
+        return {"findings": len(report) if hasattr(report, "__len__") else None}
+
+    @staticmethod
+    def _safe(call: Any) -> Any:
+        try:
+            return call()
+        except Exception:  # noqa: BLE001 - absence is an answer here
+            return None
+
     # -- low-level -----------------------------------------------------
 
     def _query(self, sql: str, params: tuple[Any, ...]) -> list[sqlite3.Row]:

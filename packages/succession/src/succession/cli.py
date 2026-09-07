@@ -603,8 +603,29 @@ def cmd_status(args: argparse.Namespace) -> int:
     print("  nothing about a store crosses the network in either direction.")
     if getattr(args, "db", None):
         store = Path(args.db).expanduser()
-        size = store.stat().st_size if store.is_file() else 0
-        print(f"  store {store} ({size:,} bytes)" if size else f"  store {store} (absent)")
+        if not store.is_file():
+            print(f"  store {store} (absent)")
+        else:
+            print(f"  store {store}")
+            health = open_tenant(store, args.tenant or "default").store_health()
+            cap = health.get("capacity") or {}
+            if cap:
+                pct = float(cap.get("pct_used") or 0) * 100
+                print(
+                    f"  capacity  {cap.get('db_size_bytes', 0):,} of "
+                    f"{cap.get('soft_cap_bytes', 0):,} bytes ({pct:.1f}%)"
+                    + ("  AT OR ABOVE CAP" if cap.get("at_or_above_cap") else "")
+                )
+            if health.get("schema_version") is not None:
+                print(f"  schema    v{health['schema_version']}")
+            pending = health.get("pending_skill_proposals")
+            if pending:
+                print(
+                    f"  {pending} skill proposal(s) unresolved — a buyer inherits "
+                    "the decision you did not make"
+                )
+            elif pending is None:
+                print("  skill proposals and linting are paid-tier features")
 
     print()
     print("Base")
@@ -851,6 +872,7 @@ def main(argv: list[str] | None = None) -> int:
     deployment_arg(p)
     marketplace_arg(p)
     p.add_argument("--db", type=Path, default=None, help="a store to report on")
+    p.add_argument("--tenant", default=None, help="which tenant, with --db")
     p.set_defaults(func=cmd_status)
 
     p = sub.add_parser(
