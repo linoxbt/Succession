@@ -46,7 +46,7 @@ const listing = all.ListingContract.abi.filter(
 );
 
 const banner = `/**
- * GENERATED FILE — do not edit.
+ * GENERATED FILE, do not edit.
  *
  * Produced by \`node scripts/generate-abi.mjs\` from the compiled
  * \`contracts/out/artifacts.json\`, so the ABI the browser sends can never drift

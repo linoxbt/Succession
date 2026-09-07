@@ -26,6 +26,25 @@ LANDING = ROOT / "web" / "src" / "landing" / "Landing.tsx"
 FORGE = ROOT / "contracts" / "test" / "ListingContract.t.sol"
 
 
+#: Test modules that only collect when an optional dependency is installed.
+#: `pytest.importorskip` at module scope prevents collection entirely, so a run
+#: without these collects fewer tests than a full one — which made the count
+#: assertion below fail in CI for a reason that had nothing to do with the
+#: claim being wrong.
+OPTIONAL_GATES = {"mcp": "test_mcp.py"}
+
+
+def _ungated() -> list[str]:
+    """Optional modules that are missing, and so were not collected."""
+    import importlib.util
+
+    return [
+        module
+        for module in OPTIONAL_GATES
+        if importlib.util.find_spec(module) is None
+    ]
+
+
 def _static_test_functions() -> int:
     """Test functions as written, before parametrisation expands them."""
     total = 0
@@ -45,6 +64,15 @@ def test_the_stated_python_test_count_is_the_real_one(request):
     collected = request.session.testscollected
     if collected < _static_test_functions():
         pytest.skip("a subset of the suite was selected; the count is meaningless here")
+
+    missing = _ungated()
+    if missing:
+        pytest.skip(
+            "not a full install: "
+            + ", ".join(f"{m} ({OPTIONAL_GATES[m]} not collected)" for m in missing)
+            + ". The stated count describes the whole suite, so it cannot be "
+            "checked against a partial one."
+        )
 
     stated = [int(n) for n in re.findall(r"(\d{3})\s*(?:tests|·)", README.read_text("utf-8"))]
     readme_counts = {
