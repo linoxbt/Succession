@@ -97,7 +97,7 @@ pipx install "succession-cli[chain,mcp]"
 succession                     # the wordmark, then a guide to everything below
 succession status              # what this install is connected to
 succession audit               # check every claim this project makes
-succession market --marketplace https://successmarket.netlify.app
+succession market --marketplace https://succession-production-7320.up.railway.app
 ```
 
 `succession audit` is the one to run first if you are evaluating this. It needs
@@ -109,7 +109,7 @@ Base.
 Set these once and the rest of the commands stop needing flags:
 
 ```bash
-export SUCCESSION_MARKETPLACE=https://successmarket.netlify.app
+export SUCCESSION_MARKETPLACE=https://succession-production-7320.up.railway.app
 export BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
 ```
 
@@ -345,7 +345,7 @@ service/app.py                       the marketplace: chain-backed, no seed data
 service/registry.py                  metadata the contract has no field for
 service/walkthrough.py               the sample-agent walkthrough, quarantined
 web/                                 landing page and operations console
-web/src/chain/                       wallet connection and on-chain escrow
+web/src/dash/                        read-only dashboard, guide and video runbook
 ```
 
 ### The memory package
@@ -433,12 +433,13 @@ not turn self-reported history into independently established reputation.
 | Stack | Where it does work | Status |
 |---|---|---|
 | **Sibyl Memory** | The asset itself. Five tiers export, hash, transfer and re-key; the successor agent retrieves through the FTS5 index. Delete this layer and there is no product. | Executed |
-| **Base** | `ListingContract.sol` holds escrow and, in one transaction, releases payment, transfers the ERC-8004 identity and sets the sealed flag. `chain.py` drives it over web3; the browser funds escrow through Wagmi and the Base Account connector. Identity is a real ERC-8004 registry on Base Sepolia (`0x7177a686…36Dd09A`), verified on chain rather than assumed, and payment moves in Circle's USDC. | **Deployed to Base Sepolia** at `0x642dFC05C9DCC0617c67B318C78dd5AE94134603`, with 5 acceptance sales (4 verified, 1 deliberate evaluator refund) plus a hosted restart-recovery sale. |
+| **Base** | `ListingContract.sol` holds escrow and, in one transaction, releases payment, transfers the ERC-8004 identity and sets the sealed flag. `chain.py` drives seller, evaluator and buyer transactions from their separate operator environments. Identity is a real ERC-8004 registry on Base Sepolia (`0x7177a686…36Dd09A`), verified on chain rather than assumed, and payment moves in Circle's USDC. | **Deployed to Base Sepolia** at `0x642dFC05C9DCC0617c67B318C78dd5AE94134603`, with 5 acceptance sales (4 verified, 1 deliberate evaluator refund) plus a hosted restart-recovery sale. |
 | **Virtuals ACP** | `acp.py` reads job history through `virtuals-acp` and makes it the data room's quality-of-earnings signal, the valuation's `task_performance` input, and part of the transferred memory. | Built. **Not yet registered** — needs a whitelisted wallet and entity id. |
 
 The current release verified the registry, exact deployment input, evaluator,
 EOA funding/claim flow, service restart recovery and buyer journal recovery.
-External Virtuals ACP jobs and provider-specific browser-wallet acceptance remain.
+External Virtuals ACP jobs remain. The current web dashboard is read-only; wallet
+transactions use the role-specific CLI environments accepted in the live EOA flow.
 See [audit status](docs/AUDIT_STATUS.md) for the evidence and release gates.
 
 ```bash
@@ -557,7 +558,8 @@ cannot be installed.
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Everything remaining to be production-ready |
 | [`docs/RELEASE_ACCEPTANCE_2026-09-09.md`](docs/RELEASE_ACCEPTANCE_2026-09-09.md) | Live deployment, transaction and two-host recovery evidence |
 | [`docs/INDEPENDENT_CONTRACT_REVIEW_2026-09-09.md`](docs/INDEPENDENT_CONTRACT_REVIEW_2026-09-09.md) | Slither/manual contract review and its assurance boundary |
-| In-app **Docs** | The same material, alongside the console |
+| [`docs/VIDEO_DEMO_SCRIPT.md`](docs/VIDEO_DEMO_SCRIPT.md) | Timed narration and terminal commands for the release video |
+| In-app **Guide** | Role-separated operation and a copyable terminal checklist |
 
 ---
 

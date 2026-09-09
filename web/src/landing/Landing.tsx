@@ -79,7 +79,7 @@ function Masthead({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void
       <div className="gutter flex items-center justify-between gap-6">
         <Wordmark size={solid ? 24 : 30} />
         <div className="flex items-center gap-6 sm:gap-8">
-          <button onClick={onEnter} className="link-underline text-micro font-semibold text-ink">Connect in app</button>
+          <button onClick={onEnter} className="link-underline text-micro font-semibold text-ink">Open dashboard</button>
           <button
             onClick={() => setOpen((v) => !v)}
             className="link-underline text-micro font-semibold text-ink"
@@ -137,9 +137,8 @@ function LandingMenu({
   }, [open]);
 
   const items: [string, () => void][] = [
-    ["Open console", onEnter],
-    ["Marketplace", onEnter],
-    ["Docs", onDocs],
+    ["Dashboard", onEnter],
+    ["Guide", onDocs],
   ];
 
   return (
@@ -222,7 +221,7 @@ function Hero({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void }) 
 
           <Reveal index={5}>
             <div className="flex flex-wrap items-center gap-5">
-              <Button onClick={onEnter}>Open console</Button>
+              <Button onClick={onEnter}>Open dashboard</Button>
               <Button variant="ghost" onClick={onDocs}>
                 Read the docs
               </Button>
@@ -619,7 +618,7 @@ function Close({ onEnter }: { onEnter: () => void }) {
               onClick={onEnter}
               className="border border-chalk bg-chalk px-10 py-4 font-mono text-micro uppercase tracking-[0.12em] text-carbon transition-colors duration-500 ease-swift hover:bg-transparent hover:text-chalk"
             >
-              Open console
+              Open dashboard
             </button>
             <p className="text-micro font-medium text-chalkFaint">
               Listings are read from the contract

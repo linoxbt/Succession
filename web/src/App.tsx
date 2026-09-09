@@ -1,39 +1,10 @@
-/**
- * The console.
- *
- * Two surfaces that must never be confused. **Market** shows listings that
- * exist because a seller ran `succession list` against their own Sibyl store
- * and paid gas to commit its root, the contract is the source of truth and an
- * empty market is a true answer. **Walkthrough** is a scripted sale on a sample
- * agent that settles in-process and touches no chain; it lives behind its own
- * banner and its own client, and no code path connects the two.
- *
- * Selling is not in the browser, and cannot be. Sibyl 0.8.0 is local-only,
- * `MemoryClient.local(path)` is its sole constructor, so a seller's memory is a
- * file on their own disk that no web page can read. The honest interface hands
- * them the command instead of pretending otherwise, which is what `Sell` does.
- */
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { WagmiProvider } from "wagmi";
-
-import { config as wagmiConfig } from "./chain/config";
-import { WalletBar, useChainStatus } from "./chain/Wallet";
-import { type MarketRow } from "./api";
-// Views reach the backend through this seam rather than through `api.ts`, so a
-// screen can be built against a shape the service does not serve yet.
-import { service } from "./services";
+/** The operator console: dashboard, guide, and a recording checklist. */
 import { Landing } from "./landing/Landing";
 import { to, useNavigation } from "./router";
 import Shell from "./dash/Shell";
-import Dashboard from "./dash/Overview";
-import Marketplace from "./dash/Marketplace";
-import ListingView from "./dash/ListingView";
-import Sell from "./dash/Sell";
-import Claim from "./dash/Claim";
-import Walkthrough from "./dash/Walkthrough";
-import { Docs } from "./dash/Docs";
-import { Note } from "./ui";
+import Dashboard from "./dash/Dashboard";
+import Guide from "./dash/Guide";
+import TerminalDemo from "./dash/TerminalDemo";
 import { CursorProvider, SmoothScroll } from "./motion";
 import Cursor from "./chrome/Cursor";
 import Preloader from "./chrome/Preloader";
@@ -41,100 +12,25 @@ import Transition from "./chrome/Transition";
 
 export default function App() {
   return (
-    <WagmiProvider config={wagmiConfig}>
-      <QueryClientProvider client={queryClient}>
-        {/* Lenis wraps the whole app so the interpolated scroll survives moving
-            between the landing document and the console, a page that changes
-            its scroll physics mid-session feels broken rather than varied. */}
-        <SmoothScroll>
-          <CursorProvider>
-            <Cursor />
-            <Surface />
-          </CursorProvider>
-        </SmoothScroll>
-      </QueryClientProvider>
-    </WagmiProvider>
+    <SmoothScroll>
+      <CursorProvider>
+        <Cursor />
+        <Surface />
+      </CursorProvider>
+    </SmoothScroll>
   );
 }
 
-const queryClient = new QueryClient();
-
 function Surface() {
-  const { route, navigate, query, setQuery } = useNavigation();
-  const view = route.kind === "app" ? route.view : "overview";
-  const listingId = route.kind === "app" ? route.listingId : null;
-
-  const [rows, setRows] = useState<MarketRow[]>([]);
-  const [demo, setDemo] = useState<MarketRow[]>([]);
-  const detail = useQuery({
-    queryKey: ['listing', listingId], queryFn: () => service.listing(listingId!),
-    enabled: Boolean(listingId), retry: 1, staleTime: 15_000,
-  });
-  const fetched = detail.data;
-  const [onChain, setOnChain] = useState<boolean | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [discoveryNotice, setDiscoveryNotice] = useState<string>();
-
-  const chainStatus = useChainStatus();
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const body = await service.listings();
-      setRows(body.real);
-      setDemo(body.demo);
-      setOnChain(body.chain);
-      setDiscoveryNotice(body.notice);
-      setError(null);
-    } catch (e) {
-      // A marketplace that cannot reach its service shows nothing and says so.
-      // Filling the screen from a cached recording is the pattern this project
-      // argues against, so there is deliberately no fallback here.
-      setRows([]);
-      setDemo([]);
-      setOnChain(false);
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  // A listing is now addressed by URL, so the row is resolved from the address
-  // rather than carried in state by whoever clicked. That is what makes
-  // /app/listing/listing-672 work in a fresh tab.
-  const selected = useMemo(() => {
-    if (!listingId) return null;
-    const known = [...rows, ...demo].find(
-      (r) => r.listing.listing_id === listingId,
-    );
-    if (known) return known;
-    return fetched?.listing.listing_id === listingId ? fetched : null;
-  }, [listingId, rows, demo, fetched]);
-
-  const open = useCallback(
-    (row: MarketRow) => navigate(to.listing(row.listing.listing_id)),
-    [navigate],
-  );
-  const openById = useCallback(
-    (id: string) => navigate(to.listing(id)),
-    [navigate],
-  );
+  const { route, navigate } = useNavigation();
 
   if (route.kind === "landing") {
     return (
       <>
-        {/* The curtain owns the first paint and lifts itself. The landing is
-            mounted underneath it from the start, so the hero's own entrance is
-            already running as the curtain clears rather than starting after. */}
         <Preloader onDone={() => undefined} />
         <Landing
-          onEnter={() => navigate(to.view("overview"))}
-          onDocs={() => navigate(to.view("docs"))}
+          onEnter={() => navigate(to.view("dashboard"))}
+          onDocs={() => navigate(to.view("guide"))}
         />
       </>
     );
@@ -142,57 +38,14 @@ function Surface() {
 
   return (
     <Shell
-      view={view}
-      onView={(next) => navigate(to.view(next))}
+      view={route.view}
+      onView={(view) => navigate(to.view(view))}
       onHome={() => navigate(to.landing())}
-      wallet={<WalletBar status={chainStatus} />}
     >
-      {error && view === "market" ? (
-        <Note>
-          The marketplace service is unreachable ({error}). Listings are read
-          from the contract through it, so nothing is shown rather than
-          something invented.
-        </Note>
-      ) : null}
-
-      {/* Keyed on the address, not just the view, so moving between two
-          listings animates as a navigation rather than swapping content
-          underneath a stationary page. */}
-      <Transition routeKey={`${view}:${listingId ?? ""}`}>
-      {discoveryNotice ? <Note>{discoveryNotice}</Note> : null}
-      {view === "overview" ? <Dashboard onOpenListing={openById} /> : null}
-      {view === "market" ? (
-        <Marketplace
-          rows={rows}
-          demo={demo}
-          onChain={onChain}
-          loading={loading}
-          onOpen={open}
-          onSell={() => navigate(to.view("sell"))}
-          onRefresh={load}
-        />
-      ) : null}
-      {view === "listing" ? (
-        <ListingView
-          row={selected}
-          loading={detail.isFetching && !selected}
-          error={detail.error?.message}
-          chainStatus={chainStatus}
-          onBack={() => navigate(to.view("market"))}
-          onClaim={() => { navigate(to.view("claim")); setQuery({listing: listingId}); }}
-          onRefresh={() => { void load(); void detail.refetch(); }}
-        />
-      ) : null}
-      {view === "sell" ? <Sell chainStatus={chainStatus} /> : null}
-      {view === "claim" ? (
-        <Claim
-          listingId={query.get("listing") ?? ""}
-          rows={rows}
-          onOpenListing={openById}
-        />
-      ) : null}
-      {view === "walkthrough" ? <Walkthrough /> : null}
-      {view === "docs" ? <Docs /> : null}
+      <Transition routeKey={route.view}>
+        {route.view === "dashboard" ? <Dashboard onGuide={() => navigate(to.view("guide"))} /> : null}
+        {route.view === "guide" ? <Guide onTerminal={() => navigate(to.view("terminal"))} /> : null}
+        {route.view === "terminal" ? <TerminalDemo /> : null}
       </Transition>
     </Shell>
   );

@@ -1,26 +1,24 @@
 # Succession web
 
-Run `npm ci` and `npm run dev` in this directory. Development proxies `/api`
-to `http://127.0.0.1:8000`. Build with `npm run build`; run the committed browser
-regressions with `npm run test:browser` after installing Playwright Chromium.
+The frontend is a read-only operator surface with three routes:
 
-The landing page loads independently of the console and wallet stack. Console
-routes are overview, marketplace, listing detail, sell, claim, docs, and the
-isolated synthetic walkthrough. Market or registry failures are shown to the
-user; production never substitutes recorded listings.
+- `/app` — live API, chain, contract, evaluator, and finality status
+- `/app/guide` — the seller, evaluator, and buyer CLI workflow
+- `/app/terminal` — the recording checklist and exact demo commands
 
-`VITE_SERVICE=mock` is development-only; production builds reject it. Optional
-`VITE_BASE_SEPOLIA_RPC_URL` and `VITE_REOWN_PROJECT_ID` are build-time settings.
-The production Vercel configuration proxies `/api` to the Railway service at
-`https://succession-production-7320.up.railway.app`; review that target and CSP
-before deploying another environment.
+Browser wallet connections and marketplace listing screens are deliberately
+absent. Keys and local Sibyl databases remain on the role-specific hosts; the
+web app only reads `/api/health` and `/api/chain`.
 
-The browser can fund escrow, cancel a listing, refund a funded sale, and reclaim
-expired escrow. Only the configured evaluator may confirm delivery. Local file
-export/import and certificate completion run through the CLI. A partial memory
-scope still transfers the entire identity token. EOA buyers can use a local
-signer. Contract-wallet buyers can download a single-use claim authorization
-from the listing page; provider-specific live acceptance remains release work.
+Run locally:
 
-See [operations](../docs/OPERATIONS.md), [audit status](../docs/AUDIT_STATUS.md)
-and [release acceptance](../docs/RELEASE_ACCEPTANCE_2026-09-09.md).
+```bash
+npm ci
+npm run dev
+```
+
+Development proxies `/api` to `http://127.0.0.1:8000`. Production uses the
+same-origin Vercel proxy configured in `vercel.json`. Set `VITE_API_URL` only
+when the API is intentionally hosted on another origin.
+
+Validate with `npm run build` and `npm run test:browser`.

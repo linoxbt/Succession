@@ -2,15 +2,11 @@
  * The shared vocabulary.
  *
  * Every export here keeps the exact name, props and behaviour it had before,
- * these are consumed across the wallet flow, the listing screens and the
- * walkthrough, and a rename would be a functional change dressed as a visual
- * one. What changed is entirely presentational.
+ * these are consumed across the landing page and operator console.
  *
  * Two things the redesign did *not* discard, because they are semantic:
  *
- *   `Field` is still a definition-list row, label then value. A listing's
- *   figures are a schedule, and a schedule is a definition list. Turning them
- *   into cards would make each figure look like a product for sale.
+ *   `Field` is a definition-list row, label then value.
  *
  *   `Hash` is still mono and still never anything else. A hash is evidence;
  *   it should read as a fingerprint, distinct from every other numeral.

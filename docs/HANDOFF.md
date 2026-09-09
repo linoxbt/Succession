@@ -14,8 +14,8 @@ baseline. This replaces the obsolete handoff claiming all code was complete.
 
 - Establish real Virtuals ACP job acceptance. ERC-8004 registration/transfer and
   the dedicated evaluator are accepted live, but external ACP jobs are not.
-- Complete provider-specific browser-popup and contract-wallet acceptance. The
-  EOA CLI wallet path and local ERC-1271 regression are complete.
+- Design an operator-approved ERC-1271 authorization tool if contract-wallet
+  support is required. The EOA CLI path and local ERC-1271 regression are complete.
 - Establish operational finality, backups, monitoring and sustained-load limits
   before accepting production assets. See [ROADMAP.md](ROADMAP.md).
 
@@ -29,8 +29,9 @@ From the repository root:
 .venv/bin/python scripts/generate_reference.py
 ```
 
-In `web/`, run `npm run build` and `npm run test:browser`. Browser regressions use
-controlled wallet fixtures; the EOA CLI path has separate live acceptance evidence.
+In `web/`, run `npm run build` and `npm run test:browser`. Browser regressions
+cover the read-only dashboard, guide, terminal runbook and route recovery; the
+EOA CLI path has separate live acceptance evidence.
 CI also checks the generated ABI, packaged wheel and clean Docker image.
 
 Keep the audit status current as checks complete. Historical testnet transactions

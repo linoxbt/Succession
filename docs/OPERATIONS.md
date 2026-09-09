@@ -40,8 +40,8 @@ new listing. An old owner cannot list a token they no longer own.
 
 ## Buyer flow
 
-The browser or `succession buy` approves the payment token and funds escrow.
-For the CLI, configure `SUCCESSION_BUYER_KEY` for the wallet that funded it.
+`succession buy` approves the payment token and funds escrow. Configure
+`SUCCESSION_BUYER_KEY` on the buyer host.
 Claim into a **fresh local tenant**, not an existing agent's populated tenant:
 
 ```bash
@@ -67,18 +67,11 @@ identity automatically carries its ownership history into the signed header,
 unless the acquisition is withheld by disclosure policy. This history remains
 seller-reported; carrying it forward is not independent verification.
 
-The listing page exposes buyer claim authorization only after evaluator
-settlement. Cancel, refund, and expiry
-recovery controls are on the listing page; the chain enforces authorization and
-the expiry timestamp.
-
-For a passkey or contract wallet, use **Authorize local claim** on the listing
-page and add `--auth-file ~/Downloads/succession-claim-auth.json` to claim.
-The wallet signs a single-use request that expires after five minutes. This
-avoids exporting its private key; the service verifies ERC-1271 on deployed
-wallets. The claim finishes the local acquisition and certificate. This path is
-covered by a contract-wallet test on the local EVM. The live EOA wallet flow is
-accepted; provider-specific popup acceptance remains open.
+Cancel, refund, and expiry recovery remain contract-authorized operations. The
+current web dashboard does not connect wallets or submit transactions. The live
+EOA CLI flow is accepted. ERC-1271 request authentication remains covered on a
+local EVM, but there is no browser flow for producing that authorization in this
+release.
 
 ## Service and demo
 
@@ -126,5 +119,5 @@ The Base Sepolia contract, Railway service and Vercel frontend were accepted
 together, including a hosted restart between key release and evaluation. Local
 retirement cannot prevent a file owner copying or modifying SQLite or revoke
 remote credentials. Mainnet use still needs an external audit, operational
-monitoring, capacity evidence, provider-specific wallet acceptance and deeper
-L1 finality reconciliation.
+monitoring, capacity evidence, an operator-approved contract-wallet
+authorization tool and deeper L1 finality reconciliation.

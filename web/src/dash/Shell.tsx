@@ -27,31 +27,21 @@ import type { AppView } from "../router";
 // would let the navigation offer a view that has no address.
 export type View = AppView;
 
-// "Walkthrough" reads as what it is. Naming it something like "Demo" beside
-// "Marketplace" would invite exactly the confusion its banner then has to undo.
-// `listing` is deliberately absent. A listing is reached by its own address
-// now, so a destination called "Listing" would either lead nowhere or lead to
-// whichever one happened to be in memory. It stays a route, not a destination.
 const NAV: { id: View; label: string }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "market", label: "Marketplace" },
-  { id: "sell", label: "Sell" },
-  { id: "claim", label: "Claim" },
-  { id: "walkthrough", label: "Walkthrough" },
-  { id: "docs", label: "Docs" },
+  { id: "dashboard", label: "Dashboard" },
+  { id: "guide", label: "Guide" },
+  { id: "terminal", label: "Terminal demo" },
 ];
 
 export default function Shell({
   view,
   onView,
   onHome,
-  wallet,
   children,
 }: {
   view: View;
   onView: (v: View) => void;
   onHome: () => void;
-  wallet?: ReactNode;
   children: ReactNode;
 }) {
   const scrolled = useScrolled(32);
@@ -115,7 +105,6 @@ export default function Shell({
           </button>
 
           <div className="flex items-center gap-6 sm:gap-8">
-            {wallet}
             <button
               onClick={() => setOpen((v) => !v)}
               className="link-underline text-micro font-semibold text-ink"
@@ -137,11 +126,7 @@ export default function Shell({
       >
         <div className="gutter flex h-full flex-col justify-center gap-1">
           {NAV.map((item, i) => {
-            // A listing belongs to the marketplace, so the marketplace reads as
-            // current while one is open. Otherwise no destination would be lit
-            // on the screen a visitor is most likely to be looking at.
-            const current =
-              view === item.id || (view === "listing" && item.id === "market");
+            const current = view === item.id;
             return (
               <button
                 key={item.id}
