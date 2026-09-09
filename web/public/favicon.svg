@@ -1,9 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <rect width="32" height="32" rx="8" fill="#011B33"/>
-  <g transform="translate(3.2 3.2) scale(0.8)" fill="none" stroke-linecap="round" stroke-width="3.6">
-    <path d="M23.5 10.5C23.5 5.5 8.5 5.5 8.5 12.5C8.5 19.5 23.5 12.5 23.5 19.5C23.5 26.5 8.5 26.5 8.5 21.5"
-          pathLength="100" stroke="#FFFFFF" stroke-dasharray="46 100"/>
-    <path d="M23.5 10.5C23.5 5.5 8.5 5.5 8.5 12.5C8.5 19.5 23.5 12.5 23.5 19.5C23.5 26.5 8.5 26.5 8.5 21.5"
-          pathLength="100" stroke="#00C3F7" stroke-dasharray="46 100" stroke-dashoffset="-54"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" rx="18" fill="#0e0d0b"/>
+  <polygon points="50,14 66,30 50,46 34,30" fill="#c08a3e"/>
+  <polygon points="66.5,46 82.5,62 66.5,78 50.5,62" fill="#c08a3e"/>
+  <polygon points="33.5,46 49.5,62 33.5,78 17.5,62" fill="#c08a3e"/>
 </svg>

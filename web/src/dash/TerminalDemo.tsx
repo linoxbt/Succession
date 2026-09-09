@@ -1,32 +1,17 @@
-import { Command } from "./Guide";
+import { CopyableCodeBlock } from "../components/CopyableCodeBlock";
+import { GuideStep } from "../components/GuideStep";
+import { SiteHeader } from "../components/SiteHeader";
+import { to } from "../router";
 
-const beats = [
-  ["Preflight", "Show the checkout, current commit, CLI connection, and a passing local audit.", `git status --short\ngit log -1 --oneline\n.venv/bin/succession status\n.venv/bin/succession audit`],
-  ["Live deployment", "Prove the hosted API and Base Sepolia contract are responding.", `curl -s https://succession-production-7320.up.railway.app/api/health\ncurl -s https://succession-production-7320.up.railway.app/api/chain | python3 -m json.tool`],
-  ["Seller proof", "Show what can transfer, then verify a local round-trip before money moves.", `.venv/bin/succession inventory --db seller.db --tenant seller-agent\n.venv/bin/succession prove --db seller.db --tenant seller-agent \\\n  --agent erc8004:84532:YOUR_AGENT_ID`],
-  ["Role-separated flow", "Use three terminal tabs. Keep every private-key export above the visible recording area.", `# Seller\n.venv/bin/succession fulfil\n\n# Evaluator\n.venv/bin/succession evaluate --listing listing-YOUR_ID \\\n  --db evaluator.db --tenant isolated --yes\n\n# Buyer\n.venv/bin/succession claim --listing listing-YOUR_ID \\\n  --db buyer.db --tenant successor`],
-  ["Recovery and evidence", "Restart both hosts. The seller republishes from its durable vault; the buyer repeats claim against the same destination journal.", `.venv/bin/succession fulfil --listing listing-YOUR_ID --once\n.venv/bin/succession claim --listing listing-YOUR_ID \\\n+  --db buyer.db --tenant successor\n.venv/bin/succession audit --check-chain`],
-] as const;
-
-export default function TerminalDemo() {
-  return (
-    <div className="mx-auto max-w-reading">
-      <header className="pb-12">
-        <p className="chapter-mark">Video runbook</p>
-        <h1 className="display-type mt-4 text-display font-bold text-ink">What to test while recording.</h1>
-        <p className="mt-5 text-lede text-muted">Record the result of each command. Use placeholder labels on screen, keep key exports hidden, and show transaction hashes only after broadcasts complete.</p>
-      </header>
-      {beats.map(([title, narration, command], index) => (
-        <section key={title} className="border-t border-rule py-9">
-          <p className="chapter-mark">{String(index + 1).padStart(2, "0")} / {title}</p>
-          <p className="mt-3 text-body text-muted">{narration}</p>
-          <Command>{command}</Command>
-        </section>
-      ))}
-      <aside className="mt-4 rounded-card border border-rule bg-shade p-6">
-        <h2 className="font-semibold text-ink">Before you press record</h2>
-        <p className="mt-2 text-body text-muted">Use a clean shell history, disable notifications, enlarge terminal text, prepare three named tabs, and confirm that no <code>.env</code> file or private key can appear in autocomplete.</p>
-      </aside>
-    </div>
-  );
+type Navigate = (route: ReturnType<typeof to.view> | ReturnType<typeof to.landing>) => void;
+export default function TerminalDemo({ navigate }: { navigate: Navigate }) {
+  return <div><SiteHeader navigate={navigate} /><div className="mx-auto max-w-3xl px-6 pb-24">
+    <header className="py-12"><p className="mb-3 font-mono text-xs uppercase tracking-widest text-accent">Video runbook · 6–8 minutes</p><h1 className="text-balance font-display text-3xl font-bold">Test Succession while you record.</h1><p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-ink/80">Prepare four tabs named STATUS, SELLER, EVALUATOR, and BUYER. Set keys before recording, clear each terminal, and never display an environment file.</p></header>
+    <GuideStep n={1} title="Preflight"><p className="text-sm text-ink/75">Show the release commit and the local audit.</p><CopyableCodeBlock>{`git status --short\ngit log -1 --oneline\n.venv/bin/succession status\n.venv/bin/succession audit`}</CopyableCodeBlock></GuideStep>
+    <GuideStep n={2} title="Live deployment"><p className="text-sm text-ink/75">Prove the dashboard comes from the hosted service.</p><CopyableCodeBlock>{`curl -s https://succession-production-7320.up.railway.app/api/health\ncurl -s https://succession-production-7320.up.railway.app/api/chain | python3 -m json.tool`}</CopyableCodeBlock></GuideStep>
+    <GuideStep n={3} title="Seller proof"><CopyableCodeBlock>{`.venv/bin/succession inventory --db seller.db --tenant seller-agent\n.venv/bin/succession prove --db seller.db --tenant seller-agent \\\n  --agent erc8004:84532:YOUR_AGENT_ID`}</CopyableCodeBlock></GuideStep>
+    <GuideStep n={4} title="Fund and evaluate"><CopyableCodeBlock>{`# BUYER\n.venv/bin/succession buy --listing listing-YOUR_ID --yes\n\n# SELLER\n.venv/bin/succession fulfil --listing listing-YOUR_ID --once\n\n# EVALUATOR\n.venv/bin/succession evaluate --listing listing-YOUR_ID \\\n  --db evaluator.db --tenant isolated --yes`}</CopyableCodeBlock></GuideStep>
+    <GuideStep n={5} title="Claim and recover"><CopyableCodeBlock>{`# BUYER\n.venv/bin/succession claim --listing listing-YOUR_ID \\\n  --db buyer.db --tenant successor\n\n# REPLAY AFTER RESTART\n.venv/bin/succession fulfil --listing listing-YOUR_ID --once\n.venv/bin/succession claim --listing listing-YOUR_ID \\\n  --db buyer.db --tenant successor`}</CopyableCodeBlock></GuideStep>
+    <GuideStep n={6} title="Close on evidence"><CopyableCodeBlock>{`.venv/bin/succession audit --check-chain`}</CopyableCodeBlock><p className="text-sm leading-relaxed text-ink/80">Expected: seven passed, zero failed, zero skipped. The full narration is in <code className="font-mono text-accent">docs/VIDEO_DEMO_SCRIPT.md</code>.</p><button onClick={() => navigate(to.view("dashboard"))} className="font-mono text-sm text-accent hover:underline">Open the dashboard →</button></GuideStep>
+  </div></div>;
 }

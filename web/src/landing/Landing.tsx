@@ -1,670 +1,74 @@
-/**
- * The landing document.
- *
- * Read top to bottom as one continuous composition rather than a stack of
- * panels: chapters are numbered, the ground alternates between paper and
- * carbon at full bleed, and elements from one chapter lead into the next. The
- * page is set edge-to-edge, the gutter is a margin, not a centring container,
- * so the type has room to run at the scale it is designed for.
- *
- * The product's own copy is unchanged. What changed is everything around it.
- */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { FadeIn } from "../components/FadeIn";
+import { PipelineMotion } from "../components/PipelineMotion";
+import { SiteHeader } from "../components/SiteHeader";
+import { StatusTicker } from "../components/StatusTicker";
+import { to } from "../router";
 
-import {
-  MaskLine,
-  Reveal,
-  useCursorState,
-  useParallax,
-  useScrollScene,
-  useScrollTo,
-} from "../motion";
-import { HashVerification, TransferDiagram } from "./visuals";
-import { HashPlate, Lineage, MemoryField } from "./imagery";
-import { Button, Figure } from "../ui";
-import { Wordmark } from "../brand/Logo";
+type Navigate = (route: ReturnType<typeof to.view> | ReturnType<typeof to.landing>) => void;
 
-export function Landing({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void }) {
+export function Landing({ navigate }: { navigate: Navigate }) {
   return (
-    <div className="bg-paper">
-      <Masthead onEnter={onEnter} onDocs={onDocs} />
-      <Hero onEnter={onEnter} onDocs={onDocs} />
-      <Thesis />
-      <Plate caption="Accumulation" tone="carbon">
-        <MemoryField className="h-full w-full" />
-      </Plate>
-      <Mechanism />
-      <Plate caption="Inheritance">
-        <Lineage className="h-full w-full" />
-      </Plate>
-      <Verification />
-      <Commitment />
-      <Proof />
-      <Stacks />
-      <Plate caption="Evidence" height="h-[46vh] sm:h-[58vh]">
-        <HashPlate className="h-full w-full" />
-      </Plate>
-      <Lifecycle />
-      <Close onEnter={onEnter} />
-      <Colophon onDocs={onDocs} />
-    </div>
-  );
-}
+    <div>
+      <StatusTicker />
+      <div className="mx-auto max-w-5xl px-6">
+        <SiteHeader navigate={navigate} />
 
-/* -- masthead ------------------------------------------------------------ */
-
-function Masthead({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void }) {
-  const [solid, setSolid] = useState(false);
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    const onScroll = () => setSolid(window.scrollY > 40);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  return (
-    <>
-      <LandingMenu
-        open={open}
-        onClose={() => setOpen(false)}
-        onEnter={onEnter}
-        onDocs={onDocs}
-      />
-    <header
-      className={`fixed inset-x-0 top-0 z-50 transition-all duration-700 ease-swift ${
-        solid ? "border-b border-rule bg-paper/95 py-3" : "border-b border-transparent py-6"
-      }`}
-    >
-      <div className="gutter flex items-center justify-between gap-6">
-        <Wordmark size={solid ? 24 : 30} />
-        <div className="flex items-center gap-6 sm:gap-8">
-          <button onClick={onEnter} className="link-underline text-micro font-semibold text-ink">Open dashboard</button>
-          <button
-            onClick={() => setOpen((v) => !v)}
-            className="link-underline text-micro font-semibold text-ink"
-            aria-expanded={open}
-            aria-controls="landing-menu"
-          >
-            {open ? "Close" : "Menu"}
-          </button>
-        </div>
-      </div>
-    </header>
-    </>
-  );
-}
-
-/**
- * The landing menu.
- *
- * Same button and same overlay as the console, so the two halves of the product
- * open in one gesture rather than each inventing its own. Destinations are set
- * at display scale because a menu that has the whole viewport should use it.
- */
-function LandingMenu({
-  open,
-  onClose,
-  onEnter,
-  onDocs,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onEnter: () => void;
-  onDocs: () => void;
-}) {
-  useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
-    if (open) document.querySelector<HTMLButtonElement>('#landing-menu button')?.focus();
-    const key = (event: KeyboardEvent) => {
-      if (!open) return;
-      if (event.key === 'Escape') {
-        onClose();
-        document.querySelector<HTMLButtonElement>('[aria-controls="landing-menu"]')?.focus();
-      }
-      if (event.key === 'Tab') {
-        const items = [...document.querySelectorAll<HTMLButtonElement>('#landing-menu button, [aria-controls="landing-menu"]')];
-        const current = items.indexOf(document.activeElement as HTMLButtonElement);
-        event.preventDefault();
-        items[(current + (event.shiftKey ? -1 : 1) + items.length) % items.length]?.focus();
-      }
-    };
-    document.addEventListener('keydown', key);
-    return () => {
-      document.body.style.overflow = "";
-      document.removeEventListener('keydown', key);
-    };
-  }, [open]);
-
-  const items: [string, () => void][] = [
-    ["Dashboard", onEnter],
-    ["Guide", onDocs],
-  ];
-
-  return (
-    <div
-      id="landing-menu"
-      hidden={!open}
-      className={`fixed inset-0 z-40 bg-paper transition-opacity duration-500 ease-swift ${
-        open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
-      }`}
-    >
-      <div className="gutter flex h-full flex-col justify-center gap-1">
-        {items.map(([label, go], i) => (
-          <button
-            key={label}
-            onClick={() => {
-              onClose();
-              go();
-            }}
-            style={{ transitionDelay: open ? `${i * 45}ms` : "0ms" }}
-            className={`display-type text-left text-title text-ink transition-all duration-700 ease-enter ${
-              open ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* -- 01 hero ------------------------------------------------------------- */
-
-/**
- * The first view is a single sentence at the largest scale the page ever uses,
- * uncovered line by line, with the mechanism diagram drifting behind it. The
- * product is introduced progressively: the headline first, its consequence
- * after, the controls last.
- */
-function Hero({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void }) {
-  const drift = useParallax<HTMLDivElement>(-0.06);
-  const scrollTo = useScrollTo();
-
-  return (
-    <section className="relative flex min-h-[100svh] flex-col justify-between overflow-hidden pt-32 sm:pt-40">
-      {/* The diagram sits behind the headline at low contrast, present enough
-          to read as structure, quiet enough not to compete with the type. */}
-      <div
-        ref={drift}
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-1/2 -z-0 hidden -translate-y-1/2 opacity-[0.07] lg:block"
-      >
-        <div className="gutter">
-          <TransferDiagram />
-        </div>
-      </div>
-
-      <div className="gutter relative z-10">
-        <MaskLine>
-          <p className="chapter-mark">01 / The property layer for agent memory</p>
-        </MaskLine>
-
-        <h1 className="display-type mt-10 text-colossal text-ink">
-          <MaskLine index={0}>The code is</MaskLine>
-          <MaskLine index={1}>replaceable.</MaskLine>
-          <MaskLine index={2} className="text-faint">
-            The memory is not.
-          </MaskLine>
-        </h1>
-      </div>
-
-      <div className="gutter relative z-10 pb-12">
-        <div className="flex flex-col justify-between gap-10 border-t border-rule pt-8 lg:flex-row lg:items-end">
-          <Reveal index={4}>
-            <p className="max-w-measure text-lede text-muted">
-              Succession turns an agent's accumulated memory into an asset that can be
-              sold, verified, and settled on chain.
-            </p>
-          </Reveal>
-
-          <Reveal index={5}>
-            <div className="flex flex-wrap items-center gap-5">
-              <Button onClick={onEnter}>Open dashboard</Button>
-              <Button variant="ghost" onClick={onDocs}>
-                Read the docs
-              </Button>
+        <header className="grid gap-10 py-20 md:grid-cols-[1.2fr,1fr] md:items-center">
+          <FadeIn>
+            <p className="mb-4 font-mono text-xs uppercase tracking-widest text-accent">&gt; the property layer for agent memory</p>
+            <h1 className="text-balance font-display text-4xl font-bold leading-[1.1] md:text-5xl">The code is replaceable. The memory is not.</h1>
+            <p className="mt-6 max-w-xl text-[15px] leading-relaxed text-ink/80">Succession packages an agent&apos;s accumulated memory, verifies it in an isolated store, and settles payment with ERC-8004 identity on Base.</p>
+            <div className="mt-8 flex items-center gap-4">
+              <button onClick={() => navigate(to.view("dashboard"))} className="rounded-sm bg-accent px-5 py-2.5 font-mono text-sm font-medium text-bg hover:opacity-90">Open Dashboard</button>
+              <button onClick={() => navigate(to.view("guide"))} className="font-mono text-sm text-muted hover:text-ink">Read the guide →</button>
             </div>
-          </Reveal>
-        </div>
+          </FadeIn>
+          <FadeIn delay={.15}><PipelineMotion /></FadeIn>
+        </header>
 
-        <button
-          onClick={() => scrollTo("#thesis")}
-          className="mt-10 text-micro font-medium text-faint transition-colors duration-500 hover:text-ink"
-        >
-          Scroll ↓
-        </button>
-      </div>
-    </section>
-  );
-}
-
-/* -- visual plates ------------------------------------------------------- */
-
-/**
- * A full-bleed visual moment.
- *
- * The artwork is oversized inside a clipping frame so it has somewhere to
- * travel under parallax without exposing an edge, and it sits at low contrast
- * against the ground: these are compositions to move through, not illustrations
- * to stop and read. The caption is the only text allowed on them.
- */
-function Plate({
-  children,
-  caption,
-  tone = "paper",
-  height = "h-[62vh] sm:h-[78vh]",
-}: {
-  children: ReactNode;
-  caption: string;
-  tone?: "paper" | "carbon";
-  height?: string;
-}) {
-  const drift = useParallax<HTMLDivElement>(0.09);
-  const dark = tone === "carbon";
-  return (
-    <section className={dark ? "on-carbon" : ""}>
-      <figure className={`frame ${height} relative`}>
-        <div ref={drift} className="absolute inset-0 -top-[8%] h-[116%]">
-          <div className={dark ? "text-chalk/45 h-full" : "text-ink/25 h-full"}>
-            {children}
-          </div>
-        </div>
-        <figcaption className="gutter absolute bottom-0 left-0 right-0 pb-8">
-          <p className={`chapter-mark ${dark ? "text-chalkFaint" : ""}`}>{caption}</p>
-        </figcaption>
-      </figure>
-    </section>
-  );
-}
-
-/* -- 02 thesis ----------------------------------------------------------- */
-
-/**
- * One statement, given a whole viewport. The line is the argument, so nothing
- * shares the screen with it except the number and its own consequence.
- */
-function Thesis() {
-  return (
-    <section id="thesis" className="gutter py-chapter">
-      <Reveal>
-        <p className="chapter-mark mb-16">02 / The thesis</p>
-      </Reveal>
-
-      <h2 className="display-type text-display text-ink">
-        <MaskLine index={0}>The model is the employee.</MaskLine>
-        <MaskLine index={1}>The memory is the customer book.</MaskLine>
-      </h2>
-
-      <Reveal index={2}>
-        <p className="mt-14 max-w-measure border-l border-rule pl-6 text-lede text-muted lg:ml-auto">
-          Succession does not sell the employee.
-        </p>
-      </Reveal>
-    </section>
-  );
-}
-
-/* -- 03 mechanism -------------------------------------------------------- */
-
-/**
- * The first inversion. A full-bleed carbon chapter carrying the sale itself,
- * six ordered steps, set as a schedule rather than as a row of feature cards,
- * because the order is the whole guarantee.
- */
-function Mechanism() {
-  const steps = [
-    ["Filter", "Withheld before hashing."],
-    ["Commit", "Posted before a buyer exists."],
-    ["Escrow", "Held by the contract."],
-    ["Deliver", "Sealed. Key stays with the seller."],
-    ["Re-hash", "Derived from the buyer's own store."],
-    ["Settle", "One transaction, or none."],
-  ];
-
-  return (
-    <section className="on-carbon py-chapter">
-      <div className="gutter">
-        <Reveal>
-          <p className="chapter-mark mb-16">03 / How a sale works</p>
-        </Reveal>
-
-        <h2 className="display-type max-w-[18ch] text-title text-chalk">
-          <MaskLine>Atomicity by ordering, not by assertion.</MaskLine>
-        </h2>
-
-        <ol className="mt-24 border-t border-carbonRule">
-          {steps.map(([name, detail], i) => (
-            <Reveal as="li" key={name} index={i % 3}>
-              <div className="group flex flex-col gap-3 border-b border-carbonRule py-8 md:flex-row md:items-baseline md:gap-16">
-                <span className="text-micro font-medium text-chalkFaint md:w-16">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <h3 className="display-type text-title text-chalk transition-transform duration-700 ease-swift md:w-[38%] md:group-hover:translate-x-2">
-                  {name}
-                </h3>
-                <p className="max-w-measure text-body text-chalkMuted">{detail}</p>
-              </div>
-            </Reveal>
-          ))}
-        </ol>
-      </div>
-    </section>
-  );
-}
-
-/* -- 04 verification ----------------------------------------------------- */
-
-/**
- * The moment the product turns on, so it gets the page to itself: the diagram
- * at full width, and the argument for why re-hashing the destination is a
- * different claim from checking the bytes.
- */
-function Verification() {
-  return (
-    <section className="gutter py-chapter">
-      <Reveal>
-        <p className="chapter-mark mb-16">04 / Verification</p>
-      </Reveal>
-
-      <div className="grid gap-16 lg:grid-cols-12 lg:gap-24">
-        <div className="lg:col-span-5">
-          <h2 className="display-type text-title text-ink">
-            <MaskLine index={0}>Checked against</MaskLine>
-            <MaskLine index={1}>the destination.</MaskLine>
-          </h2>
-          <Reveal index={2}>
-            <p className="mt-8 max-w-measure text-lede text-muted">
-              Not the bytes sent. The store that received them.
-            </p>
-          </Reveal>
-        </div>
-
-        <Reveal className="lg:col-span-7" index={1}>
-          <HashVerification />
-        </Reveal>
-      </div>
-    </section>
-  );
-}
-
-/* -- pinned: the commitment ---------------------------------------------- */
-
-/**
- * A pinned chapter, choreographed by scroll position rather than by time.
- *
- * The section is three viewports tall and its inner frame sticks for the whole
- * traversal, so the reader's scroll drives a sequence instead of moving past
- * it: the commitment is posted, a buyer appears, the delivered root is derived
- * and the two are compared. It is the argument of the product performed at the
- * speed the reader chooses, which is the one thing a static diagram cannot do.
- *
- * Progress is written straight to transforms in a rAF loop, never to React
- * state. A scroll-linked value that re-renders sixty times a second is a
- * scroll-linked value that drops frames.
- */
-function Commitment() {
-  const trackRef = useRef<HTMLDivElement | null>(null);
-  const stepRefs = useRef<(HTMLLIElement | null)[]>([]);
-  const barRef = useRef<HTMLSpanElement | null>(null);
-
-  const steps = [
-    ["Committed", "No buyer exists yet."],
-    ["Escrowed", "Nothing has moved."],
-    ["Delivered", "Imported, then re-hashed."],
-    ["Verified", "Settled in one transaction."],
-  ];
-
-  const sceneRef = useScrollScene<HTMLElement>((p) => {
-    // Ease the raw progress so the first and last steps hold a little longer
-    // than the middle, the ends are where a reader arrives and leaves.
-    const eased = Math.min(1, Math.max(0, (p - 0.12) / 0.72));
-    if (barRef.current) barRef.current.style.transform = `scaleX(${eased})`;
-
-    const active = Math.min(steps.length - 1, Math.floor(eased * steps.length));
-    stepRefs.current.forEach((el, i) => {
-      if (!el) return;
-      const on = i <= active;
-      el.style.opacity = on ? "1" : "0.22";
-      el.style.transform = `translate3d(0, ${on ? 0 : 8}px, 0)`;
-    });
-    if (trackRef.current) {
-      trackRef.current.style.transform = `translate3d(0, ${(0.5 - eased) * 40}px, 0)`;
-    }
-  });
-
-  return (
-    <section ref={sceneRef} className="on-carbon relative h-[300vh]">
-      <div className="sticky top-0 flex h-screen flex-col justify-center overflow-hidden">
-        <div className="gutter">
-          <p className="chapter-mark mb-12">05 / The commitment, in order</p>
-
-          <div ref={trackRef}>
-            <h2 className="display-type max-w-[16ch] text-title text-chalk">
-              The hash is posted before a buyer exists.
-            </h2>
-
-            <ol className="mt-16 grid gap-px border-y border-carbonRule bg-carbonRule sm:grid-cols-2 lg:grid-cols-4">
-              {steps.map(([name, detail], i) => (
-                <li
-                  key={name}
-                  ref={(el) => {
-                    stepRefs.current[i] = el;
-                  }}
-                  className="bg-carbon px-6 py-10 transition-[opacity,transform] duration-500 ease-swift"
-                  style={{ opacity: 0.22 }}
-                >
-                  <span className="text-micro font-medium text-chalkFaint">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <h3 className="display-type mt-4 text-heading text-chalk">{name}</h3>
-                  <p className="mt-3 text-body text-chalkMuted">{detail}</p>
-                </li>
+        <section id="pipeline" className="border-t border-line py-16">
+          <FadeIn>
+            <p className="mb-3 font-mono text-xs uppercase tracking-widest text-muted">How it works</p>
+            <h2 className="max-w-2xl text-balance font-display text-2xl font-bold">Three checks, one atomic handover.</h2>
+            <div className="mt-10 grid gap-6 md:grid-cols-3">
+              {[
+                ["01 — Package", "Commit before delivery", "The seller filters consent, signs the full provenance header, encrypts locally, and commits the Merkle root before a buyer receives plaintext."],
+                ["02 — Verify", "Re-hash the destination", "The independent evaluator imports into a separate store and derives the root again. A matching courier package alone is not enough."],
+                ["03 — Settle", "Atomic on Base", "One contract transaction releases USDC, transfers ERC-8004 identity, and seals the sale after the evaluator approves."],
+              ].map(([eyebrow, title, copy]) => (
+                <div key={title} className="rounded-sm border border-line p-6" style={{ background: "radial-gradient(circle at 20% 20%, var(--accent-dim) 0%, transparent 60%)" }}>
+                  <span className="font-mono text-xs tracking-widest text-accent">{eyebrow}</span>
+                  <h3 className="mt-2 font-display text-lg font-bold">{title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-ink/75">{copy}</p>
+                </div>
               ))}
-            </ol>
-
-            {/* The reader's own position through the sequence, as a length. */}
-            <span className="mt-12 block h-px w-full bg-carbonRule">
-              <span
-                ref={barRef}
-                className="block h-px origin-left bg-chalk"
-                style={{ transform: "scaleX(0)" }}
-              />
-            </span>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* -- 06 proof ------------------------------------------------------------ */
-
-/** Figures at display scale, counted up once as they arrive. */
-function Proof() {
-
-  return (
-    <section className="gutter border-y border-rule py-beat">
-      <Reveal>
-        <p className="chapter-mark mb-14">05 / What is actually built</p>
-      </Reveal>
-
-      <div className="grid gap-14 sm:grid-cols-2 lg:grid-cols-4">
-        <Reveal index={0}>
-          <Figure value="SMP" label="Verified memory imports" />
-        </Reveal>
-        <Reveal index={1}>
-          <Figure
-            value="EVM"
-            label="Escrow settlement"
-          />
-        </Reveal>
-        <Reveal index={2}>
-          <Figure value="9" label="SMP directories" />
-        </Reveal>
-        <Reveal index={3}>
-          <Figure value="1" label="Transaction to settle" tone="closed" />
-        </Reveal>
-      </div>
-    </section>
-  );
-}
-
-/* -- 06 stacks ----------------------------------------------------------- */
-
-function Stacks() {
-  const rows = [
-    ["Sibyl Memory", "The asset itself."],
-    ["Base", "Escrow and settlement."],
-    ["ERC-8004", "Identity as a token."],
-    ["Virtuals ACP", "Earnings a buyer can check."],
-  ];
-
-  return (
-    <section className="gutter py-chapter">
-      <Reveal>
-        <p className="chapter-mark mb-16">06 / What it runs on</p>
-      </Reveal>
-
-      <dl className="border-t border-rule">
-        {rows.map(([name, detail], i) => (
-          <Reveal key={name} index={i % 3}>
-            <div className="group flex flex-col gap-3 border-b border-rule py-10 md:flex-row md:items-baseline md:gap-16">
-              <dt className="display-type text-title text-ink transition-transform duration-700 ease-swift md:w-[34%] md:group-hover:translate-x-2">
-                {name}
-              </dt>
-              <dd className="max-w-measure text-body text-muted">{detail}</dd>
             </div>
-          </Reveal>
-        ))}
-      </dl>
-    </section>
-  );
-}
+          </FadeIn>
+        </section>
 
-/* -- 07 lifecycle -------------------------------------------------------- */
+        <section id="surfaces" className="border-t border-line py-16">
+          <FadeIn>
+            <p className="mb-3 font-mono text-xs uppercase tracking-widest text-muted">Operate and verify</p>
+            <h2 className="max-w-2xl text-balance font-display text-2xl font-bold">Each role runs beside its own wallet and local memory store.</h2>
+            <div className="mt-10 grid gap-6 md:grid-cols-2">
+              <button onClick={() => navigate(to.view("guide"))} className="block rounded-sm border border-line bg-surface p-6 text-left transition hover:border-accent/50">
+                <p className="mb-2 font-mono text-[11px] uppercase tracking-widest text-accent">Operator guide</p>
+                <h3 className="font-display text-lg font-bold">Seller · evaluator · buyer</h3>
+                <p className="mt-2 text-sm leading-relaxed text-ink/75">Install, inspect, commit, fund, independently evaluate, claim, and recover.</p>
+                <span className="mt-4 inline-block font-mono text-xs text-accent">Open the guide →</span>
+              </button>
+              <button onClick={() => navigate(to.view("terminal"))} className="block rounded-sm border border-line bg-surface p-6 text-left transition hover:border-accent/50">
+                <p className="mb-2 font-mono text-[11px] uppercase tracking-widest text-accent">Video runbook</p>
+                <h3 className="font-display text-lg font-bold">Record verifiable evidence</h3>
+                <p className="mt-2 text-sm leading-relaxed text-ink/75">A timed script with safe, copyable commands and the expected result of every terminal scene.</p>
+                <span className="mt-4 inline-block font-mono text-xs text-accent">Open the runbook →</span>
+              </button>
+            </div>
+          </FadeIn>
+        </section>
 
-/**
- * A horizontal rail. The lifecycle is a sequence with more entries than fit a
- * column comfortably, and reading it sideways makes the ordering legible in a
- * way a vertical list of eight items does not.
- */
-function Lifecycle() {
-  const railPointer = useCursorState("drag", "Drag");
-  const items: [string, string, string][] = [
-    ["Sell", "Built", "End to end."],
-    ["Partial", "Built", "Some categories, not all."],
-    ["Archive", "Free", "At tenant level."],
-    ["Lease", "Designed", "An on-chain expiry."],
-    ["Conditional", "Designed", "An oracle gate."],
-    ["Inherit", "Roadmap", "A different trigger."],
-    ["Merge", "Roadmap", "Two memories, one rule."],
-    ["Split", "Roadmap", "The inverse of merge."],
-  ];
-
-  return (
-    <section className="py-chapter">
-      <div className="gutter">
-        <Reveal>
-          <p className="chapter-mark mb-16">07 / The lifecycle</p>
-        </Reveal>
-        <h2 className="display-type max-w-[20ch] text-title text-ink">
-          <MaskLine>Selling is the first primitive, not the only one.</MaskLine>
-        </h2>
+        <footer className="flex items-center justify-between border-t border-line py-10 font-mono text-xs text-muted"><span>© {new Date().getFullYear()} Succession</span><span>Built on Sibyl Memory, Base, and ERC-8004</span></footer>
       </div>
-
-      <div className="rail mt-16 overflow-x-auto pb-4" {...railPointer}>
-        <ul className="flex w-max gap-px border-y border-rule bg-rule">
-          {items.map(([name, state, detail]) => (
-            <li
-              key={name}
-              className="w-[19rem] shrink-0 bg-paper px-8 py-12 transition-colors duration-700 hover:bg-shade sm:w-[22rem]"
-            >
-              <p className="text-micro font-medium text-faint">{state}</p>
-              <h3 className="display-type mt-5 text-title text-ink">{name}</h3>
-              <p className="mt-4 text-body text-muted">{detail}</p>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="gutter mt-6">
-        <p className="text-micro font-medium text-faint">Scroll sideways →</p>
-      </div>
-    </section>
-  );
-}
-
-/* -- 08 close ------------------------------------------------------------ */
-
-function Close({ onEnter }: { onEnter: () => void }) {
-  const drift = useParallax<HTMLDivElement>(0.05);
-  return (
-    <section className="on-carbon relative overflow-hidden py-chapter">
-      <div ref={drift} className="gutter">
-        <Reveal>
-          <p className="chapter-mark mb-16">08 / Enter</p>
-        </Reveal>
-
-        <h2 className="display-type text-display text-chalk">
-          <MaskLine index={0}>Memory that outlives</MaskLine>
-          <MaskLine index={1}>the agent that made it.</MaskLine>
-        </h2>
-
-        <Reveal index={2}>
-          <div className="mt-16 flex flex-wrap items-center gap-6">
-            <button
-              onClick={onEnter}
-              className="border border-chalk bg-chalk px-10 py-4 font-mono text-micro uppercase tracking-[0.12em] text-carbon transition-colors duration-500 ease-swift hover:bg-transparent hover:text-chalk"
-            >
-              Open dashboard
-            </button>
-            <p className="text-micro font-medium text-chalkFaint">
-              Listings are read from the contract
-            </p>
-          </div>
-        </Reveal>
-      </div>
-    </section>
-  );
-}
-
-/* -- colophon ------------------------------------------------------------ */
-
-function Colophon({ onDocs }: { onDocs: () => void }) {
-  return (
-    <footer className="gutter py-beat">
-      <div className="flex flex-col gap-6 border-t border-rule pt-8 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-micro font-medium text-faint">
-          Succession · Base Sepolia · Sibyl Memory
-        </p>
-        <div className="flex gap-8">
-          <button
-            onClick={onDocs}
-            className="link-underline text-micro font-medium text-faint transition-colors duration-500 hover:text-ink"
-          >
-            Docs
-          </button>
-          <a
-            href="https://github.com/linoxbt/Succession"
-            target="_blank"
-            rel="noreferrer"
-            className="link-underline text-micro font-medium text-faint transition-colors duration-500 hover:text-ink"
-          >
-            Source
-          </a>
-        </div>
-      </div>
-    </footer>
-  );
-}
-
-export function Band({ label, children }: { label?: string; children: ReactNode }) {
-  return (
-    <section className="gutter py-beat">
-      {label ? <p className="chapter-mark mb-10">{label}</p> : null}
-      {children}
-    </section>
+    </div>
   );
 }

@@ -4,16 +4,16 @@ const deployment = {
   listing_contract: "0x642dFC05C9DCC0617c67B318C78dd5AE94134603",
   identity_registry: `0x${"34".repeat(20)}`,
   payment_token: `0x${"23".repeat(20)}`,
-  evaluator: `0x${"45".repeat(20)}`,
+  arbiter: `0x${"45".repeat(20)}`,
 };
 
 test.beforeEach(async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
   page.on("pageerror", (error) => console.error("Uncaught browser error:", error.message));
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
-    const body = path === "/api/health"
-      ? { status: "ok" }
-      : { mode: "chain", chain_id: 84532, head_block: 46600000, explanation: "Verified on Base Sepolia.", deployment };
+    const body = path === "/api/health" ? { status: "ok" }
+      : { mode: "chain", chain_id: 84532, head_block: 46600000, deployment };
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
   });
 });
@@ -28,44 +28,54 @@ for (const route of ["/", "/app", "/app/guide", "/app/terminal", "/app/docs", "/
   });
 }
 
-test("dashboard reports the deployment without wallet controls or listing rows", async ({ page }) => {
-  await page.goto("/app");
-  await expect(page.getByRole("heading", { name: "Succession is ready to verify." })).toBeVisible();
-  await expect(page.getByText("Healthy", { exact: true })).toBeVisible();
-  await expect(page.getByText("Base Sepolia", { exact: true })).toBeVisible();
-  await expect(page.getByText("3 blocks", { exact: true })).toBeVisible();
-  await expect(page.getByText("0x642dFC…134603", { exact: true })).toBeVisible();
+test("landing matches the Triacta page structure", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(14, 13, 11)");
+  await expect(page.getByText("SUCCESSION", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "The code is replaceable. The memory is not." })).toBeVisible();
+  await expect(page.getByText("Three checks, one atomic handover.")).toBeVisible();
   await expect(page.getByRole("button", { name: /connect/i })).toHaveCount(0);
+});
+
+test("dashboard mirrors the Triacta sidebar, cards, and table arrangement", async ({ page }) => {
+  await page.goto("/app");
+  await expect(page.getByRole("heading", { name: "What Succession is connected to" })).toBeVisible();
+  await expect(page.getByText("Healthy", { exact: true })).toBeVisible();
+  await expect(page.getByText("Base Sepolia", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("3 blocks", { exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Component" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
   await expect(page.getByText(/marketplace/i)).toHaveCount(0);
 });
 
-test("guide exposes the role-separated command sequence", async ({ page }) => {
-  await page.goto("/app/guide");
-  await expect(page.getByRole("heading", { name: "Use Succession from the terminal." })).toBeVisible();
-  await expect(page.getByText("Prepare the seller store")).toBeVisible();
-  await expect(page.getByText("Evaluate independently")).toBeVisible();
-  await expect(page.getByText("Claim and verify on the buyer host")).toBeVisible();
+test("sidebar collapses and preserves the preference", async ({ page }) => {
+  await page.goto("/app");
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
 });
 
-test("terminal checklist contains repeatable recovery commands", async ({ page }) => {
+test("theme toggle uses the Triacta light palette", async ({ page }) => {
+  await page.goto("/app");
+  await page.getByRole("button", { name: "Switch to light theme" }).click();
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(245, 241, 232)");
+});
+
+test("guide and runbook expose copyable terminal steps", async ({ page }) => {
+  await page.goto("/app/guide");
+  await expect(page.getByRole("heading", { name: "Run Succession from your terminal." })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy to clipboard" }).first()).toBeVisible();
   await page.goto("/app/terminal");
-  await expect(page.getByRole("heading", { name: "What to test while recording." })).toBeVisible();
-  await expect(page.getByText(/succession fulfil --listing listing-YOUR_ID --once/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Test Succession while you record." })).toBeVisible();
   await expect(page.getByText(/succession audit --check-chain/)).toBeVisible();
 });
 
-test("closed menu cannot receive focus and Escape closes it", async ({ page }) => {
+test("mobile dashboard uses the Triacta off-canvas navigation", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/app");
-  await expect(page.locator("#console-menu")).toBeHidden();
-  await page.locator('[aria-controls="console-menu"]').click();
-  await expect(page.locator("#console-menu")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.locator("#console-menu")).toBeHidden();
-  await expect(page.locator('[aria-controls="console-menu"]')).toBeFocused();
-});
-
-test("landing opens the dashboard and contains no connect action", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.getByRole("button", { name: "Open dashboard" }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: /connect/i })).toHaveCount(0);
+  await page.getByRole("button", { name: "Open menu" }).click();
+  await expect(page.getByRole("dialog", { name: "Mobile navigation" })).toBeVisible();
+  await page.getByRole("button", { name: /Succession Guide/ }).click();
+  await expect(page.getByRole("heading", { name: "Run Succession from your terminal." })).toBeVisible();
 });

@@ -2,442 +2,75 @@
 @tailwind components;
 @tailwind utilities;
 
-/**
- * Global layer.
- *
- * Motion here is systemic rather than decorative: a small set of primitives —
- * reveal, parallax, mask, magnetic — applied deliberately, so the page has
- * depth without anything jittering. Every one of them animates `transform` or
- * `opacity` only, which is what keeps a heavily animated page off the main
- * thread and at 60fps.
- *
- * Every effect below degrades to nothing under `prefers-reduced-motion`. The
- * content was never carried by the animation.
- */
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("/fonts/space-grotesk-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Space Mono";
+  src: url("/fonts/space-mono-400-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Space Mono";
+  src: url("/fonts/space-mono-700-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
 
-@layer base {
-  /* One palette, Paystack-light.
+:root {
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "Space Mono", monospace;
+  --bg: #0e0d0b;
+  --surface: #17150f;
+  --surface-2: #1e1b14;
+  --ink: #f3efe6;
+  --muted: #948c7a;
+  --accent: #c08a3e;
+  --accent-dim: #8a6431;
+  --line: #2a2721;
+  --pass: #7fae7f;
+  --partial: #c9a227;
+  --fail: #c0524a;
+  --sev-high: #d97a3d;
+}
 
-     There were two before: warm paper for the marketing pages and dark charcoal
-     for the console, each asked for at a different time and each correct in
-     isolation. Reading them one after the other made the site feel like two
-     products. This is the single light language: white ground, a half step off
-     it for a panel, deep navy ink, one blue that means "act", and the three
-     state colours that are the only ones carrying meaning.
+:root[data-theme="light"] {
+  --bg: #f5f1e8;
+  --surface: #ffffff;
+  --surface-2: #fbf8f1;
+  --ink: #1b1811;
+  --muted: #6b6455;
+  --accent: #a66b22;
+  --accent-dim: #c9a063;
+  --line: #e4ddcb;
+  --pass: #4b7a4e;
+  --partial: #8a6b12;
+  --fail: #a13f38;
+  --sev-high: #b35e1f;
+}
 
-     Every value is measured against the surface it actually sits on rather than
-     chosen by eye. `faint` is the one to watch: it carries every 11px uppercase
-     label in the interface, and the version that looked right measured 4.29 on
-     the panel, under the 4.5 that size needs. It is set to clear 4.6 on the
-     panel and 4.87 on white.
-
-     The channel-triplet form stays. Alpha modifiers (`bg-ink/25`, `bg-paper/95`)
-     need it, and it keeps a second palette one block away rather than one
-     refactor away. */
-  :root {
-    color-scheme: light;
-
-    --c-paper: 255 255 255;
-    --c-shade: 246 249 252;
-    /* Inverted bands, for a footer or a full-bleed chapter. */
-    --c-carbon: 1 27 51;
-    --c-carbon-rule: 11 48 80;
-
-    --c-ink: 1 27 51;
-    --c-muted: 74 92 110;
-    --c-faint: 92 108 126;
-    --c-rule: 220 229 237;
-    --c-hairline: 237 242 247;
-
-    --c-chalk: 255 255 255;
-    --c-chalk-muted: 169 194 216;
-    --c-chalk-faint: 138 166 191;
-
-    /* State, and only state. Funds held, hash verified, mismatch. A screen with
-       nothing pending shows none of them, which is what keeps them legible. */
-    --c-escrow: 10 98 201;
-    --c-closed: 11 122 62;
-    --c-void: 192 50 33;
-
-    /* The one accent. Deep enough to carry text at 4.5, unlike the brighter
-       cyan the reference uses for large fills, which fails as a label colour. */
-    --c-signal: 15 98 214;
-    --c-press: 11 79 172;
-
-    /* Decorative only: the successor half of the wordmark, where contrast is
-       not load bearing, so it can be the brighter blue. */
-    --mark-accent: rgb(0 195 247);
-  }
-
-  html {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    /* Lenis drives scrolling; the native smooth behaviour would fight it. */
-    scroll-behavior: auto;
-  }
-
-  body {
-    @apply bg-paper font-sans text-body text-ink;
-    overflow-x: hidden;
-  }
-
-  /* Display type is set tight and optically aligned. Instrument Serif carries
-     a little too much side bearing at these sizes to sit flush to a margin. */
-  .display-type {
-    @apply font-display;
-    font-kerning: normal;
-    text-wrap: balance;
-  }
-
-  /* Hashes and identifiers. With a single family there is no monospaced face
-     to set them apart, so the distinction is made with tabular figures, a
-     lighter weight and tighter tracking than the prose around them. */
-  .evidence-type {
-    font-variant-numeric: tabular-nums;
-    font-weight: 400;
-    letter-spacing: 0.01em;
-  }
-
-  /* Numerals must line up column to column — a table of figures that jitters
-     between rows reads as sloppy bookkeeping. */
-  .tnum {
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* A visible keyboard focus ring on every interactive element. */
-  :focus-visible {
-    @apply outline-none ring-2 ring-escrow ring-offset-2 ring-offset-paper;
-  }
-
-  .on-carbon :focus-visible {
-    @apply ring-chalk ring-offset-carbon;
-  }
-
-  ::selection {
-    @apply bg-ink/10;
-  }
-
-  .on-carbon ::selection {
-    @apply bg-chalk/20;
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f5f1e8; --surface: #ffffff; --surface-2: #fbf8f1; --ink: #1b1811;
+    --muted: #6b6455; --accent: #a66b22; --accent-dim: #c9a063; --line: #e4ddcb;
+    --pass: #4b7a4e; --partial: #8a6b12; --fail: #a13f38; --sev-high: #b35e1f;
   }
 }
 
-@layer components {
-  /* --- page frame -----------------------------------------------------
-
-     The page is edge-to-edge; this is the gutter, not a centring container.
-     Content sits close to the viewport edge on purpose and only pulls in far
-     enough to stay off it. */
-  .gutter {
-    @apply px-6 sm:px-10 lg:px-16 xl:px-24;
-  }
-
-  /* A reading column, for prose only. Everything else uses the full width. */
-  .measure {
-    @apply max-w-measure;
-  }
-
-  /* --- chapter numbering ----------------------------------------------
-
-     Sections are numbered like chapters because the page is one document read
-     top to bottom, not a set of independent panels. */
-  .chapter-mark {
-    @apply text-micro font-medium text-faint;
-  }
-
-  .on-carbon .chapter-mark {
-    @apply text-chalkFaint;
-  }
-
-  /* --- reveal ----------------------------------------------------------
-
-     The default entrance: a short rise with a fade, triggered once when the
-     element first crosses into view. Applied to blocks, never to every child —
-     a page where everything animates in is a page that feels slow. */
-  .reveal {
-    opacity: 0;
-    transform: translate3d(0, 1.75rem, 0);
-    transition:
-      opacity 900ms var(--ease-enter, cubic-bezier(0.16, 1, 0.3, 1)),
-      transform 900ms var(--ease-enter, cubic-bezier(0.16, 1, 0.3, 1));
-    will-change: transform, opacity;
-  }
-
-  .reveal.is-in {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-
-  /* Staggering is done with a custom property so a container can set it once
-     rather than every child carrying its own delay class. */
-  .reveal[style*="--i"] {
-    transition-delay: calc(var(--i) * 90ms);
-  }
-
-  /* --- masked reveal ---------------------------------------------------
-
-     For display lines and images: the element rises out from behind a clip
-     rather than fading in place. Reads as print being uncovered. */
-  .mask-line {
-    overflow: hidden;
-    display: block;
-  }
-
-  .mask-line > * {
-    display: block;
-    transform: translate3d(0, 105%, 0);
-    transition: transform 1100ms cubic-bezier(0.16, 1, 0.3, 1);
-    will-change: transform;
-  }
-
-  .mask-line.is-in > * {
-    transform: translate3d(0, 0, 0);
-  }
-
-  .mask-line[style*="--i"] > * {
-    transition-delay: calc(var(--i) * 110ms);
-  }
-
-  /* --- image treatment -------------------------------------------------
-
-     Images are framed by their crop, not by a border-radius. The figure holds
-     the aspect ratio and clips; the image inside is oversized so parallax has
-     somewhere to travel without exposing an edge. */
-  .frame {
-    @apply relative overflow-hidden;
-  }
-
-  .frame > img,
-  .frame > canvas,
-  .frame > svg {
-    @apply h-full w-full object-cover;
-    transform: scale(1.06);
-    transition: transform 1200ms cubic-bezier(0.16, 1, 0.3, 1);
-    will-change: transform;
-  }
-
-  .frame:hover > img {
-    transform: scale(1.01);
-  }
-
-  /* --- links -----------------------------------------------------------
-
-     A rule that draws itself from the leading edge. Directional, so it reads
-     as the link moving rather than as a state toggling. */
-  .link-underline {
-    @apply relative inline-block;
-  }
-
-  .link-underline::after {
-    content: "";
-    @apply absolute bottom-0 left-0 h-px w-full origin-right scale-x-0 bg-current;
-    transition: transform 520ms cubic-bezier(0.22, 0.61, 0.24, 1);
-  }
-
-  .link-underline:hover::after,
-  .link-underline:focus-visible::after {
-    @apply origin-left scale-x-100;
-  }
-
-  /* --- the hash-match pulse -------------------------------------------
-
-     Kept from the original system. It fires once, when verification completes,
-     on the checkmark itself — the single moment in the product where something
-     is genuinely resolved. */
-  .verify-pulse {
-    @apply animate-verify;
-  }
-
-  /* --- the evidentiary strip ------------------------------------------
-
-     The region of a listing that should feel most official: set apart by rules,
-     never by a shadow. Shadows imply depth and depth is a marketing device; a
-     closing document is flat. */
-  .evidence {
-    @apply border-y border-rule py-8;
-  }
-
-  .on-carbon .evidence {
-    @apply border-carbonRule;
-  }
-
-  /* --- inverted chapters ----------------------------------------------
-
-     Full-bleed carbon sections. The alternation between paper and carbon is
-     what gives the page its cadence, so this is a section-level treatment and
-     never applied to a fragment. */
-  .on-carbon {
-    @apply bg-carbon text-chalk;
-  }
+* { border-color: var(--line); }
+html, body, #root { min-height: 100%; background: var(--bg); color: var(--ink); }
+body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+::selection { background: var(--accent); color: var(--bg); }
+a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
 }
-
-@layer components {
-  /* --- the pointer -----------------------------------------------------
-
-     Desktop only, and hidden entirely wherever precision matters. The dot
-     tracks exactly; the ring eases behind it, and the gap under fast movement
-     is what reads as inertia. */
-  .cursor-layer {
-    @apply pointer-events-none fixed inset-0 z-[100] hidden;
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .cursor-layer {
-      @apply block;
-    }
-
-    /* The native cursor stays wherever a person is aiming at something small
-       or typing into it. */
-    body:not(input):not(textarea) {
-      cursor: none;
-    }
-
-    input,
-    textarea,
-    select,
-    [contenteditable="true"] {
-      cursor: auto;
-    }
-  }
-
-  .cursor-dot,
-  .cursor-ring {
-    @apply absolute left-0 top-0 opacity-0;
-    transition: opacity 300ms ease-out;
-  }
-
-  .cursor-dot {
-    @apply -ml-[3px] -mt-[3px] h-1.5 w-1.5 rounded-full bg-ink;
-  }
-
-  .cursor-dot[data-mode="link"],
-  .cursor-dot[data-mode="drag"] {
-    @apply opacity-0;
-  }
-
-  .cursor-ring {
-    @apply -ml-5 -mt-5 flex h-10 w-10 items-center justify-center rounded-full border border-ink/35;
-    transition:
-      width 500ms cubic-bezier(0.22, 0.61, 0.24, 1),
-      height 500ms cubic-bezier(0.22, 0.61, 0.24, 1),
-      margin 500ms cubic-bezier(0.22, 0.61, 0.24, 1),
-      background-color 500ms cubic-bezier(0.22, 0.61, 0.24, 1),
-      border-color 500ms cubic-bezier(0.22, 0.61, 0.24, 1),
-      opacity 300ms ease-out;
-  }
-
-  /* Over a link the ring closes in and fills — the pointer becomes the
-     affordance rather than sitting beside it. */
-  .cursor-ring[data-mode="link"] {
-    @apply -ml-8 -mt-8 h-16 w-16 border-transparent bg-ink/10;
-  }
-
-  .cursor-ring[data-mode="drag"] {
-    @apply -ml-11 -mt-11 h-[5.5rem] w-[5.5rem] border-transparent bg-ink/90;
-  }
-
-  .cursor-ring[data-mode="read"] {
-    @apply -ml-1 -mt-6 h-12 w-0.5 rounded-none border-0 bg-ink/50;
-  }
-
-  .cursor-label {
-    @apply font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-paper;
-  }
-
-  .on-carbon .cursor-dot {
-    @apply bg-chalk;
-  }
-
-  /* --- the curtain -----------------------------------------------------
-
-     Full-bleed carbon, lifted by a clip rather than a fade so the page appears
-     to be uncovered rather than to brighten. */
-  .preloader {
-    @apply fixed inset-0 z-[200] bg-carbon text-chalk;
-    clip-path: inset(0 0 0 0);
-    transition: clip-path 900ms cubic-bezier(0.76, 0, 0.24, 1);
-  }
-
-  .preloader.is-lifting {
-    clip-path: inset(0 0 100% 0);
-  }
-
-  /* --- route change ----------------------------------------------------
-
-     Short both ways. A transition noticed twice is one resented by the tenth
-     time, and this is an application people move through repeatedly. */
-  .route[data-phase="out"] {
-    opacity: 0;
-    transform: translate3d(0, -0.75rem, 0);
-    transition:
-      opacity var(--route-out, 260ms) cubic-bezier(0.4, 0, 1, 1),
-      transform var(--route-out, 260ms) cubic-bezier(0.4, 0, 1, 1);
-  }
-
-  .route[data-phase="in"] {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-    transition:
-      opacity var(--route-in, 420ms) cubic-bezier(0.16, 1, 0.3, 1),
-      transform var(--route-in, 420ms) cubic-bezier(0.16, 1, 0.3, 1);
-  }
-}
-
-@layer utilities {
-  /* Horizontal rails scroll with the pointer or a swipe and hide their bar —
-     the content's own overflow is the affordance. */
-  .rail {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-
-  .rail::-webkit-scrollbar {
-    display: none;
-  }
-}
-
-/* --- reduced motion ---------------------------------------------------
-
-   Everything above is an enhancement. Under a reduced-motion preference the
-   page is fully legible and fully functional with none of it: revealed
-   elements start visible, masks are open, parallax is inert. */
 @media (prefers-reduced-motion: reduce) {
-  .reveal,
-  .mask-line > *,
-  .frame > img {
-    transition: none !important;
-    transform: none !important;
-    opacity: 1 !important;
-  }
-
-  .verify-pulse {
-    animation: none;
-  }
-
-  .animate-marquee {
-    animation: none;
-  }
-
-  .preloader {
-    transition: none !important;
-  }
-
-  .route[data-phase="out"],
-  .route[data-phase="in"] {
-    opacity: 1 !important;
-    transform: none !important;
-    transition: none !important;
-  }
-
-  .cursor-layer {
-    display: none !important;
-  }
-
-  body {
-    cursor: auto !important;
-  }
-
-  html {
-    scroll-behavior: auto;
-  }
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 }
