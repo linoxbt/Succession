@@ -1,0 +1,10 @@
+{
+  "inputs": {
+    "listing_id": "listing-example",
+    "chain_id": 84532,
+    "contract": "0x1212121212121212121212121212121212121212",
+    "timestamp": 1788868800,
+    "nonce": "abababababababababababababababab"
+  },
+  "message": "Succession/request/v2\n{\"body_sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"chain_id\":84532,\"contract\":\"0x1212121212121212121212121212121212121212\",\"listing_id\":\"listing-example\",\"method\":\"GET\",\"nonce\":\"abababababababababababababababab\",\"path\":\"/api/listing/listing-example/key\",\"timestamp\":1788868800}"
+}

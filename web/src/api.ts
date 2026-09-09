@@ -12,17 +12,18 @@ export interface Listing {
   seller: string;
   seller_signature: string;
   hash_commitment: string;
-  price: number;
+  price: number | string;
   currency: string;
   categories: string[];
   valuation_reference: string;
   state: ListingState;
   buyer: string;
-  escrow_balance: number;
+  escrow_balance: number | string;
   delivered_hash: string;
   sealed: boolean;
   created_at: string;
   settled_at: string;
+  confirm_by?: number;
 }
 
 export interface ValuationFactor {
@@ -54,8 +55,8 @@ export interface Overview {
   totals: {
     listings?: number;
     by_state?: Record<string, number>;
-    volume_settled?: number;
-    volume_open?: number;
+    volume_settled?: number | string;
+    volume_open?: number | string;
     agents?: number;
     sellers?: number;
     with_data_room?: number;
@@ -343,6 +344,7 @@ export const market = {
       count: number;
       chain: boolean;
       demo_listings?: MarketRow[];
+      discovery?: {complete: boolean; error?: string | null};
     }>("/api/marketplace"),
   listing: (id: string) => request<MarketRow>(`/api/listing/${id}`),
   /** Ciphertext. Public on purpose, inert without the content key. */
@@ -395,10 +397,9 @@ export const walkthrough = {
 
 
 /** Money arrives in minor units; render it the way a closing statement would. */
-export function formatAmount(minorUnits: number, currency: string): string {
-  return `${(minorUnits / 1_000_000).toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })} ${currency}`;
+export function formatAmount(minorUnits: number | string, currency: string): string {
+  const amount = BigInt(minorUnits);
+  const absolute = amount < 0n ? -amount : amount;
+  const fraction = (absolute % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '').padEnd(2, '0');
+  return `${amount < 0n ? '-' : ''}${(absolute / 1_000_000n).toLocaleString('en-US')}.${fraction} ${currency}`;
 }
-

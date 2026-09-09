@@ -144,9 +144,8 @@ class LineageLink:
         A link without an owner or a hash is not evidence of anything, and
         counting it would let a malformed chain score the same as a sound one.
         """
-        return bool(self.owner) and self.verified_hash.startswith("0x") and len(
-            self.verified_hash
-        ) == 66
+        import re
+        return bool(self.owner) and bool(re.fullmatch(r"0x[0-9a-fA-F]{64}", self.verified_hash))
 
 
 @dataclass(frozen=True)
@@ -162,14 +161,15 @@ class Reputation:
     def to_dict(self) -> dict[str, Any]:
         return {
             "score": str(_q(self.score, "0.01")),
-            "grade": self.grade,
+            "grade": "unverified",
+            "heuristic_band": self.grade,
+            "verification": "seller-asserted",
             "links": self.links,
             "factors": [f.to_dict() for f in self.factors],
             "computed_at": self.computed_at,
             "basis": (
-                "Recomputed from the provenance chain and the memory itself. "
-                "Not supplied by the seller and not stored anywhere; a buyer "
-                "derives the same figure from the package they received."
+                "Heuristic computed over supplied history. The signature identifies "
+                "the current signer; it does not authenticate historical transfers or earnings."
             ),
         }
 
@@ -240,7 +240,7 @@ def score_lineage(
         integrity = _D(len(sound)) / _D(len(links))
         integrity_note = (
             f"{len(sound)} of {len(links)} chain entries carry a complete, "
-            "well-formed verification record."
+            "well-formed asserted record; historical evidence is not checked here."
         )
     else:
         # An origin memory has never been transferred. That is not a failing and
@@ -269,7 +269,7 @@ def score_lineage(
             depth,
             W_LINEAGE,
             {"verified_handovers": len(sound), "saturates_at": int(LINEAGE_TARGET)},
-            f"{len(sound)} verified handover(s); the factor saturates at "
+            f"{len(sound)} asserted handover(s); the factor saturates at "
             f"{int(LINEAGE_TARGET)} because the difference between one and three "
             "is real and the difference between eight and eleven is noise.",
         )

@@ -19,7 +19,9 @@ from eth_account import Account
 from web3 import EthereumTesterProvider, Web3
 
 from succession.chain import ChainSettlement, listing_id_to_bytes32
-from succession.demokeys import BUYER, SELLER
+from succession.demokeys import BUYER, EVALUATOR, SELLER
+from succession.evaluator import Evaluator
+from succession.memory.sibyl import open_tenant
 from succession.seal import SealRegistry
 from succession.settlement import ListingState, SettlementError
 from succession.transfer import execute_transfer, list_asset
@@ -41,7 +43,7 @@ def evm(tmp_path):
     artifacts = load_artifacts()
 
     funder = w3.eth.accounts[0]
-    arbiter = w3.eth.accounts[9]
+    arbiter = EVALUATOR.address
 
     # Real keys for our demo identities, funded from the tester's accounts, so
     # the signatures the contract recovers are the same ones the SMP header
@@ -49,7 +51,7 @@ def evm(tmp_path):
     # that the wallet holding the ERC-8004 identity signs both.
     seller = Account.from_key(SELLER.private_key).address
     buyer = Account.from_key(BUYER.private_key).address
-    for who in (seller, buyer):
+    for who in (seller, buyer, arbiter):
         w3.eth.send_transaction(
             {"from": funder, "to": who, "value": w3.to_wei(10, "ether")}
         )
@@ -71,6 +73,7 @@ def evm(tmp_path):
         contract_address=listings.address,
         seller_key=SELLER.private_key,
         buyer_key=BUYER.private_key,
+        evaluator_key=EVALUATOR.private_key,
     )
     settlement.approve_identity(registry.address, seller, AGENT_TOKEN_ID)
     settlement.approve_payment(token.address, buyer, PRICE * 10)
@@ -134,9 +137,17 @@ def _list_and_escrow(evm, seller, agent_id, tmp_path):
     return listed
 
 
+def _evaluation(tmp_path, name):
+    return (
+        open_tenant(tmp_path / f"{name}-evaluator.db", "isolated-evaluator"),
+        Evaluator(EVALUATOR.private_key),
+    )
+
+
 def test_a_full_transfer_settles_on_chain(evm, seller, buyer, agent_id, tmp_path):
     listed = _list_and_escrow(evm, seller, agent_id, tmp_path)
     seller_before = evm["token"].functions.balanceOf(evm["seller"]).call()
+    evaluator_sink, evaluator = _evaluation(tmp_path, "full")
 
     outcome = execute_transfer(
         listing_id=LISTING,
@@ -146,6 +157,7 @@ def test_a_full_transfer_settles_on_chain(evm, seller, buyer, agent_id, tmp_path
         content_key=listed.content_key,
         seller_tenant_id=seller.tenant_id,
         buyer_sink=buyer,
+        evaluator_sink=evaluator_sink, evaluator=evaluator,
         buyer_identity=BUYER.agent_id,
         buyer_address=evm["buyer"],
         expected_signer=SELLER.address,
@@ -165,11 +177,13 @@ def test_a_full_transfer_settles_on_chain(evm, seller, buyer, agent_id, tmp_path
 
 def test_the_buyers_agent_recalls_after_an_on_chain_sale(evm, seller, buyer, agent_id, tmp_path):
     listed = _list_and_escrow(evm, seller, agent_id, tmp_path)
+    evaluator_sink, evaluator = _evaluation(tmp_path, "recall")
     execute_transfer(
         listing_id=LISTING, settlement=evm["settlement"],
         seals=SealRegistry(tmp_path / "seals.db"),
         envelope=listed.envelope, content_key=listed.content_key,
         seller_tenant_id=seller.tenant_id, buyer_sink=buyer,
+        evaluator_sink=evaluator_sink, evaluator=evaluator,
         buyer_identity=BUYER.agent_id, buyer_address=evm["buyer"],
         expected_signer=SELLER.address,
     )
@@ -182,11 +196,13 @@ def test_the_buyers_agent_recalls_after_an_on_chain_sale(evm, seller, buyer, age
 
 def test_the_certificate_carries_the_transaction_hash(evm, seller, buyer, agent_id, tmp_path):
     listed = _list_and_escrow(evm, seller, agent_id, tmp_path)
+    evaluator_sink, evaluator = _evaluation(tmp_path, "certificate")
     outcome = execute_transfer(
         listing_id=LISTING, settlement=evm["settlement"],
         seals=SealRegistry(tmp_path / "seals.db"),
         envelope=listed.envelope, content_key=listed.content_key,
         seller_tenant_id=seller.tenant_id, buyer_sink=buyer,
+        evaluator_sink=evaluator_sink, evaluator=evaluator,
         buyer_identity=BUYER.agent_id, buyer_address=evm["buyer"],
         expected_signer=SELLER.address,
     )
@@ -211,12 +227,14 @@ def test_a_bad_delivery_refunds_on_chain_and_leaves_nothing_behind(
         tampered, listing_id=LISTING, hash_commitment=listed.committed_root,
         key=listed.content_key,
     )
+    evaluator_sink, evaluator = _evaluation(tmp_path, "bad")
 
     outcome = execute_transfer(
         listing_id=LISTING, settlement=evm["settlement"],
         seals=SealRegistry(tmp_path / "seals.db"),
         envelope=bad, content_key=listed.content_key,
         seller_tenant_id=seller.tenant_id, buyer_sink=buyer,
+        evaluator_sink=evaluator_sink, evaluator=evaluator,
         buyer_identity=BUYER.agent_id, buyer_address=evm["buyer"],
         expected_signer=SELLER.address,
     )
@@ -234,11 +252,13 @@ def test_the_content_key_is_still_gated_on_escrow(evm, seller, buyer, agent_id, 
         seller_address=evm["seller"], private_key=SELLER.private_key, price=PRICE,
     )
     with pytest.raises(SettlementError, match="funded escrow"):
+        evaluator_sink, evaluator = _evaluation(tmp_path, "gated")
         execute_transfer(
             listing_id=LISTING, settlement=evm["settlement"],
             seals=SealRegistry(tmp_path / "seals.db"),
             envelope=listed.envelope, content_key=listed.content_key,
             seller_tenant_id=seller.tenant_id, buyer_sink=buyer,
+            evaluator_sink=evaluator_sink, evaluator=evaluator,
             buyer_identity=BUYER.agent_id, buyer_address=evm["buyer"],
             expected_signer=SELLER.address,
         )

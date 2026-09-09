@@ -63,11 +63,11 @@ function detail(event: ActivityEvent): string {
   const args = event.args;
   switch (event.event) {
     case "Listed":
-      return args.price ? `${formatAmount(Number(args.price), "USDC")} asked` : "";
+      return args.price ? `${formatAmount(String(args.price), "USDC")} asked` : "";
     case "Escrowed":
-      return `${short(args.buyer)} funded ${formatAmount(Number(args.amount ?? 0), "USDC")}`;
+      return `${short(args.buyer)} funded ${formatAmount(String(args.amount ?? 0), "USDC")}`;
     case "TransferConfirmed":
-      return `${formatAmount(Number(args.amount ?? 0), "USDC")} released`;
+      return `${formatAmount(String(args.amount ?? 0), "USDC")} released`;
     case "Refunded":
       return String(args.reason || "no reason recorded");
     case "Cancelled":

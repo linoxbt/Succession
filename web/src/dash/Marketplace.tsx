@@ -40,17 +40,6 @@ const WHY = [
   ["Provenance", "Who held it before, and whether each handover verified."],
 ] as const;
 
-const HOW = [
-  ["01", "Export", "The seller's tenant is filtered, serialised and hashed into a package."],
-  ["02", "List", "The Merkle root is committed to the contract on Base."],
-  ["03", "Preview", "The buyer sees aggregate statistics and verifiable history."],
-  ["04", "Escrow", "The buyer funds the contract. Nothing has moved yet."],
-  ["05", "Deliver", "The encrypted package travels to the buyer."],
-  ["06", "Re-key", "It imports into a new tenant under the buyer's own id."],
-  ["07", "Verify", "The buyer re-exports their store and re-derives the root."],
-  ["08", "Settle", "confirmTransfer pays, moves the identity and seals the seller."],
-  ["09", "Record", "The acquisition becomes part of the provenance chain."],
-] as const;
 
 export default function Marketplace({
   rows,
@@ -106,7 +95,7 @@ export default function Marketplace({
       <Section index="02" title="Live marketplace" action={
         <button
           onClick={onRefresh}
-          className="link-underline font-mono text-label uppercase text-muted hover:text-ink"
+          className="link-underline text-micro font-medium text-muted hover:text-ink"
         >
           Refresh
         </button>
@@ -260,7 +249,7 @@ export default function Marketplace({
           </Empty>
         ) : (
           <>
-            <p className="mb-8 font-mono text-label uppercase tracking-[0.14em] text-faint">
+            <p className="mb-8 text-micro font-medium text-faint">
               {visible.length} of {rows.length} listing
               {rows.length === 1 ? "" : "s"}
             </p>
@@ -313,17 +302,12 @@ export default function Marketplace({
 
       {/* --- how a sale works --------------------------------------------- */}
       <Section index="05" title="How a sale works" className="mt-chapter">
-        <ol className="grid gap-px border border-hairline bg-hairline sm:grid-cols-2 lg:grid-cols-3">
-          {HOW.map(([index, title, line]) => (
-            <li key={index} className="bg-paper p-7">
-              <span className="font-mono text-label uppercase tracking-[0.14em] text-signal">
-                {index}
-              </span>
-              <h3 className="mt-3 text-body text-ink">{title}</h3>
-              <p className="mt-2 text-micro text-muted">{line}</p>
-            </li>
-          ))}
-        </ol>
+        <p className="max-w-measure text-lede text-muted">
+          Nine steps, from export to a provenance record the next sale extends.
+          They are set out in full under Docs, which is the one place they live
+          now: this screen used to carry a second copy, and two copies of a
+          sequence is one that will eventually be wrong.
+        </p>
       </Section>
 
       {/* --- what is verifiable, and what is not -------------------------- */}
@@ -358,7 +342,7 @@ export default function Marketplace({
           </div>
 
           <div className="space-y-8">
-            <h3 className="font-mono text-label uppercase tracking-[0.14em] text-faint">
+            <h3 className="text-micro font-medium text-faint">
               Known limits
             </h3>
             <KnownLimit title="The buyer asserts the delivered hash">

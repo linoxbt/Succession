@@ -190,7 +190,7 @@ def test_a_settled_agent_cannot_be_confirmed_again(env):
     listing_id = make_listing(env)
     env["listings"].functions.buy(listing_id).transact({"from": env["buyer"]})
     env["listings"].functions.confirmTransfer(listing_id, COMMITMENT).transact(
-        {"from": env["buyer"]}
+        {"from": env["arbiter"]}
     )
     assert env["listings"].functions.isSealed(AGENT_ID).call() is True
 
@@ -252,7 +252,7 @@ def test_a_matching_hash_pays_moves_and_seals_in_one_transaction(env):
     seller_before = env["token"].functions.balanceOf(env["seller"]).call()
 
     tx = env["listings"].functions.confirmTransfer(listing_id, COMMITMENT).transact(
-        {"from": env["buyer"]}
+        {"from": env["arbiter"]}
     )
     receipt = env["w3"].eth.wait_for_transaction_receipt(tx)
 
@@ -272,7 +272,7 @@ def test_the_identity_carries_its_registration_uri(env):
     listing_id = make_listing(env)
     env["listings"].functions.buy(listing_id).transact({"from": env["buyer"]})
     env["listings"].functions.confirmTransfer(listing_id, COMMITMENT).transact(
-        {"from": env["buyer"]}
+        {"from": env["arbiter"]}
     )
     assert env["registry"].functions.agentURI(AGENT_ID).call() == AGENT_URI
 
@@ -283,7 +283,7 @@ def test_a_mismatched_hash_refunds_instead_of_reverting(env):
     buyer_before = env["token"].functions.balanceOf(env["buyer"]).call()
 
     tx = env["listings"].functions.confirmTransfer(listing_id, WRONG).transact(
-        {"from": env["buyer"]}
+        {"from": env["arbiter"]}
     )
     receipt = env["w3"].eth.wait_for_transaction_receipt(tx)
 
@@ -298,7 +298,7 @@ def test_a_mismatched_hash_refunds_instead_of_reverting(env):
     assert "Hash mismatch" in events[0]["args"]["reason"]
 
 
-def test_only_the_buyer_or_arbiter_may_confirm(env):
+def test_only_the_evaluator_may_confirm(env):
     listing_id = make_listing(env)
     env["listings"].functions.buy(listing_id).transact({"from": env["buyer"]})
 
@@ -313,6 +313,11 @@ def test_only_the_buyer_or_arbiter_may_confirm(env):
     with reverts_with(env["listings"], "NotAuthorised"):
         env["listings"].functions.confirmTransfer(listing_id, COMMITMENT).transact(
             {"from": env["seller"]}
+        )
+
+    with reverts_with(env["listings"], "NotAuthorised"):
+        env["listings"].functions.confirmTransfer(listing_id, COMMITMENT).transact(
+            {"from": env["buyer"]}
         )
 
 
@@ -331,38 +336,38 @@ def test_settlement_cannot_happen_twice(env):
     listing_id = make_listing(env)
     env["listings"].functions.buy(listing_id).transact({"from": env["buyer"]})
     env["listings"].functions.confirmTransfer(listing_id, COMMITMENT).transact(
-        {"from": env["buyer"]}
+        {"from": env["arbiter"]}
     )
 
     with reverts_with(env["listings"], "WrongState"):
         env["listings"].functions.confirmTransfer(listing_id, COMMITMENT).transact(
-            {"from": env["buyer"]}
+            {"from": env["arbiter"]}
         )
 
 
-def test_a_sealed_agent_cannot_be_relisted(env):
-    """The seal is what stops the same memory being sold twice."""
+def test_successor_can_relist_after_prior_owner_is_retired(env):
+    """The identity stays transferable across successive owners."""
     listing_id = make_listing(env)
     env["listings"].functions.buy(listing_id).transact({"from": env["buyer"]})
     env["listings"].functions.confirmTransfer(listing_id, COMMITMENT).transact(
-        {"from": env["buyer"]}
+        {"from": env["arbiter"]}
     )
 
     env["registry"].functions.approve(env["listings"].address, AGENT_ID).transact(
         {"from": env["buyer"]}
     )
     second = b"S" + b"\x00" * 31
-    with reverts_with(env["listings"], "AgentAlreadySealed"):
-        env["listings"].functions.list(
-            second, AGENT_ID, COMMITMENT, PRICE, attest(env, second, COMMITMENT, signer=env["buyer"])
-        ).transact({"from": env["buyer"]})
+    env["listings"].functions.list(
+        second, AGENT_ID, COMMITMENT, PRICE, attest(env, second, COMMITMENT, signer=env["buyer"])
+    ).transact({"from": env["buyer"]})
+    assert env['listings'].functions.activeListing(AGENT_ID).call() == second
 
 
 def test_confirming_without_escrow_reverts(env):
     listing_id = make_listing(env)
     with reverts_with(env["listings"], "WrongState"):
         env["listings"].functions.confirmTransfer(listing_id, COMMITMENT).transact(
-            {"from": env["buyer"]}
+            {"from": env["arbiter"]}
         )
 
 
@@ -448,7 +453,7 @@ def test_a_token_that_returns_false_is_not_treated_as_paid(env, chain):
     token.functions.setFailTransfers(True).transact({"from": deployer})
 
     with reverts_with(listings, "TransferFailed"):
-        listings.functions.confirmTransfer(listing_id, COMMITMENT).transact({"from": buyer})
+        listings.functions.confirmTransfer(listing_id, COMMITMENT).transact({"from": arbiter})
 
     # The whole transaction reverted, so nothing moved.
     assert registry.functions.ownerOf(AGENT_ID).call() == seller

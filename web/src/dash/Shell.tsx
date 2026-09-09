@@ -66,8 +66,22 @@ export default function Shell({
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
+    const toggle = document.querySelector<HTMLButtonElement>('[aria-controls="console-menu"]');
+    const menu = document.getElementById('console-menu');
+    if (open) menu?.querySelector<HTMLButtonElement>('button')?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (!open) return;
+      if (event.key === 'Escape') { setOpen(false); toggle?.focus(); }
+      if (event.key === 'Tab') {
+        const items = [toggle, ...Array.from(menu?.querySelectorAll<HTMLButtonElement>('button') ?? [])].filter(Boolean) as HTMLButtonElement[];
+        const index = items.indexOf(document.activeElement as HTMLButtonElement);
+        event.preventDefault(); items[(index + (event.shiftKey ? items.length - 1 : 1)) % items.length]?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = "";
+      document.removeEventListener("keydown", onKey);
     };
   }, [open]);
 
@@ -104,7 +118,7 @@ export default function Shell({
             {wallet}
             <button
               onClick={() => setOpen((v) => !v)}
-              className="link-underline font-mono text-label uppercase text-ink"
+              className="link-underline text-micro font-semibold text-ink"
               aria-expanded={open}
               aria-controls="console-menu"
             >
@@ -116,6 +130,7 @@ export default function Shell({
 
       <div
         id="console-menu"
+        hidden={!open}
         className={`fixed inset-0 z-40 bg-paper transition-opacity duration-500 ease-swift ${
           open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
@@ -174,7 +189,7 @@ function Footer({ onView }: { onView: (v: View) => void }) {
               <button
                 key={item.id}
                 onClick={() => onView(item.id)}
-                className="link-underline font-mono text-label uppercase text-chalkMuted transition-colors duration-500 hover:text-chalk"
+                className="link-underline text-micro font-medium text-chalkMuted transition-colors duration-500 hover:text-chalk"
               >
                 {item.label}
               </button>
@@ -183,14 +198,14 @@ function Footer({ onView }: { onView: (v: View) => void }) {
         </div>
 
         <div className="mt-16 flex flex-col gap-3 border-t border-carbonRule pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="font-mono text-label uppercase text-chalkFaint">
+          <p className="text-micro font-medium text-chalkFaint">
             Settles on Base · ERC-8004 identity · Sibyl Memory
           </p>
           <a
             href="https://github.com/linoxbt/Succession"
             target="_blank"
             rel="noreferrer"
-            className="link-underline font-mono text-label uppercase text-chalkMuted transition-colors duration-500 hover:text-chalk"
+            className="link-underline text-micro font-medium text-chalkMuted transition-colors duration-500 hover:text-chalk"
           >
             Source
           </a>

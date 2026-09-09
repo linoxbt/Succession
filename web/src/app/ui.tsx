@@ -43,9 +43,9 @@ export function Panel({
 }) {
   return (
     <Tag
-      className={`rounded-sm border border-hairline bg-shade ${
+      className={`rounded-card border border-hairline bg-paper shadow-card ${
         interactive
-          ? "transition-colors duration-200 ease-swift hover:border-rule"
+          ? "transition-[box-shadow,transform] duration-200 ease-swift hover:-translate-y-0.5 hover:shadow-lift"
           : ""
       } ${className}`}
     >
@@ -68,8 +68,8 @@ export function Block({
 }) {
   return (
     <div className={className}>
-      <div className="mb-5 flex items-baseline justify-between gap-6 border-b border-hairline pb-3">
-        <h3 className="font-mono text-label uppercase text-faint">{label}</h3>
+      <div className="mb-5 flex items-baseline justify-between gap-6">
+        <h3 className="text-micro font-semibold uppercase tracking-[0.08em] text-faint">{label}</h3>
         {action}
       </div>
       {children}
@@ -98,7 +98,7 @@ export function Tabs<T extends string>({
             role="tab"
             aria-selected={on}
             onClick={() => onSelect(tab.id)}
-            className={`-mb-px shrink-0 border-b-2 pb-4 font-mono text-label uppercase tracking-[0.14em] transition-colors duration-200 ${
+            className={`-mb-px shrink-0 border-b-2 pb-4 text-micro font-medium transition-colors duration-200 ${
               on
                 ? "border-signal text-ink"
                 : "border-transparent text-faint hover:text-muted"
@@ -206,7 +206,7 @@ export function Steps({
               >
                 {step.title}
               </span>
-              <span className="font-mono text-label uppercase tracking-[0.14em] text-faint">
+              <span className="text-micro font-medium text-faint">
                 {step.state}
               </span>
             </div>
@@ -225,8 +225,9 @@ export function Steps({
 // --- input ---------------------------------------------------------------
 
 const FIELD =
-  "w-full rounded-sm border border-rule bg-paper px-4 py-3 text-body text-ink " +
-  "placeholder:text-faint focus:border-signal focus:outline-none";
+  "w-full rounded-control border border-rule bg-paper px-3.5 py-2.5 text-body text-ink " +
+  "placeholder:text-faint focus:border-signal focus:ring-2 focus:ring-signal/20 focus:outline-none " +
+  "transition-[border-color,box-shadow] duration-150";
 
 export function TextInput({
   label,
@@ -248,7 +249,7 @@ export function TextInput({
     <div>
       <label
         htmlFor={id}
-        className="mb-2 block font-mono text-label uppercase tracking-[0.14em] text-faint"
+        className="mb-1.5 block text-micro font-medium text-muted"
       >
         {label}
       </label>
@@ -281,7 +282,7 @@ export function Select<T extends string>({
     <div>
       <label
         htmlFor={id}
-        className="mb-2 block font-mono text-label uppercase tracking-[0.14em] text-faint"
+        className="mb-1.5 block text-micro font-medium text-muted"
       >
         {label}
       </label>
@@ -320,9 +321,7 @@ export function Slider({
   return (
     <div className={disabled ? "opacity-40" : ""}>
       <label htmlFor={id} className="flex items-baseline justify-between gap-4">
-        <span className="font-mono text-label uppercase tracking-[0.14em] text-faint">
-          {label}
-        </span>
+        <span className="text-micro font-medium text-muted">{label}</span>
         <span className="tnum text-body text-ink">
           {value}
           {suffix}
@@ -368,7 +367,7 @@ export function Skeleton({
       {Array.from({ length: rows }, (_, i) => (
         <div
           key={i}
-          className="h-4 animate-pulse rounded-sm bg-shade"
+          className="h-4 animate-pulse rounded-control bg-shade"
           style={{ width: `${100 - i * 12}%` }}
         />
       ))}
@@ -414,14 +413,14 @@ export function CopyLine({ value, label }: { value: string; label?: string }) {
       title={value}
     >
       {label ? (
-        <span className="shrink-0 font-mono text-label uppercase text-faint">
+        <span className="shrink-0 text-micro font-medium text-faint">
           {label}
         </span>
       ) : null}
       <span className="evidence-type min-w-0 flex-1 truncate text-micro text-ink">
         {value}
       </span>
-      <span className="shrink-0 font-mono text-label uppercase text-faint opacity-0 transition-opacity group-hover:opacity-100">
+      <span className="shrink-0 text-micro font-medium text-faint opacity-0 transition-opacity group-hover:opacity-100">
         {copied ? "copied" : "copy"}
       </span>
     </button>

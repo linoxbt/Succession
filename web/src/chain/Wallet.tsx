@@ -21,6 +21,7 @@ import {
   useConnect,
   useDisconnect,
   useReadContract,
+  useSignMessage,
   useSwitchChain,
   useWaitForTransactionReceipt,
   useWriteContract,
@@ -28,6 +29,8 @@ import {
 import { Badge, Button, Field, FieldList, Hash, Note } from "../ui";
 import { ERC20_ABI, LISTING_ABI } from "./abi";
 import { CHAIN, explorerAddress, explorerTx } from "./config";
+import type { Listing } from "../api";
+import { keyRequestMessage } from './requestAuth';
 
 export interface Deployment {
   listing_contract: string;
@@ -43,7 +46,7 @@ export interface ChainStatus {
   // "none" when no deployment record exists. There is deliberately no third
   // state: a flag that turned on chain mode without a deployment would be a
   // flag that could be set wrongly.
-  mode: "none" | "chain";
+  mode: "none" | "chain" | "unavailable";
   explanation: string;
   chain_id: number | null;
   deployment: Deployment | null;
@@ -116,7 +119,7 @@ export function WalletBar(_props: { status?: ChainStatus | null }) {
       {wrongChain ? (
         <button
           onClick={() => switchChain({ chainId: CHAIN.id })}
-          className="link-underline font-mono text-label uppercase text-void"
+          className="link-underline text-micro font-medium text-void"
         >
           Wrong network, switch
         </button>
@@ -125,7 +128,7 @@ export function WalletBar(_props: { status?: ChainStatus | null }) {
       )}
       <button
         onClick={() => disconnect()}
-        className="link-underline font-mono text-label uppercase text-faint transition-colors duration-500 hover:text-ink"
+        className="link-underline text-micro font-medium text-faint transition-colors duration-500 hover:text-ink"
       >
         Disconnect
       </button>
@@ -189,7 +192,7 @@ function ConnectButton() {
       <button
         onClick={() => setOpen((v) => !v)}
         disabled={isPending}
-        className="border border-rule px-3 py-1.5 font-mono text-label uppercase text-ink transition-colors duration-500 ease-swift hover:border-ink disabled:opacity-40"
+        className="border border-rule px-3 py-1.5 text-micro font-semibold text-ink transition-colors duration-500 ease-swift hover:border-ink disabled:opacity-40"
       >
         {isPending ? "Connecting" : "Connect"}
       </button>
@@ -290,7 +293,7 @@ export function SettlementMode({ status }: { status: ChainStatus | null }) {
           </Field>
           <Field label="Arbiter">
             <Hash value={d.arbiter} chars={8} />
-            <span className="text-muted">, may confirm alongside the buyer</span>
+            <span className="text-muted">, sole delivery evaluator and settlement authority</span>
           </Field>
         </FieldList>
       ) : null}
@@ -438,69 +441,76 @@ export function FundEscrow({
   );
 }
 
-/**
- * Submit the re-derived root. The buyer's own assertion, which is exactly the
- * hole the Evaluator exists to close, so the caller is expected to say so.
- */
-export function ConfirmOnChain({
-  deployment,
-  listingId,
-  deliveredRoot,
-  onConfirmed,
-}: {
-  deployment: Deployment;
-  listingId: string;
-  deliveredRoot: string;
-  onConfirmed: (txHash: string) => void;
+/** Recovery calls act on this listing's escrow and never ask for token approval. */
+export function EscrowRecovery({ deployment, listing, onChanged }: {
+  deployment: Deployment; listing: Listing; onChanged: () => void;
 }) {
+  const { address, isConnected } = useAccount();
+  const chainId = useChainId();
+  const [now, setNow] = useState(() => Date.now());
+  const [reason, setReason] = useState('');
   const { writeContract, data: txHash, isPending, error } = useWriteContract();
-  const { isLoading: mining, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
-
-  // See FundEscrow: the receipt state is sticky, so the effect must remember
-  // which hash it has already reported rather than firing on every re-render.
-  const handled = useRef<string | null>(null);
-
+  const { data: receipt, isLoading: mining, error: receiptError } = useWaitForTransactionReceipt({ hash: txHash, chainId: CHAIN.id });
+  const handled = useRef<string>();
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
   useEffect(() => {
-    if (!isSuccess || !txHash) return;
-    if (handled.current === txHash) return;
-    handled.current = txHash;
-    onConfirmed(txHash);
-  }, [isSuccess, txHash, onConfirmed]);
+    if (receipt?.status === 'success' && txHash && handled.current !== txHash) {
+      handled.current = txHash; onChanged();
+    }
+  }, [receipt, txHash, onChanged]);
+  const seller = address?.toLowerCase() === listing.seller.toLowerCase();
+  const buyer = address?.toLowerCase() === listing.buyer.toLowerCase();
+  const arbiter = address?.toLowerCase() === deployment.arbiter.toLowerCase();
+  const escrowed = listing.state === 'escrowed';
+  const expired = Boolean(listing.confirm_by && now >= listing.confirm_by * 1000);
+  const disabled = isPending || mining || !isConnected || chainId !== deployment.chain_id || deployment.chain_id !== CHAIN.id;
+  const base = { address: deployment.listing_contract as `0x${string}`, abi: LISTING_ABI, chainId: CHAIN.id };
+  const id = listingIdToBytes32(listing.listing_id);
+  if (listing.state !== 'open' && !escrowed) return null;
+  return <div className="mt-8 space-y-4 border-t border-rule pt-6">
+    <h3 className="font-display text-heading">Cancel or recover escrow</h3>
+    {escrowed && listing.confirm_by ? <Note>Reclaim becomes available at {new Date(listing.confirm_by * 1000).toLocaleString()}. The contract checks the chain timestamp.</Note> : null}
+    {listing.state === 'open' && seller ? <Button disabled={disabled} onClick={() => writeContract({ ...base, functionName: 'cancel', args: [id] })}>Cancel listing</Button> : null}
+    {escrowed && (seller || buyer || arbiter) ? <div className="space-y-3">
+      <label className="block text-body">Refund reason<input aria-label="Refund reason" maxLength={500} value={reason} onChange={e => setReason(e.target.value)} className="mt-2 block w-full border border-rule p-3" /></label>
+      <Note>A refund abandons this sale and returns its escrow to the buyer.</Note>
+      <Button disabled={disabled || !reason.trim()} onClick={() => writeContract({ ...base, functionName: 'refund', args: [id, reason.trim()] })}>Refund and abandon sale</Button>
+    </div> : null}
+    {escrowed ? <Button disabled={disabled || !expired} onClick={() => writeContract({ ...base, functionName: 'reclaimExpired', args: [id] })}>Reclaim expired escrow</Button> : null}
+    {!isConnected ? <Note>Connect a wallet to use the recovery controls.</Note> : chainId !== deployment.chain_id ? <Note>Switch to the listing's network.</Note> : null}
+    {isPending || mining ? <Note>Waiting for the wallet or network…</Note> : null}
+    {txHash ? <a className="block underline" href={explorerTx(txHash)} target="_blank" rel="noreferrer">View recovery transaction</a> : null}
+    {error || receiptError ? <ContractError error={(error || receiptError)!} /> : null}
+    {receipt?.status === 'reverted' ? <Note>The transaction reverted. The listing was not changed.</Note> : null}
+  </div>;
+}
 
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-4">
-        <Button
-          disabled={isPending || mining}
-          onClick={() =>
-            writeContract({
-              address: deployment.listing_contract as `0x${string}`,
-              abi: LISTING_ABI,
-              functionName: "confirmTransfer",
-              args: [listingIdToBytes32(listingId), deliveredRoot as `0x${string}`],
-            })
-          }
-        >
-          {isPending || mining ? "Waiting for the network…" : "Confirm delivery on chain"}
-        </Button>
-        <Note>
-          Payment, identity and the seal move in this one transaction, or none
-          of them do.
-        </Note>
-      </div>
-      {txHash ? (
-        <a
-          className="text-micro underline underline-offset-4 hover:text-escrow"
-          href={explorerTx(txHash)}
-          target="_blank"
-          rel="noreferrer"
-        >
-          View transaction on Basescan
-        </a>
-      ) : null}
-      {error ? <ContractError error={error} /> : null}
-    </div>
-  );
+export function ClaimAuthorization({deployment, listing}: {deployment: Deployment; listing: Listing}) {
+  const { address } = useAccount();
+  const { signMessageAsync, isPending } = useSignMessage();
+  const [error, setError] = useState<string>();
+  const download = async () => {
+    if (!address) return;
+    setError(undefined);
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const nonce = crypto.randomUUID().replaceAll('-', '');
+      const signature = await signMessageAsync({message: keyRequestMessage(listing.listing_id, deployment.chain_id, deployment.listing_contract, timestamp, nonce)});
+      const auth = {listing_id: listing.listing_id, chain_id:deployment.chain_id,
+        contract:deployment.listing_contract, address, headers:{
+          'X-Succession-Address':address, 'X-Succession-Timestamp':String(timestamp),
+          'X-Succession-Nonce':nonce, 'X-Succession-Signature':signature,
+        }};
+      const url = URL.createObjectURL(new Blob([JSON.stringify(auth)], {type:'application/json'}));
+      const anchor = document.createElement('a'); anchor.href=url; anchor.download='succession-claim-auth.json';
+      anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  };
+  return <div className="mt-6 space-y-3">
+    <Button disabled={isPending || address?.toLowerCase() !== listing.buyer.toLowerCase()} onClick={() => {void download();}}>Authorize local claim</Button>
+    <Note>For a passkey or contract wallet, sign a single-use authorization and add <code>--auth-file ~/Downloads/succession-claim-auth.json</code> to your claim command. It expires after five minutes and does not export your wallet key. Regenerate it if collection fails.</Note>
+    {error ? <Note>{error}</Note> : null}
+  </div>;
 }
 
 /**

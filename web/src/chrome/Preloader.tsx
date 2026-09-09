@@ -108,7 +108,7 @@ export default function Preloader({ onDone }: { onDone: () => void }) {
       aria-label="Loading"
     >
       <div className="gutter flex h-full flex-col justify-between py-10">
-        <p className="font-mono text-label uppercase text-chalkFaint">Succession</p>
+        <p className="text-micro font-medium text-chalkFaint">Succession</p>
 
         <p className="display-type max-w-[14ch] text-title text-chalk">
           The property layer for agent memory

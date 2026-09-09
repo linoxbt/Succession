@@ -1,43 +1,26 @@
 # Succession web
 
-Two surfaces, one system.
+Run `npm ci` and `npm run dev` in this directory. Development proxies `/api`
+to `http://127.0.0.1:8000`. Build with `npm run build`; run the committed browser
+regressions with `npm run test:browser` after installing Playwright Chromium.
 
-```bash
-npm install
-npm run dev      # proxies /api to http://127.0.0.1:8000
-```
+The landing page loads independently of the console and wallet stack. Console
+routes are overview, marketplace, listing detail, sell, claim, docs, and the
+isolated synthetic walkthrough. Market or registry failures are shown to the
+user; production never substitutes recorded listings.
 
-**Landing** (`/`) — statements, not paragraphs. Every line is a claim the
-product can be held to, and nothing explains itself twice. The scale does the
-persuading.
+`VITE_SERVICE=mock` is development-only; production builds reject it. Optional
+`VITE_BASE_SEPOLIA_RPC_URL` and `VITE_REOWN_PROJECT_ID` are build-time settings.
+The production Vercel configuration proxies `/api` to the Railway service at
+`https://succession-production-7320.up.railway.app`; review that target and CSP
+before deploying another environment.
 
-**Console** (`/app`) — an internal operations surface for the team running
-sales: left rail, dense tables, tabular numerals, one accent reserved for
-transaction state. There is deliberately no `Card` component and no shadow
-anywhere; depth is what a marketing page uses to make a list feel important.
+The browser can fund escrow, cancel a listing, refund a funded sale, and reclaim
+expired escrow. Only the configured evaluator may confirm delivery. Local file
+export/import and certificate completion run through the CLI. A partial memory
+scope still transfers the entire identity token. EOA buyers can use a local
+signer. Contract-wallet buyers can download a single-use claim authorization
+from the listing page; provider-specific live acceptance remains release work.
 
-Five views: Overview, Listing (the full list → escrow → settle workflow),
-Transfers (the settlement ledger, refunds included), Agents (Virtuals ACP job
-history), Memory (the cold-booted successor agent).
-
-## Rules the surface keeps
-
-- **Colour encodes transaction state and nothing else**, and never alone —
-  every badge says what it means in words.
-- **The hash comparison is the screen**, not a detail behind a success banner.
-  Two monospace blocks in eight-character runs, so a person can actually read
-  one against the other.
-- **Self-reported and verifiable figures are labelled separately.** Record
-  counts come from the seller's own memory; ACP job history resolves to on-chain
-  job ids. A buyer's confidence in each should differ, so the UI does not blend
-  them.
-- **The Memory view is deliberately plain.** The surprise belongs to what the
-  agent says. The citation line under each reply names the records behind every
-  claim — that is what separates "the agent remembered" from "the agent said
-  something plausible".
-
-## Recorded mode
-
-With no service reachable the build replays `public/recorded-run.json` — one
-real end-to-end run. A banner names the mode and the recording date on every
-screen. Regenerate it whenever the pipeline changes.
+See [operations](../docs/OPERATIONS.md), [audit status](../docs/AUDIT_STATUS.md)
+and [release acceptance](../docs/RELEASE_ACCEPTANCE_2026-09-09.md).

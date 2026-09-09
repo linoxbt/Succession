@@ -248,11 +248,11 @@ class LiveACP:
         if self._client is None:
             # Imported here, not at module scope: the SDK opens a socket
             # connection and wants credentials the test suite does not have.
-            from virtuals_acp import VirtualsACP
-            from virtuals_acp.configs import BASE_SEPOLIA_CONFIG
-            from virtuals_acp.contract_clients.contract_client import AcpContractClient
+            from virtuals_acp.client import VirtualsACP
+            from virtuals_acp.configs.configs import BASE_SEPOLIA_CONFIG
+            from virtuals_acp.contract_clients.contract_client import ACPContractClient
 
-            contract = AcpContractClient(
+            contract = ACPContractClient(
                 wallet_private_key=os.environ["WHITELISTED_WALLET_PRIVATE_KEY"],
                 agent_wallet_address=os.environ["AGENT_WALLET_ADDRESS"],
                 config=BASE_SEPOLIA_CONFIG,

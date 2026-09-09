@@ -339,6 +339,25 @@ def test_arbiter_refuses_to_rubber_stamp_a_corrupt_delivery(
     assert receipt.outcome == "refunded"
 
 
+def test_matching_root_with_bad_seller_signature_is_refunded(evaluator, sale, buyer):
+    """A matching content root alone must never override failed provenance."""
+    settlement, listed = sale
+    verdict = evaluator.evaluate(
+        listing_id="listing-0417",
+        committed_root=listed.committed_root,
+        buyer_sink=buyer,
+        package=listed.export.package,
+        expected_signer=BUYER.address,
+    )
+
+    assert verdict.evaluator_root == listed.committed_root
+    assert not verdict.verified
+    receipt = evaluator.settle(settlement, verdict, buyer_identity=BUYER_AGENT)
+
+    assert receipt.outcome == "refunded"
+    assert receipt.confirmed_by == "arbiter"
+
+
 def test_a_stranger_cannot_confirm(sale, buyer):
     """Only the buyer and the arbiter, exactly as the contract enforces."""
     settlement, listed = sale
@@ -351,21 +370,20 @@ def test_a_stranger_cannot_confirm(sale, buyer):
         expected_signer=SELLER.address,
     )
 
-    with pytest.raises(SettlementError, match="neither the buyer nor the arbiter"):
+    with pytest.raises(SettlementError, match="not the evaluator"):
         stranger.settle(settlement, verdict, buyer_identity=BUYER_AGENT)
 
 
-def test_buyer_confirmation_is_still_labelled_as_self_reported(sale):
-    """The default path must not silently claim the arbiter's credibility."""
+def test_buyer_cannot_confirm_or_trigger_a_mismatch_refund(sale):
+    """Plaintext access can never give the buyer control of settlement."""
     settlement, listed = sale
 
-    receipt = settlement.confirm_transfer(
-        "listing-0417",
-        delivered_hash=listed.committed_root,
-        buyer_identity=BUYER_AGENT,
-    )
-
-    assert receipt.confirmed_by == "buyer"
+    with pytest.raises(SettlementError, match="not the evaluator"):
+        settlement.confirm_transfer(
+            "listing-0417", delivered_hash="0x" + "de" * 32,
+            buyer_identity=BUYER_AGENT, caller=BUYER.address,
+        )
+    assert settlement.get("listing-0417").state.value == "escrowed"
 
 
 # -- partial sales --------------------------------------------------------

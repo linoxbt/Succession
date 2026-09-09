@@ -26,6 +26,7 @@ import {
 
 /** Listings, with the two collections kept apart as the service returns them. */
 export interface Listings {
+  notice?: string;
   /** Real listings, read from the contract. Every figure derives from these. */
   real: MarketRow[];
   /** Demonstration rows. Never counted, never purchasable. */
@@ -57,6 +58,8 @@ export const HttpService: SuccessionService = {
       real: body.listings,
       demo: body.demo_listings ?? [],
       chain: body.chain,
+      notice: body.discovery?.error || (body.discovery && !body.discovery.complete
+        ? 'Historical listing discovery is still in progress. Counts cover the listings found so far.' : undefined),
     };
   },
 
@@ -198,4 +201,4 @@ export const MockService: SuccessionService = {
  * fixtures by anything a page can set.
  */
 export const service: SuccessionService =
-  import.meta.env.VITE_SERVICE === "mock" ? MockService : HttpService;
+  import.meta.env.DEV && import.meta.env.VITE_SERVICE === "mock" ? MockService : HttpService;

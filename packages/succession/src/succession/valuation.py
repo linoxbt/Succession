@@ -36,7 +36,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from .memory.base import MemorySource
-from .redaction import read_disclosure
+from .redaction import record_disclosure
 
 __all__ = ["Factor", "Valuation", "value_tenant", "trust_score"]
 
@@ -180,8 +180,8 @@ def value_tenant(
     # non-transferable never reaches the buyer, so letting it lift the tenure,
     # density, breadth or win-rate terms would price an asset that includes it —
     # the same overstatement the data room's counts already refuse to make.
-    events = [e for e in source.events() if read_disclosure(e.get("extra")).transferable]
-    entities = [e for e in source.entities() if read_disclosure(e["body"]).transferable]
+    events = [e for e in source.events() if record_disclosure(e).may_transfer]
+    entities = [e for e in source.entities() if record_disclosure(e).may_transfer]
 
     # -- tenure --------------------------------------------------------
     stamps = sorted(_parse(e["ts"]) for e in events if e.get("ts"))

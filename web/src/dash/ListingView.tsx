@@ -19,8 +19,8 @@
 import { useState } from "react";
 
 import { formatAmount, type MarketRow } from "../api";
-import AgentPicker from "../chain/AgentPicker";
-import { ConfirmOnChain, FundEscrow, type ChainStatus } from "../chain/Wallet";
+import { shellArgument } from "../app/commands";
+import { ClaimAuthorization, EscrowRecovery, FundEscrow, type ChainStatus } from "../chain/Wallet";
 import { Button, Copyable, Note, Section } from "../ui";
 import {
   AgentIdentity,
@@ -68,19 +68,19 @@ function deliverySteps(row: MarketRow): { index: string; title: string; state: S
     },
     {
       index: "2",
-      title: "Package delivered and imported",
-      state: at(delivered || settled, escrowed && !delivered),
+      title: "Evaluator verifies delivery",
+      state: at(settled, escrowed),
       detail:
         escrowed && !delivered
-          ? "Happens in your terminal: the import writes into your own store, which this page cannot reach."
+          ? "The configured evaluator imports into an isolated store and checks the signature and root."
           : undefined,
     },
     {
       index: "3",
-      title: "Destination root re-derived",
-      state: at(delivered || settled, escrowed && !delivered),
+      title: "Evaluator root re-derived",
+      state: at(settled, escrowed),
       detail:
-        "The root is derived from your store after import, not from the bytes that arrived. Hashing the delivery would prove only that a file was sent.",
+        "The evaluator derives the root from its imported store, not from the bytes that arrived.",
     },
     {
       index: "4",
@@ -97,12 +97,16 @@ function deliverySteps(row: MarketRow): { index: string; title: string; state: S
 
 export default function ListingView({
   row,
+  loading = false,
+  error,
   chainStatus,
   onBack,
   onClaim,
   onRefresh,
 }: {
   row: MarketRow | null;
+  loading?: boolean;
+  error?: string;
   chainStatus: ChainStatus | null;
   onBack: () => void;
   onClaim: () => void;
@@ -111,9 +115,11 @@ export default function ListingView({
   // Which of the buyer's agents inherits this memory. Empty until they pick,
   // and the claim command says so rather than defaulting to a placeholder that
   // would import into the wrong tenant if pasted unread.
-  const [successor, setSuccessor] = useState("");
+  const [successor, setSuccessor] = useState("succession-import");
   const [tab, setTab] = useState<Tab>("memory");
 
+  if (!row && loading) return <Note>Loading listing…</Note>;
+  if (!row && error) return <Note>Could not load this listing: {error} <Button onClick={onRefresh}>Retry</Button></Note>;
   if (!row) {
     return (
       <Note>
@@ -137,7 +143,7 @@ export default function ListingView({
       <header className="pb-beat">
         <button
           onClick={onBack}
-          className="link-underline font-mono text-label uppercase tracking-[0.14em] text-muted hover:text-ink"
+          className="link-underline text-micro font-medium text-muted hover:text-ink"
         >
           Back to marketplace
         </button>
@@ -294,58 +300,47 @@ export default function ListingView({
                 only when a matching hash is confirmed, or back to you if it is
                 not.
               </p>
-              <FundEscrow
+              {row.has_envelope ? <FundEscrow
                 deployment={deployment}
                 listingId={listing.listing_id}
                 price={BigInt(listing.price)}
                 onFunded={onRefresh}
-              />
+              /> : <Note>The seller has not published the encrypted deliverable. Funding is unavailable until it is published.</Note>}
             </Section>
           ) : null}
 
           {listing.state === "escrowed" ? (
-            <Section index="04" title="Claim what you paid for" className="mt-chapter">
+            <Section index="04" title="Independent evaluation" className="mt-chapter">
               <p className="mb-8 max-w-measure text-body text-muted">
-                Your escrow is funded. Choose which of your agents inherits this
-                memory, then collect and import it on your own machine: the
-                import writes into your Sibyl store, which this page cannot
-                reach.
+                Your escrow is funded. The content key is available only to the
+                evaluator configured in the contract. It imports the package,
+                checks the seller signature, re-derives the root, and settles
+                only a verified delivery.
               </p>
-
-              <p className="chapter-mark mb-5">Successor agent</p>
-              <AgentPicker selected={successor} onSelect={setSuccessor} />
-
-              <div className="mt-10">
-                <Copyable
-                  text={`succession claim \\
-    --listing ${listing.listing_id} \\
-    --db ~/.sibyl-memory/memory.db \\
-    --tenant ${successor ? successor.replace(/[:]/g, "-") : "<pick an agent above>"} \\
-    --marketplace ${window.location.origin}`}
-                />
-              </div>
-              <div className="mt-4">
-                <Button size="sm" variant="quiet" onClick={onClaim}>
-                  Full instructions
-                </Button>
-              </div>
               <Note>
-                It prints the committed hash and the one re-derived from your own
-                store after the import. Confirm on chain only if they match.
+                The buyer cannot collect plaintext or submit a delivery root
+                while a refund remains possible. You may reclaim expired escrow
+                if evaluation never completes.
               </Note>
             </Section>
           ) : null}
 
-          {deployment && listing.state === "escrowed" && listing.delivered_hash ? (
-            <Section index="05" title="Confirm on chain" className="mt-chapter">
-              <ConfirmOnChain
-                deployment={deployment}
-                listingId={listing.listing_id}
-                deliveredRoot={listing.delivered_hash}
-                onConfirmed={onRefresh}
-              />
+          {listing.state === "confirmed" ? (
+            <Section index="05" title="Claim evaluator-approved memory" className="mt-chapter">
+              <label className="block text-body">Fresh destination tenant
+                <input aria-label="Destination tenant" value={successor} onChange={e => setSuccessor(e.target.value)} maxLength={128} className="mt-3 block w-full border border-rule p-3" />
+              </label>
+              <Note>Payment and identity transfer are confirmed. The buyer may now collect the key and import into a fresh local tenant.</Note>
+              {deployment ? <ClaimAuthorization deployment={deployment} listing={listing} /> : null}
+              <div className="mt-10"><Copyable text={`succession claim \\
+    --listing ${shellArgument(listing.listing_id)} \\
+    --db ~/.sibyl-memory/memory.db \\
+    --tenant ${shellArgument(successor.trim() || "succession-import")} \\
+    --marketplace ${shellArgument(window.location.origin)}`} /></div>
+              <div className="mt-4"><Button size="sm" variant="quiet" onClick={onClaim}>Full instructions</Button></div>
             </Section>
           ) : null}
+          {deployment ? <EscrowRecovery deployment={deployment} listing={listing} onChanged={onRefresh} /> : null}
         </>
       )}
     </div>

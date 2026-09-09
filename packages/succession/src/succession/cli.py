@@ -27,6 +27,7 @@ KEY_ENV = "SUCCESSION_SIGNING_KEY"
 #: The buyer signs with a different wallet to the seller, and conflating them
 #: is how someone accidentally tries to buy their own listing.
 BUYER_KEY_ENV = "SUCCESSION_BUYER_KEY"
+EVALUATOR_KEY_ENV = "SUCCESSION_EVALUATOR_KEY"
 
 
 def _require_key() -> str:
@@ -156,8 +157,12 @@ def _chain_backend(args: argparse.Namespace, key: str):
     w3 = Web3(Web3.HTTPProvider(rpc, request_kwargs={"timeout": 30}))
     w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
     if not w3.is_connected():
-        raise SystemExit(f"cannot reach {rpc}")
+        raise SystemExit("cannot reach the configured chain RPC")
 
+    if w3.eth.chain_id != int(record['chain_id']):
+        raise SystemExit('the RPC network does not match the deployment record')
+    if not w3.eth.get_code(record['listing_contract']):
+        raise SystemExit('the configured listing contract has no code on this network')
     backend = ChainSettlement(
         w3,
         contract_address=record["listing_contract"],
@@ -257,13 +262,16 @@ def cmd_publish(args: argparse.Namespace) -> int:
     the memory.
     """
     from .marketplace import MarketplaceError, publish_metadata
-    from .publish import PublishError, SellerVault
+    from .publish import PublishError, SellerVault, resume_listing
 
     key = _require_key()
     vault = SellerVault(args.vault) if getattr(args, "vault", None) else SellerVault()
 
     try:
         stored = vault.read(args.listing)
+        if stored.stage == 'prepared':
+            backend, _ = _chain_backend(args, key)
+            stored = resume_listing(args.listing, backend, private_key=key, vault=vault)
         envelope = vault.envelope(args.listing)
     except PublishError as exc:
         raise SystemExit(str(exc)) from exc
@@ -374,14 +382,30 @@ def _buyer_backend(args: argparse.Namespace, key: str):
     w3 = Web3(Web3.HTTPProvider(rpc, request_kwargs={"timeout": 30}))
     w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
     if not w3.is_connected():
-        raise SystemExit(f"cannot reach {rpc}")
+        raise SystemExit("cannot reach the configured chain RPC")
 
+    if w3.eth.chain_id != int(record['chain_id']):
+        raise SystemExit('the RPC network does not match the deployment record')
+    if not w3.eth.get_code(record['listing_contract']):
+        raise SystemExit('the configured listing contract has no code on this network')
     backend = ChainSettlement(
         w3,
         contract_address=record["listing_contract"],
         buyer_key=key,
         artifacts_path=getattr(args, "artifacts", None),
     )
+    return backend, record
+
+
+def _evaluator_backend(args: argparse.Namespace, key: str):
+    """Connect with the sole key the contract permits to settle delivery."""
+    backend, record = _buyer_backend(args, key)
+    evaluator = backend.register_key(key)
+    if evaluator.lower() != backend.arbiter.lower():
+        raise SystemExit(
+            f"{EVALUATOR_KEY_ENV} belongs to {evaluator}, but this deployment "
+            f"configures {backend.arbiter} as evaluator"
+        )
     return backend, record
 
 
@@ -496,7 +520,7 @@ def cmd_show(args: argparse.Namespace) -> int:
         print("  be checked before purchase. The commitment above still binds.")
 
     print()
-    print("Fund escrow, which is the first irreversible step:")
+    print("Fund escrow; payment is held until settlement:")
     print(f"  succession buy --listing {args.listing}")
     return 0
 
@@ -539,8 +563,8 @@ def cmd_buy(args: argparse.Namespace) -> int:
 
     if not args.yes:
         print("This sends two transactions: an ERC-20 approval, then buy().")
-        print("Funding escrow is irreversible from your side; the money is")
-        print("released to the seller on a matching hash, or returned to you.")
+        print("Payment is held until a matching hash releases it to the seller.")
+        print("You can request a refund before settlement or recover expired escrow.")
         print()
         print("Re-run with --yes to send them.")
         return 1
@@ -568,56 +592,88 @@ def cmd_buy(args: argparse.Namespace) -> int:
 
 
 def cmd_confirm(args: argparse.Namespace) -> int:
-    """Submit the root you re-derived, and settle or refund on it.
+    """Retained as a clear migration error for older scripts."""
+    raise SystemExit(
+        "buyer confirmation is disabled; the configured evaluator verifies and "
+        "settles before the buyer can collect the content key"
+    )
 
-    This is the transaction that moves ownership. Submitting a root that does
-    not match refunds you and abandons the sale, which is the correct outcome
-    for a bad delivery and an expensive mistake to make on a good one, so the
-    root is not defaulted and has to be passed.
-    """
+
+def _require_evaluator_key() -> str:
+    key = os.environ.get(EVALUATOR_KEY_ENV)
+    if not key:
+        raise SystemExit(f"set {EVALUATOR_KEY_ENV} to the configured evaluator wallet key")
+    return key
+
+
+def cmd_evaluate(args: argparse.Namespace) -> int:
+    """Collect into an isolated tenant, verify independently, then settle."""
     from eth_account import Account
 
+    from .auth import request_auth_headers
+    from .envelope import SealedEnvelope, open_envelope
+    from .evaluator import Evaluator
+    from .marketplace import MarketplaceError, get
     from .settlement import SettlementError
 
-    key = _require_buyer_key()
-    backend, _record = _buyer_backend(args, key)
-    buyer = Account.from_key(key).address
-
+    key = _require_evaluator_key()
+    backend, deployment = _evaluator_backend(args, key)
+    account = Account.from_key(key)
     listing = backend.get(args.listing)
+    if listing.state.value == "confirmed":
+        print(f"{args.listing} is already evaluator-settled")
+        return 0
     if listing.state.value != "escrowed":
-        raise SystemExit(
-            f"{args.listing} is {listing.state.value}; there is nothing escrowed "
-            "to settle."
-        )
+        raise SystemExit(f"{args.listing} is {listing.state.value}; evaluation requires funded escrow")
 
-    matches = args.root.lower() == listing.hash_commitment.lower()
-    print(f"listing {args.listing}")
-    print(f"  committed  {listing.hash_commitment}")
-    print(f"  submitting {args.root}")
-    print(f"  {'match' if matches else 'MISMATCH — this will refund you and abandon the sale'}")
-    print()
-    if not args.yes:
-        print("Re-run with --yes to send it.")
+    base = args.marketplace.rstrip("/")
+    try:
+        envelope = SealedEnvelope.from_dict(get(base, f"/api/listing/{args.listing}/envelope"))
+        path = f"/api/listing/{args.listing}/key/evaluator"
+        headers = request_auth_headers(
+            key, listing_id=args.listing, method="GET", path=path,
+            chain_id=int(deployment["chain_id"]), contract=deployment["listing_contract"],
+        )
+        content_key = bytes.fromhex(get(base, path, headers=headers)["content_key"])
+        package = open_envelope(envelope, content_key)
+    except (MarketplaceError, ValueError, KeyError) as exc:
+        raise SystemExit(f"could not collect evaluator delivery: {exc}") from exc
+
+    sink = open_tenant(args.db, args.tenant)
+    evaluator = Evaluator(key)
+    try:
+        if sink.is_empty():
+            import_package(
+                package, sink, committed_root=listing.hash_commitment,
+                expected_signer=listing.seller,
+            )
+        verdict = evaluator.evaluate(
+            listing_id=args.listing, committed_root=listing.hash_commitment,
+            buyer_sink=sink, package=package, expected_signer=listing.seller,
+            categories=package.header.get("categories"),
+        )
+    except Exception as exc:
+        if not args.yes:
+            print(f"evaluation failed: {exc}", file=sys.stderr)
+            print("Re-run with --yes to submit the evaluator refund.", file=sys.stderr)
+            return 1
+        receipt = backend.refund(
+            args.listing, reason=f"Evaluator rejected delivery — {exc}"[:200],
+            caller=account.address, confirmed_by="arbiter",
+        )
+        print(json.dumps(receipt.to_dict(), indent=2))
         return 1
 
+    print(json.dumps(verdict.to_dict(), indent=2))
+    if not args.yes:
+        print("Re-run with --yes to submit this signed evaluator verdict.")
+        return 0 if verdict.verified else 1
     try:
-        receipt = backend.confirm_transfer(
-            args.listing, delivered_hash=args.root, buyer_identity=buyer, caller=buyer
-        )
+        receipt = evaluator.settle(backend, verdict, buyer_identity=listing.buyer)
     except SettlementError as exc:
-        raise SystemExit(f"confirmTransfer failed: {exc}") from exc
-
-    body = receipt.to_dict()
-    print(f"  outcome    {body['outcome']}")
-    print(f"  amount     {int(body['amount']) / 1_000_000:,.2f}")
-    print(f"  reference  {body['reference']}")
-    if body["outcome"] == "released":
-        print()
-        print("Paid, identity transferred, and the seller's copy sealed.")
-    else:
-        print()
-        print("Refunded. The seller keeps their memory and you keep your money.")
-    return 0
+        raise SystemExit(f"evaluator settlement failed: {exc}") from exc
+    print(json.dumps(receipt.to_dict(), indent=2))
+    return 0 if receipt.outcome == "released" else 1
 
 
 def _require_buyer_key() -> str:
@@ -640,29 +696,72 @@ def cmd_claim(args: argparse.Namespace) -> int:
     purchase checkable: it proves the importer wrote what it received and the
     engine coerced nothing on the way in.
 
-    Every failure below is caught and explained. `import_package` raises on a
-    bad re-derivation rather than returning a result, so the guidance about not
-    confirming on chain used to sit behind a condition that could never be true,
-    and a buyer holding a corrupt package got a traceback instead of being told
-    what to do about it. That guidance is the most important output this command
-    has: confirming a mismatch is how a buyer loses their money.
+    This command is reachable only after evaluator settlement. It verifies the
+    buyer's local write again and records the acquisition certificate from the
+    already-mined settlement event.
     """
     from .envelope import SealedEnvelope, open_envelope
     from .importer import IntegrityMismatch, import_package
     from .marketplace import MarketplaceError, get
 
-    backend, _ = _chain_backend(args, os.environ.get(KEY_ENV, "0x" + "11" * 32))
+    from .auth import request_auth_headers
+    authorization = None
+    if args.auth_file:
+        try:
+            authorization = json.loads(args.auth_file.expanduser().read_text('utf-8'))
+        except (OSError, ValueError) as exc:
+            raise SystemExit('could not read the wallet authorization file') from exc
+    buyer_key = None if authorization else _require_buyer_key()
+    backend, deployment = _buyer_backend(args, buyer_key)
     listing = backend.get(args.listing)
+    from eth_account import Account
+    from eth_utils import to_checksum_address
+    from .acquisition import AcquisitionJournal
+    from .importer import ImportResult
+    if authorization:
+        if (authorization.get('listing_id') != args.listing
+                or authorization.get('chain_id') != deployment['chain_id']
+                or str(authorization.get('contract', '')).lower() != deployment['listing_contract'].lower()):
+            raise SystemExit('authorization is for a different listing or deployment')
+        buyer = to_checksum_address(authorization['address'])
+    else:
+        buyer = Account.from_key(buyer_key).address
+    if listing.buyer.lower() != buyer.lower():
+        raise SystemExit("only the wallet that funded this listing can claim it")
+    sink = open_tenant(args.db, args.tenant)
+    journal = AcquisitionJournal(sink, deployment, listing, buyer)
+    entry = journal.read()
+    if entry is not None:
+        if listing.state.value != 'confirmed':
+            raise SystemExit("the evaluator has not settled this listing; the buyer key is still locked")
+        if entry['stage'] != 'complete':
+            with sink.atomic_import():
+                journal.verify_destination(entry)
+        if listing.state.value == 'confirmed' and entry['stage'] != 'complete':
+            entry = journal.complete(backend.confirmed_receipt(
+                args.listing,
+                from_block=int(deployment.get("deployment_block", entry["from_block"])),
+            ))
+        if entry['stage'] == 'complete':
+            print(json.dumps(entry['certificate'], indent=2))
+            return 0
+        raise SystemExit("the acquisition journal could not be completed")
+    if listing.state.value != 'confirmed':
+        raise SystemExit("the evaluator has not settled this listing; the buyer key is still locked")
     base = args.marketplace.rstrip("/")
 
     try:
         envelope = SealedEnvelope.from_dict(
             get(base, f"/api/listing/{args.listing}/envelope")
         )
-        key = bytes.fromhex(get(base, f"/api/listing/{args.listing}/key")["content_key"])
-    except MarketplaceError as exc:
+        path = f"/api/listing/{args.listing}/key"
+        headers = authorization['headers'] if authorization else request_auth_headers(
+            buyer_key, listing_id=args.listing, method="GET", path=path,
+            chain_id=int(deployment["chain_id"]), contract=deployment["listing_contract"])
+        key = bytes.fromhex(get(base, path, headers=headers)["content_key"])
+    except (MarketplaceError, ValueError, KeyError) as exc:
         print(f"could not collect {args.listing}: {exc}", file=sys.stderr)
-        if exc.status == 404:
+        if getattr(exc, "status", None) == 404:
             print(file=sys.stderr)
             print(
                 "A 404 here means the seller has not published this part yet. "
@@ -675,37 +774,22 @@ def cmd_claim(args: argparse.Namespace) -> int:
             )
         return 1
 
-    package = open_envelope(envelope, key)
-    sink = open_tenant(args.db, args.tenant)
-
     try:
-        result = import_package(
-            package,
-            sink,
-            committed_root=listing.hash_commitment,
-            expected_signer=listing.seller,
-        )
-    except IntegrityMismatch as exc:
-        print(f"the delivered memory does not match the commitment: {exc}")
+        package = open_envelope(envelope, key)
+        entry = journal.import_once(package, from_block=backend.w3.eth.block_number)
+        result = ImportResult(**entry['result'])
+    except Exception as exc:
+        print(f"claim failed; no import was committed: {exc}", file=sys.stderr)
         print()
-        print("Do not confirm on chain. Submitting this root refunds you and the")
-        print("sale is abandoned, which is the correct outcome for a bad delivery.")
+        print("The destination does not match the evaluator-approved package.")
         return 1
 
-    print(f"imported {result.total_records} records into {result.tenant_id}")
-    print(f"  committed root  {listing.hash_commitment}")
-    print(f"  re-derived root {result.reimported_root}")
-    print(f"  {'VERIFIED' if result.verified else 'MISMATCH'}")
-    if not result.verified:
-        print()
-        print("Do not confirm on chain. Submitting this root refunds you and the")
-        print("sale is abandoned, which is the correct outcome for a bad delivery.")
-        return 1
-    print()
-    print("Confirm on chain to release payment and take the identity:")
-    print(f"  the root above, submitted to confirmTransfer({args.listing}, ...)")
+    entry = journal.complete(backend.confirmed_receipt(
+        args.listing,
+        from_block=int(deployment.get("deployment_block", entry["from_block"])),
+    ))
+    print(json.dumps(entry['certificate'], indent=2))
     return 0
-
 
 def cmd_inventory(args: argparse.Namespace) -> int:
     """What this agent actually has to sell, category by category.
@@ -1019,7 +1103,37 @@ def cmd_listings(args: argparse.Namespace) -> int:
     return 0
 
 
-GUIDE = """succession — the property layer for agent memory
+#: The wordmark, drawn rather than generated so it costs nothing at import and
+#: has no dependency. 59 columns wide, which is the number `_banner` checks
+#: against the terminal before printing: art that wraps is worse than no art.
+BANNER = (
+    "█████ █   █ █████ █████ █████ █████ █████ █████ █████ █   █",
+    "█     █   █ █     █     █     █     █       █   █   █ ██  █",
+    "█████ █   █ █     █     ████  █████ █████   █   █   █ █ █ █",
+    "    █ █   █ █     █     █         █     █   █   █   █ █  ██",
+    "█████ █████ █████ █████ █████ █████ █████ █████ █████ █   █",
+)
+
+BANNER_WIDTH = max(len(line) for line in BANNER)
+
+
+def _banner() -> str:
+    """The wordmark, when the terminal is a terminal and wide enough for it.
+
+    Skipped when stdout is redirected, because `succession | grep` and a CI log
+    want the guide and not a picture, and skipped in a narrow window, because a
+    wrapped banner reads as corruption rather than as branding.
+    """
+    import shutil
+
+    if not sys.stdout.isatty():
+        return ""
+    if shutil.get_terminal_size(fallback=(80, 24)).columns < BANNER_WIDTH:
+        return ""
+    return "\n".join(BANNER) + "\n\n"
+
+
+GUIDE = """succession, the property layer for agent memory
 
 Start here
   succession status                  what this install is connected to
@@ -1036,7 +1150,7 @@ Buying
   succession show --listing …        one listing's data room, before paying
   succession buy --listing …         fund escrow
   succession claim --listing … --db … --tenant …   collect, import, re-derive
-  succession confirm --listing … --root …          settle on what you derived
+  succession evaluate --listing … --db … --tenant … --yes   independently verify and settle
 
 Keys come from the environment, never from an argument:
   SUCCESSION_SIGNING_KEY   the seller's wallet
@@ -1162,11 +1276,20 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_fulfil)
 
     p = sub.add_parser("claim", help="collect, import and verify memory you bought")
+    p.add_argument("--auth-file", type=Path, help="single-use buyer authorization downloaded from the browser")
     tenant_args(p)
     deployment_arg(p)
     p.add_argument("--listing", required=True, help="the listing you funded escrow on")
     marketplace_arg(p)
     p.set_defaults(func=cmd_claim)
+
+    p = sub.add_parser("evaluate", help="independently verify and settle an escrowed delivery")
+    tenant_args(p)
+    deployment_arg(p)
+    marketplace_arg(p)
+    p.add_argument("--listing", required=True, help="the escrowed listing to evaluate")
+    p.add_argument("--yes", action="store_true", help="submit the signed verdict on chain")
+    p.set_defaults(func=cmd_evaluate)
 
     p = sub.add_parser(
         "inventory", help="what this agent actually has to sell, per category"
@@ -1209,8 +1332,10 @@ def main(argv: list[str] | None = None) -> int:
                    help="send the transactions rather than describing them")
     p.set_defaults(func=cmd_buy)
 
-    p = sub.add_parser("confirm", help="settle on the root you re-derived")
+    p = sub.add_parser("confirm", help="deprecated: buyers cannot settle delivery")
     deployment_arg(p)
+    p.add_argument("--db", type=Path, help="the database used by claim")
+    p.add_argument("--tenant", help="the destination tenant used by claim")
     p.add_argument("--listing", required=True, help="the listing to settle")
     p.add_argument("--root", required=True,
                    help="the root succession claim re-derived from your own store")
@@ -1240,7 +1365,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     if not getattr(args, "command", None):
-        print(GUIDE)
+        print(_banner() + GUIDE)
         return 0
     return args.func(args)
 

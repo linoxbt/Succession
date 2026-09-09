@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +37,7 @@ from eth_account.messages import encode_defunct
 from eth_utils import to_checksum_address
 
 from .merkle import from_hex, to_hex
-from .settlement import Listing, ListingState, SettlementError, SettlementReceipt
+from .settlement import Listing, ListingState, ListingNotFound, SettlementError, SettlementReceipt
 
 __all__ = ["ChainSettlement", "load_artifact", "ATTESTATION_DOMAIN"]
 
@@ -157,6 +158,8 @@ def _plain(value: Any) -> Any:
     """Make a decoded event argument JSON-safe without losing what it is."""
     if isinstance(value, (bytes, bytearray)):
         return "0x" + bytes(value).hex()
+    if isinstance(value, int) and abs(value) > 2**53 - 1:
+        return str(value)
     return value
 
 
@@ -184,17 +187,26 @@ class ChainSettlement:
         contract_address: str,
         seller_key: str | None = None,
         buyer_key: str | None = None,
+        evaluator_key: str | None = None,
         artifacts_path: str | Path | None = None,
         tx_timeout: int = 180,
+        confirmations: int | None = None,
     ) -> None:
         self.w3 = w3
         self.tx_timeout = tx_timeout
+        configured = os.environ.get("SUCCESSION_FINALITY_CONFIRMATIONS")
+        self.confirmations = (
+            int(configured) if configured is not None
+            else (3 if int(w3.eth.chain_id) == 84532 else 1)
+        ) if confirmations is None else confirmations
+        if self.confirmations < 1:
+            raise SettlementError("finality confirmations must be at least 1")
         listing_abi = load_artifact("ListingContract", artifacts_path)["abi"]
         self.contract = w3.eth.contract(
             address=to_checksum_address(contract_address), abi=listing_abi
         )
         self._keys: dict[str, str] = {}
-        for key in (seller_key, buyer_key):
+        for key in (seller_key, buyer_key, evaluator_key):
             if key:
                 self._keys[Account.from_key(key).address.lower()] = key
 
@@ -244,7 +256,21 @@ class ChainSettlement:
             )
         # Every caller here reads back what it just wrote.
         await_chain_state(self.w3, receipt)
+        self._wait_for_finality(receipt)
         return receipt
+
+    def _wait_for_finality(self, receipt: Any) -> None:
+        """Require the configured depth for new and crash-recovered writes."""
+        tx_hash = receipt["transactionHash"].hex()
+        target = int(receipt["blockNumber"]) + self.confirmations - 1
+        deadline = time.monotonic() + self.tx_timeout
+        while self.w3.eth.block_number < target:
+            if time.monotonic() >= deadline:
+                raise SettlementError(
+                    f"transaction {tx_hash.hex()} was mined but did not reach "
+                    f"{self.confirmations} confirmations before timeout"
+                )
+            time.sleep(1)
 
     def attest(self, listing_id: str, agent_id: int, commitment: str, key: str) -> bytes:
         """Sign the listing attestation the contract recovers.
@@ -304,8 +330,14 @@ class ChainSettlement:
             raw = self.contract.functions.getListing(
                 listing_id_to_bytes32(listing_id)
             ).call()
-        except Exception as exc:  # noqa: BLE001 - the revert means "no such listing"
-            raise SettlementError(f"no such listing: {listing_id!r} ({exc})") from exc
+        except Exception as exc:
+            from eth_utils import keccak
+            selector = keccak(text='NoSuchListing()')[:4]
+            data = getattr(exc, 'data', None)
+            missing = data in (selector, '0x' + selector.hex()) or repr(selector) in str(exc)
+            if missing:
+                raise ListingNotFound(f"no such listing: {listing_id!r}") from exc
+            raise SettlementError(f"could not read listing {listing_id!r} from chain") from exc
 
         # Unpacked positionally, so the order here is the struct's order in
         # ListingContract.sol. `escrowed` is last and was added after the rest;
@@ -316,7 +348,7 @@ class ChainSettlement:
             agent_id,
             commitment,
             price,
-            _deadline,
+            deadline,
             state,
             delivered,
             escrowed,
@@ -328,13 +360,14 @@ class ChainSettlement:
             seller_signature="",
             hash_commitment=to_hex(commitment),
             price=int(price),
+            confirm_by=int(deadline),
             state=_STATES[int(state)] or ListingState.OPEN,
             buyer="" if int(buyer, 16) == 0 else buyer,
             # What the contract actually holds for this listing, not what it was
             # asked for — the two differ if a token ever shorts the transfer.
             escrow_balance=int(escrowed),
             delivered_hash=to_hex(delivered) if int.from_bytes(delivered, "big") else "",
-            sealed=bool(self.contract.functions.isSealed(int(agent_id)).call()),
+            sealed=int(state) == 3,
         )
 
     def buy(self, listing_id: str, *, buyer: str, amount: int) -> Listing:
@@ -361,17 +394,18 @@ class ChainSettlement:
         mismatch refunds instead of reverting, so the transaction succeeds
         either way and only the log distinguishes them.
 
-        ``caller`` selects who submits. It defaults to the buyer, which is the
-        self-reported path the contract's own docstring calls out as the known
-        adversarial edge; passing the arbiter is what closes it, and the
-        contract already accepts either. The receipt records which one it was.
+        ``caller`` must be the configured evaluator. Buyer confirmation is
+        deliberately impossible: once plaintext is released, a buyer-controlled
+        mismatch would be a refund oracle.
         """
         listing = self.get(listing_id)
         if listing.state is not ListingState.ESCROWED:
             raise SettlementError(
                 f"listing {listing_id!r} is {listing.state.value}; nothing is escrowed"
             )
-        sender = caller or listing.buyer
+        if caller is None:
+            raise SettlementError("confirmTransfer requires the configured evaluator")
+        sender = caller
         confirmed_by = self._role_of(listing, sender)
         receipt = self._send(
             self.contract.functions.confirmTransfer(
@@ -383,31 +417,36 @@ class ChainSettlement:
 
     @property
     def arbiter(self) -> str:
-        """The address the deployed contract accepts alongside the buyer."""
+        """The sole address the deployed contract accepts for confirmation."""
         return self.contract.functions.arbiter().call()
 
     def _role_of(self, listing: Listing, caller: str) -> str:
         """Mirror the contract's ``NotAuthorised`` check, before spending gas."""
-        if listing.buyer and caller.lower() == listing.buyer.lower():
-            return "buyer"
         if caller.lower() == self.arbiter.lower():
             return "arbiter"
         raise SettlementError(
-            f"{caller} is neither the buyer nor the arbiter of listing "
+            f"{caller} is not the evaluator for listing "
             f"{listing.listing_id!r}; confirmTransfer would revert with NotAuthorised"
         )
 
     def refund(
-        self, listing_id: str, *, reason: str, delivered_hash: str = ""
+        self, listing_id: str, *, reason: str, delivered_hash: str = "",
+        caller: str | None = None, confirmed_by: str = "buyer",
     ) -> SettlementReceipt:
         listing = self.get(listing_id)
+        sender = caller or listing.buyer or listing.seller
+        allowed = {listing.seller.lower(), listing.buyer.lower(), self.arbiter.lower()}
+        if sender.lower() not in allowed:
+            raise SettlementError("only the seller, buyer, or evaluator may refund")
+        if sender.lower() == self.arbiter.lower():
+            confirmed_by = "arbiter"
         receipt = self._send(
             self.contract.functions.refund(
                 listing_id_to_bytes32(listing_id), reason[:200]
             ),
-            listing.buyer or listing.seller,
+            sender,
         )
-        return self._receipt_from_logs(listing, receipt)
+        return self._receipt_from_logs(listing, receipt, confirmed_by=confirmed_by)
 
     def cancel(self, listing_id: str, *, seller: str | None = None) -> Listing:
         """Withdraw an unfunded listing. Mirrors ``LocalSettlement.cancel``.
@@ -471,8 +510,8 @@ class ChainSettlement:
 
         raw: list[Any] = []
         upper = head
-        while upper > floor and len(raw) < limit:
-            lower = max(floor, upper - step)
+        while upper >= floor and len(raw) < limit:
+            lower = max(floor, upper - step + 1)
             for name in self.ACTIVITY_EVENTS:
                 try:
                     raw.extend(
@@ -482,7 +521,7 @@ class ChainSettlement:
                     )
                 except Exception:  # noqa: BLE001 - a refused window is not fatal
                     continue
-            upper = lower
+            upper = lower - 1
 
         # Newest first. Ordering on (block, log index) rather than on the block
         # alone keeps two events from one transaction — a confirm and its seal —
@@ -538,8 +577,8 @@ class ChainSettlement:
         upper = head
         floor = max(0, head - lookback_blocks)
 
-        while upper > floor:
-            lower = max(floor, upper - step)
+        while upper >= floor:
+            lower = max(floor, upper - step + 1)
             try:
                 logs = self.w3.eth.get_logs(
                     {
@@ -558,7 +597,7 @@ class ChainSettlement:
                         seen.append(listing_id)
             except Exception:  # noqa: BLE001 - one refused window is not fatal
                 pass
-            upper = lower
+            upper = lower - 1
 
         return seen
 
@@ -573,9 +612,13 @@ class ChainSettlement:
         block = self.w3.eth.get_block(receipt["blockNumber"])
         settled_at = _iso(block["timestamp"])
 
-        confirmed = self.contract.events.TransferConfirmed().process_receipt(
+        if receipt['status'] != 1:
+            raise SettlementError('settlement transaction reverted')
+        expected_id = listing_id_to_bytes32(listing.listing_id)
+        confirmed = [event for event in self.contract.events.TransferConfirmed().process_receipt(
             receipt, errors=DISCARD
-        )
+        ) if event['address'].lower() == self.contract.address.lower()
+            and bytes(event['args']['listingId']) == expected_id]
         if confirmed:
             args = confirmed[0]["args"]
             return SettlementReceipt(
@@ -590,9 +633,10 @@ class ChainSettlement:
                 confirmed_by=confirmed_by,
             )
 
-        refunded = self.contract.events.Refunded().process_receipt(
+        refunded = [event for event in self.contract.events.Refunded().process_receipt(
             receipt, errors=DISCARD
-        )
+        ) if event['address'].lower() == self.contract.address.lower()
+            and bytes(event['args']['listingId']) == expected_id]
         if refunded:
             args = refunded[0]["args"]
             return SettlementReceipt(
@@ -610,6 +654,27 @@ class ChainSettlement:
         raise SettlementError(
             f"transaction {tx_hash} emitted neither TransferConfirmed nor Refunded"
         )
+
+    def confirmed_receipt(self, listing_id: str, *, from_block: int) -> SettlementReceipt:
+        """Recover completion after a crash, bounded by the recorded import block."""
+        listing = self.get(listing_id)
+        head = self.w3.eth.block_number
+        for lower in range(max(0, from_block), head + 1, 1000):
+            logs = self.contract.events.TransferConfirmed().get_logs(
+                from_block=lower, to_block=min(head, lower + 999),
+                argument_filters={'listingId': listing_id_to_bytes32(listing_id)})
+            if logs:
+                receipt = self.w3.eth.get_transaction_receipt(logs[0]['transactionHash'])
+                self._wait_for_finality(receipt)
+                sender = self.w3.eth.get_transaction(receipt['transactionHash'])['from']
+                try:
+                    role = self._role_of(listing, sender)
+                except SettlementError:
+                    # An outer transaction may call through a wallet or
+                    # bundler. Its sender does not identify the inner caller.
+                    role = 'unknown (forwarded transaction)'
+                return self._receipt_from_logs(listing, receipt, confirmed_by=role)
+        raise SettlementError('confirmed listing has no matching settlement event in the claim window')
 
     # -- convenience ---------------------------------------------------
 

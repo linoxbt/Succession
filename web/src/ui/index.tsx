@@ -15,9 +15,11 @@
  *   `Hash` is still mono and still never anything else. A hash is evidence;
  *   it should read as a fingerprint, distinct from every other numeral.
  *
- * There is no `Card`, and no shadow in this file. Regions are separated by
- * hairlines and by space. Depth is what a marketing page uses to make a list
- * feel important; this page uses scale.
+ * The "no cards, no shadow" rule this file used to carry is gone. It was right
+ * for a broadsheet, where regions are separated by hairlines and space; it is
+ * wrong for a payments console, where a bounded card is how a reader knows
+ * where one thing ends. Elevation is one step and used sparingly: see
+ * `shadow-card` in the theme.
  */
 import { useState } from "react";
 import type { ReactNode } from "react";
@@ -55,10 +57,10 @@ export function Section({
   return (
     <section ref={ref} className={`reveal ${className}`}>
       {title ? (
-        <header className="mb-8 flex flex-wrap items-end justify-between gap-x-8 gap-y-4 border-b border-rule pb-4">
-          <div className="flex items-baseline gap-5">
-            {index ? <span className="chapter-mark">{index}</span> : null}
-            <h2 className="display-type text-title text-ink">{title}</h2>
+        <header className="mb-6 flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+          <div className="min-w-0">
+            {index ? <span className="chapter-mark block mb-1.5">{index}</span> : null}
+            <h2 className="display-type text-title font-bold text-ink">{title}</h2>
           </div>
           {action}
         </header>
@@ -80,7 +82,7 @@ export function Field({
 }) {
   return (
     <div className="flex flex-col gap-1 border-b border-hairline py-4 sm:flex-row sm:items-baseline sm:gap-10">
-      <dt className="w-full shrink-0 font-mono text-label uppercase text-faint sm:w-72">
+      <dt className="w-full shrink-0 text-micro text-faint sm:w-64">
         {label}
       </dt>
       <dd
@@ -154,10 +156,10 @@ export function Evidence({ children }: { children: ReactNode }) {
 export type Tone = "neutral" | "escrow" | "closed" | "void";
 
 const TONES: Record<Tone, string> = {
-  neutral: "border-rule text-muted",
-  escrow: "border-escrow/40 text-escrow",
-  closed: "border-closed/40 text-closed",
-  void: "border-void/40 text-void",
+  neutral: "bg-shade text-muted",
+  escrow: "bg-escrow/10 text-escrow",
+  closed: "bg-closed/10 text-closed",
+  void: "bg-void/10 text-void",
 };
 
 /**
@@ -173,7 +175,7 @@ export function Badge({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-2 border px-3 py-1 font-mono text-label uppercase ${TONES[tone]}`}
+      className={`inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-micro font-medium ${TONES[tone]}`}
     >
       {children}
     </span>
@@ -250,19 +252,19 @@ export function Button({
   const pointer = useCursorState("link");
 
   const variants = {
-    // `press` rather than a literal black: it resolves to black on the
-    // marketing pages, and to white in the console, where this button is
-    // near-white on a dark ground and hovering to black would invert it.
+    // The accent carries the primary action rather than the ink, because on a
+    // white ground a near-black button reads as a form control and a blue one
+    // reads as the thing to press.
     primary:
-      "bg-ink text-paper hover:bg-press border border-ink",
+      "bg-signal text-white hover:bg-press border border-transparent shadow-card",
     ghost:
-      "border border-rule text-ink hover:border-ink bg-transparent",
+      "border border-rule text-ink hover:border-signal hover:text-signal bg-paper",
     quiet:
-      "text-muted hover:text-ink border-0 px-0 link-underline",
+      "text-signal hover:text-press border-0 px-0",
   };
   const sizes = {
-    sm: "px-5 py-2 text-micro",
-    md: "px-8 py-3.5 text-micro",
+    sm: "px-4 py-2 text-micro",
+    md: "px-6 py-3 text-body",
   };
 
   return (
@@ -272,7 +274,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       {...pointer}
-      className={`inline-flex items-center justify-center gap-2 font-mono uppercase tracking-[0.12em] transition-[background-color,border-color,color,transform] duration-500 ease-swift disabled:cursor-not-allowed disabled:opacity-35 ${
+      className={`inline-flex items-center justify-center gap-2 rounded-control font-medium transition-[background-color,border-color,color,transform,box-shadow] duration-200 ease-swift disabled:cursor-not-allowed disabled:opacity-40 ${
         variants[variant]
       } ${variant === "quiet" ? "" : sizes[size]}`}
     >
@@ -301,7 +303,7 @@ export function Table({ head, children }: { head: string[]; children: ReactNode 
               <th
                 key={i}
                 scope="col"
-                className="pb-4 pr-8 font-mono text-label uppercase font-normal text-faint"
+                className="pb-4 pr-8 text-micro font-medium font-normal text-faint"
               >
                 {h}
               </th>
@@ -358,7 +360,7 @@ export function Copyable({ text }: { text: string }) {
               /* select-and-copy still works; nothing to report */
             });
         }}
-        className="absolute right-0 top-0 border-b border-l border-rule px-4 py-2 font-mono text-label uppercase text-faint transition-colors duration-400 hover:text-ink"
+        className="absolute right-0 top-0 border-b border-l border-rule px-4 py-2 text-micro font-medium text-faint transition-colors duration-400 hover:text-ink"
       >
         {copied ? "Copied" : "Copy"}
       </button>
@@ -397,7 +399,7 @@ export function Figure({
   return (
     <div className="flex flex-col gap-3">
       <span className={`display-type text-display leading-none ${colour}`}>{value}</span>
-      <span className="font-mono text-label uppercase text-faint">{label}</span>
+      <span className="text-micro font-medium text-faint">{label}</span>
     </div>
   );
 }

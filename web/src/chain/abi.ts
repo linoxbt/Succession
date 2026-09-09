@@ -25,11 +25,6 @@ export const LISTING_ABI = [
   },
   {
     "inputs": [],
-    "name": "AgentAlreadySealed",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "BadAttestation",
     "type": "error"
   },
@@ -47,6 +42,16 @@ export const LISTING_ABI = [
       }
     ],
     "name": "EscrowShortfall",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidIdentityRegistry",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidPaymentToken",
     "type": "error"
   },
   {
@@ -107,7 +112,17 @@ export const LISTING_ABI = [
   },
   {
     "inputs": [],
+    "name": "ZeroArbiter",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "ZeroCommitment",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ZeroListingId",
     "type": "error"
   },
   {
@@ -278,6 +293,19 @@ export const LISTING_ABI = [
         "internalType": "bytes32",
         "name": "listingId",
         "type": "bytes32"
+      }
+    ],
+    "name": "cancel",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "listingId",
+        "type": "bytes32"
       },
       {
         "internalType": "bytes32",
@@ -399,6 +427,37 @@ export const LISTING_ABI = [
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "listingId",
+        "type": "bytes32"
+      }
+    ],
+    "name": "reclaimExpired",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "listingId",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "string",
+        "name": "reason",
+        "type": "string"
+      }
+    ],
+    "name": "refund",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   }
 ] as const;

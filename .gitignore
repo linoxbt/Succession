@@ -40,3 +40,5 @@ deployments/transfers-local.json
 
 # Recording scratch
 .record-state/
+web/test-results/
+web/playwright-report/

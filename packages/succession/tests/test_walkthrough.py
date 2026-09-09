@@ -40,6 +40,19 @@ def _settle(client):
     return client.post("/api/walkthrough/transfer").json()
 
 
+def test_visitors_cannot_reset_or_mutate_each_others_walkthrough(client):
+    from service.app import app
+    with TestClient(app) as other:
+        assert other.get("/api/walkthrough/listing").status_code == 409
+        other.post("/api/walkthrough/reset", json={}).raise_for_status()
+        client.post("/api/walkthrough/buy").raise_for_status()
+        assert client.get("/api/walkthrough/listing").json()["state"] == "escrowed"
+        other.post("/api/walkthrough/reset", json={}).raise_for_status()
+        assert client.get("/api/walkthrough/listing").json()["state"] == "escrowed"
+        assert other.get("/api/walkthrough/listing").json()["state"] == "open"
+        assert client.cookies.get("succession_walkthrough") != other.cookies.get("succession_walkthrough")
+
+
 # --- the quarantine ------------------------------------------------------
 
 

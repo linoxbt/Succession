@@ -19,9 +19,10 @@ import {IIdentityRegistry} from "./interfaces/IIdentityRegistry.sol";
 ///      key. Nothing has moved.
 ///   2. `buy` — the buyer's funds enter escrow. Still nothing has moved; the
 ///      seller cannot touch the money and the buyer holds no identity.
-///   3. off-chain — the package is delivered, imported into the buyer's fresh
-///      tenant, and re-hashed there.
-///   4. `confirmTransfer` — payment release, identity transfer, and the sealed
+///   3. off-chain — the evaluator receives the package, imports it into an
+///      isolated tenant, and independently re-hashes it.
+///   4. `confirmTransfer` — the evaluator submits its derived root; payment
+///      release, identity transfer, and the sealed
 ///      flag all happen in *this one transaction*. All of them, or none.
 ///
 /// Step 4 is where atomicity actually lives, and it is real because it is one
@@ -29,18 +30,14 @@ import {IIdentityRegistry} from "./interfaces/IIdentityRegistry.sol";
 /// `reclaimExpired` return the buyer's funds and leave the seller exactly as
 /// they were.
 ///
-/// @dev Known adversarial edge, stated rather than hidden.
+/// @dev Trust boundary, stated rather than hidden.
 ///
-/// `confirmTransfer` is called by the buyer, who asserts the hash they derived
-/// from what they received. A dishonest buyer can therefore submit a wrong hash,
-/// trigger the automatic refund, and keep the decrypted package. This contract
-/// does not solve that, and no amount of on-chain logic can: the chain cannot
-/// see the delivered bytes. The designed answer is the `arbiter` role below —
-/// the hook for the Evaluator-style third-party agent that ACP already uses for
-/// job quality, applied here to delivery integrity. An arbiter can independently
-/// re-derive the root and confirm. Wiring a real evaluator agent into that role
-/// is roadmap; the role exists now so the contract does not need redeploying to
-/// gain one.
+/// The chain cannot inspect delivered bytes. It therefore accepts a delivery
+/// root only from the immutable `arbiter`, which the protocol treats as an
+/// independent evaluator. The service withholds the buyer key until this
+/// transaction confirms. The evaluator must be operated as a confidential data
+/// custodian and its key must be isolated: compromise of that role can approve
+/// a bad delivery or expose the package.
 contract ListingContract {
     // -----------------------------------------------------------------
     // Types
@@ -131,6 +128,7 @@ contract ListingContract {
     // -----------------------------------------------------------------
 
     error ListingExists();
+    error ZeroListingId();
     error NoSuchListing();
     error WrongState(State expected, State actual);
     error ZeroPrice();
@@ -142,13 +140,22 @@ contract ListingContract {
     error BadAttestation();
     error TransferFailed();
     error WindowNotElapsed();
-    error AgentAlreadySealed();
     error AgentAlreadyListed(bytes32 listingId);
     error EscrowShortfall(uint256 expected, uint256 received);
+    error ZeroArbiter();
+    error InvalidPaymentToken();
+    error InvalidIdentityRegistry();
 
     // -----------------------------------------------------------------
 
     constructor(IERC20 paymentToken_, IIdentityRegistry identityRegistry_, address arbiter_) {
+        if (address(paymentToken_) == address(0) || address(paymentToken_).code.length == 0) {
+            revert InvalidPaymentToken();
+        }
+        if (address(identityRegistry_) == address(0) || address(identityRegistry_).code.length == 0) {
+            revert InvalidIdentityRegistry();
+        }
+        if (arbiter_ == address(0)) revert ZeroArbiter();
         paymentToken = paymentToken_;
         identityRegistry = identityRegistry_;
         arbiter = arbiter_;
@@ -180,10 +187,10 @@ contract ListingContract {
         uint256 price,
         bytes calldata attestation
     ) external {
+        if (listingId == bytes32(0)) revert ZeroListingId();
         if (_listings[listingId].state != State.None) revert ListingExists();
         if (price == 0) revert ZeroPrice();
         if (hashCommitment == bytes32(0)) revert ZeroCommitment();
-        if (seals[agentId].sealed_) revert AgentAlreadySealed();
 
         bytes32 live = activeListing[agentId];
         if (live != bytes32(0)) revert AgentAlreadyListed(live);
@@ -227,7 +234,7 @@ contract ListingContract {
         if (msg.sender != listing.seller) revert NotAuthorised();
 
         listing.state = State.Refunded;
-        delete activeListing[listing.agentId];
+        if (activeListing[listing.agentId] == listingId) delete activeListing[listing.agentId];
 
         emit Cancelled(listingId, msg.sender);
     }
@@ -268,8 +275,8 @@ contract ListingContract {
     // -----------------------------------------------------------------
 
     /// @notice Release payment, move the identity, and seal the seller — or refund.
-    /// @param deliveredHash The root the caller re-derived from the memory that
-    ///                      actually landed in the buyer's store.
+    /// @param deliveredHash The root the evaluator re-derived from the memory
+    ///                      imported into its isolated store.
     ///
     /// @dev A mismatch refunds rather than reverting. Reverting would leave the
     ///      escrow funded and the buyer needing to remember to call something
@@ -278,11 +285,12 @@ contract ListingContract {
     function confirmTransfer(bytes32 listingId, bytes32 deliveredHash) external {
         Listing storage listing = _get(listingId);
         if (listing.state != State.Escrowed) revert WrongState(State.Escrowed, listing.state);
-        if (msg.sender != listing.buyer && msg.sender != arbiter) revert NotAuthorised();
-        // Defence in depth behind `activeListing`: an agent that is already
-        // sealed cannot be settled again, so a second sale fails here with a
-        // named error rather than deep inside the registry's `transferFrom`.
-        if (seals[listing.agentId].sealed_) revert AgentAlreadySealed();
+        // Only the independent evaluator may attest delivery. Allowing the
+        // buyer to submit a false mismatch would refund their escrow after they
+        // had already received plaintext.
+        if (msg.sender != arbiter) revert NotAuthorised();
+        // A prior handover retires the former owner's copy, not the identity's
+        // ability to move again. Ownership and activeListing govern each sale.
 
         listing.deliveredHash = deliveredHash;
 
@@ -303,7 +311,7 @@ contract ListingContract {
         // pooled balance.
         uint256 amount = listing.escrowed;
         listing.escrowed = 0;
-        delete activeListing[agentId];
+        if (activeListing[agentId] == listingId) delete activeListing[agentId];
 
         seals[agentId] = Seal({
             sealed_: true,
@@ -355,7 +363,7 @@ contract ListingContract {
         // hostile token cannot re-enter into a second refund of the same money.
         uint256 amount = listing.escrowed;
         listing.escrowed = 0;
-        delete activeListing[listing.agentId];
+        if (activeListing[listing.agentId] == listingId) delete activeListing[listing.agentId];
         if (!paymentToken.transfer(buyer, amount)) revert TransferFailed();
         emit Refunded(listingId, buyer, amount, reason);
     }

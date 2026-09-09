@@ -1,7 +1,12 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
+export default defineConfig(({ command, mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  if (command === 'build' && (process.env.VITE_SERVICE || env.VITE_SERVICE) === 'mock') {
+    throw new Error('Mock services are only supported by the development server. Remove VITE_SERVICE=mock before building.');
+  }
+  return {
   plugins: [react()],
   server: {
     port: 5173,
@@ -57,4 +62,5 @@ export default defineConfig({
       },
     },
   },
+  };
 });

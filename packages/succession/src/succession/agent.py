@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+from decimal import Decimal, DecimalException, ROUND_CEILING
+import re
 
 __all__ = ["Agent", "Reply", "Citation"]
 
@@ -205,7 +207,57 @@ class Agent:
 
     # -- response ------------------------------------------------------
 
+    def quote(self, counterparty: str, *, target: str, cost: str) -> dict[str, Any]:
+        """Apply remembered pricing rules to explicit monetary inputs."""
+        try:
+            target_value, cost_value = Decimal(target), Decimal(cost)
+            if not target_value.is_finite() or not cost_value.is_finite() or min(target_value, cost_value) <= 0:
+                raise ValueError('target and cost must be finite positive amounts')
+            floor_record = next((e for e in self.memory.entities()
+                if e['category'] == 'preference' and e['name'] == 'margin-floor'), None)
+            if floor_record is None:
+                raise ValueError('no margin-floor preference is available; a quote needs operator review')
+            floor = Decimal(str(floor_record['body']['floor_pct']))
+            if not floor.is_finite() or not 0 <= floor < 100:
+                raise ValueError('the stored margin floor is invalid')
+            minimum = (cost_value / (1 - floor / 100)).quantize(Decimal('.01'), rounding=ROUND_CEILING)
+            known = self.find_counterparty(counterparty)
+            if known is None:
+                raise ValueError('unknown counterparty; operator review required')
+            company = known['body'].get('company', known['name'])
+            behaviour = self.behaviour_for(company)
+            premium = Decimal(0)
+            if behaviour:
+                rule = re.search(r'Open (\d+(?:\.\d+)?)% above target', str(behaviour['body'].get('action', '')), re.I)
+                if rule:
+                    premium = Decimal(rule.group(1))
+            opening = (target_value * (1 + premium / 100)).quantize(Decimal('.01'), rounding=ROUND_CEILING)
+            return {'counterparty':company, 'target':str(target_value), 'cost':str(cost_value),
+                    'minimum_rate':str(minimum), 'opening_rate':str(max(opening, minimum)),
+                    'floor_pct':str(floor), 'opening_premium_pct':str(premium),
+                    'target_allowed':target_value >= minimum,
+                    'requires_review':target_value < minimum,
+                    'citations':[Citation('preference', 'margin-floor').to_dict()]
+                        + ([Citation('learned-behavior', behaviour['name']).to_dict()] if behaviour else [])}
+        except (DecimalException, KeyError, TypeError) as exc:
+            raise ValueError('pricing inputs or stored rules are invalid') from exc
+
     def respond(self, message: str) -> Reply:
+        # Consume the entire value so signs, exponents and invalid suffixes
+        # cannot silently turn into a different amount or ordinary recall.
+        targets = re.findall(r'\btarget\s*=\s*\$?([^\s]*)', message, re.I)
+        costs = re.findall(r'\bcost\s*=\s*\$?([^\s]*)', message, re.I)
+        if targets or costs:
+            if len(targets) != 1 or len(costs) != 1 or not targets[0] or not costs[0]:
+                return Reply(text='A quote requires exactly one target=<amount> and cost=<amount>.', recalled=False)
+            try:
+                quote = self.quote(message, target=targets[0], cost=costs[0])
+            except ValueError as exc:
+                return Reply(text=str(exc), recalled=False)
+            decision = ('The requested target is below the stored margin floor; escalate for review.'
+                        if quote['requires_review'] else 'The target respects the stored margin floor.')
+            return Reply(text=f"{quote['counterparty']}: open at ${quote['opening_rate']}; minimum ${quote['minimum_rate']}. {decision}",
+                         citations=[Citation(**c) for c in quote['citations']])
         context = self.context_for(message)
         if not context:
             return Reply(

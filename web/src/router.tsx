@@ -57,9 +57,13 @@ export function parse(pathname: string): Route {
     // A listing route without an id is not a listing route. Falling through to
     // the market is better than rendering a detail page with nothing in it.
     const id = tail.join("/");
-    return id
-      ? { kind: "app", view: "listing", listingId: decodeURIComponent(id) }
-      : { kind: "app", view: "market", listingId: null };
+    try {
+      const decoded = decodeURIComponent(id);
+      if (!/^[A-Za-z0-9_.-]{1,32}$/.test(decoded)) return { kind: "app", view: "market", listingId: null };
+      return { kind: "app", view: "listing", listingId: decoded };
+    } catch {
+      return { kind: "app", view: "market", listingId: null };
+    }
   }
 
   const view = BY_SEGMENT.get(head);

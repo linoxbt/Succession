@@ -36,7 +36,11 @@ from __future__ import annotations
 import json
 import os
 import stat
-from dataclasses import dataclass
+import re
+import tempfile
+import shutil
+from uuid import uuid4
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Sequence
@@ -71,7 +75,7 @@ class PublishError(Exception):
     """A listing could not be published."""
 
 
-def listing_id_for(agent_identity: str, root_hex: str) -> str:
+def listing_id_for(agent_identity: str, root_hex: str, nonce: str = "") -> str:
     """A listing id derived from what is being sold, not from a counter.
 
     Two sellers must never collide, and the same seller re-listing the same
@@ -82,7 +86,7 @@ def listing_id_for(agent_identity: str, root_hex: str) -> str:
     """
     from eth_utils import keccak
 
-    digest = keccak(f"{agent_identity}|{root_hex}".encode()).hex()
+    digest = keccak(f"{agent_identity}|{root_hex}{'|' + nonce if nonce else ''}".encode()).hex()
     return f"listing-{digest[:24]}"
 
 
@@ -102,6 +106,9 @@ class StoredListing:
     valuation_reference: str
     preview: dict[str, Any]
     tx_hash: str = ""
+    source_db: str = ""
+    source_tenant: str = ""
+    stage: str = "listed"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -117,6 +124,9 @@ class StoredListing:
             "valuation_reference": self.valuation_reference,
             "preview": self.preview,
             "tx_hash": self.tx_hash,
+            "source_db": self.source_db,
+            "source_tenant": self.source_tenant,
+            "stage": self.stage,
         }
 
     @classmethod
@@ -134,7 +144,18 @@ class StoredListing:
             valuation_reference=blob.get("valuation_reference", ""),
             preview=blob.get("preview", {}),
             tx_hash=blob.get("tx_hash", ""),
+            source_db=blob.get("source_db", ""),
+            source_tenant=blob.get("source_tenant", ""),
+            stage=blob.get("stage", "listed"),
         )
+
+
+def _fsync_directory(path):
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 class SellerVault:
@@ -144,6 +165,8 @@ class SellerVault:
         self.root = Path(root).expanduser() if root else VAULT
 
     def path(self, listing_id: str) -> Path:
+        if not re.fullmatch(r"[A-Za-z0-9_.-]{1,32}", listing_id) or listing_id in {".", ".."}:
+            raise PublishError("invalid listing id for a vault entry")
         return self.root / listing_id
 
     def exists(self, listing_id: str) -> bool:
@@ -166,27 +189,59 @@ class SellerVault:
         could never be given the proofs afterwards, and the buyer would be asked
         to trust a root nobody had shown them.
         """
+        destination = self.path(stored.listing_id)
+        self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if destination.exists():
+            raise PublishError("refusing to overwrite an existing prepared asset")
+        directory = Path(tempfile.mkdtemp(prefix=".preparing-", dir=self.root))
+        try:
+            if integrity:
+                (directory / "integrity.json").write_text(
+                    json.dumps(integrity, indent=2) + "\n", encoding="utf-8"
+                )
+            if provenance:
+                (directory / "provenance.json").write_text(
+                    json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
+                )
+            (directory / "meta.json").write_text(
+                json.dumps(stored.to_dict(), indent=2) + "\n", encoding="utf-8"
+            )
+            (directory / "envelope.json").write_text(
+                json.dumps(envelope.to_dict(), indent=2) + "\n", encoding="utf-8"
+            )
+            key_path = directory / "key"
+            key_path.write_text(content_key.hex() + "\n", encoding="utf-8")
+            # The one file here that is actually a secret.
+            key_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+            for path in directory.iterdir():
+                with path.open("rb") as handle:
+                    os.fsync(handle.fileno())
+            _fsync_directory(directory)
+            os.rename(directory, destination)
+            fd = os.open(self.root, os.O_RDONLY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        except BaseException:
+            if directory.exists():
+                shutil.rmtree(directory)
+            raise
+        return destination
+
+    def update(self, stored: StoredListing) -> None:
         directory = self.path(stored.listing_id)
-        directory.mkdir(parents=True, exist_ok=True)
-        if integrity:
-            (directory / "integrity.json").write_text(
-                json.dumps(integrity, indent=2) + "\n", encoding="utf-8"
-            )
-        if provenance:
-            (directory / "provenance.json").write_text(
-                json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
-            )
-        (directory / "meta.json").write_text(
-            json.dumps(stored.to_dict(), indent=2) + "\n", encoding="utf-8"
-        )
-        (directory / "envelope.json").write_text(
-            json.dumps(envelope.to_dict(), indent=2) + "\n", encoding="utf-8"
-        )
-        key_path = directory / "key"
-        key_path.write_text(content_key.hex() + "\n", encoding="utf-8")
-        # The one file here that is actually a secret.
-        key_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
-        return directory
+        fd, temp = tempfile.mkstemp(prefix=".meta-", dir=directory)
+        try:
+            with os.fdopen(fd, "w") as handle:
+                json.dump(stored.to_dict(), handle)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp, directory / "meta.json")
+            _fsync_directory(directory)
+        finally:
+            if os.path.exists(temp):
+                os.unlink(temp)
 
     def proofs(self, listing_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
         """The manifest and header, or empty dicts for a listing made before them."""
@@ -199,13 +254,6 @@ class SellerVault:
             except (OSError, ValueError):
                 out.append({})
         return out[0], out[1]
-
-    def envelope(self, listing_id: str) -> SealedEnvelope:
-        """The sealed package, read back for a re-publish."""
-        path = self.path(listing_id) / "envelope.json"
-        if not path.is_file():
-            raise PublishError(f"no envelope in the vault for {listing_id}")
-        return SealedEnvelope.from_dict(json.loads(path.read_text("utf-8")))
 
     def read(self, listing_id: str) -> StoredListing:
         path = self.path(listing_id) / "meta.json"
@@ -230,6 +278,8 @@ class SellerVault:
             return []
         out = []
         for directory in sorted(self.root.iterdir()):
+            if directory.name.startswith("."):
+                continue
             meta = directory / "meta.json"
             if meta.is_file():
                 out.append(StoredListing.from_dict(json.loads(meta.read_text("utf-8"))))
@@ -291,71 +341,82 @@ def publish_listing(
     seller_address = Account.from_key(private_key).address
     vault = vault or SellerVault()
 
-    # Build the package first so the listing id can be derived from the
-    # commitment. A pre-allocated id would let two exports of different memory
-    # share one listing.
     from .export import export_tenant
+    from .memory.snapshot import MemorySnapshot
+    from .settlement import ListingState, ListingNotFound
 
-    probe = export_tenant(
-        memory,
-        agent_identity=agent_identity,
-        private_key=private_key,
-        categories=categories,
-        scope=scope,
-    )
+    if hasattr(settlement, 'w3') and (settlement.w3.eth.chain_id != chain_id
+            or settlement.contract.address.lower() != listing_contract.lower()):
+        raise PublishError('listing deployment does not match the connected chain and contract')
+    source_db = str(Path(memory.client.storage.db_path).expanduser().resolve()) if hasattr(memory, "client") else ""
+    source_tenant = memory.tenant_id
+    snapshot = MemorySnapshot.capture(memory)
+    probe = export_tenant(snapshot, agent_identity=agent_identity, private_key=private_key,
+                          categories=categories, scope=scope)
     listing_id = listing_id_for(agent_identity, probe.root_hex)
-    if vault.exists(listing_id):
-        raise PublishError(
-            f"{listing_id} is already in your vault — this memory, unchanged, is "
-            "already listed. Change what is for sale or cancel the existing listing."
+    try:
+        previous = settlement.get(listing_id)
+    except ListingNotFound:
+        previous = None
+    if previous is not None and previous.state in (ListingState.REFUNDED, ListingState.CONFIRMED):
+        listing_id = listing_id_for(agent_identity, probe.root_hex, uuid4().hex)
+    elif previous is not None or vault.exists(listing_id):
+        raise PublishError(f"{listing_id} is already listed or prepared; resume that vault entry instead")
+
+    stored = None
+    def persist(asset):
+        nonlocal stored
+        stored = StoredListing(
+            listing_id=listing_id, agent_identity=agent_identity,
+            committed_root=asset.committed_root, price=price, currency=currency,
+            categories=tuple(probe.package.categories), seller=seller_address,
+            chain_id=chain_id, listing_contract=listing_contract,
+            valuation_reference=asset.listing.valuation_reference,
+            preview=asset.preview.to_dict(), source_db=source_db,
+            source_tenant=source_tenant, stage="prepared",
         )
+        vault.write(stored, envelope=asset.envelope, content_key=asset.content_key,
+                    integrity=asset.export.package.integrity, provenance=asset.export.package.header)
 
-    asset = list_asset(
-        memory,
-        settlement,
-        listing_id=listing_id,
-        agent_identity=agent_identity,
-        seller_address=seller_address,
-        private_key=private_key,
-        price=price,
-        currency=currency,
-        categories=categories,
-        scope=scope,
-        base_price=base_price,
-    )
-
-    # Computed here rather than read back off the listing. `LocalSettlement`
-    # stores a valuation because it is a database; the contract has no field for
-    # one and should not — it is a reference figure, not a term of the sale — so
-    # reading it back from a chain listing returns an empty string. The seller
-    # is the one who can compute it, and this is the record they publish.
-    from .valuation import value_tenant
-
-    valuation = (
-        value_tenant(memory, base_price=base_price)
-        if base_price is not None
-        else value_tenant(memory)
-    )
-
-    stored = StoredListing(
-        listing_id=listing_id,
-        agent_identity=agent_identity,
-        committed_root=asset.committed_root,
-        price=price,
-        currency=currency,
-        categories=tuple(asset.listing.categories or probe.package.categories),
-        seller=seller_address,
-        chain_id=chain_id,
-        listing_contract=listing_contract,
-        valuation_reference=str(valuation.to_dict()["amount"]),
-        preview=asset.preview.to_dict(),
-    )
-    package = getattr(asset.export, "package", None)
-    vault.write(
-        stored,
-        envelope=asset.envelope,
-        content_key=asset.content_key,
-        integrity=getattr(package, "integrity", None),
-        provenance=getattr(package, "header", None),
-    )
+    asset = list_asset(snapshot, settlement, listing_id=listing_id,
+        agent_identity=agent_identity, seller_address=seller_address, private_key=private_key,
+        price=price, currency=currency, categories=categories, scope=scope,
+        base_price=base_price, prepared_export=probe, before_commit=persist)
+    assert stored is not None
+    stored = replace(stored, stage="listed")
+    vault.update(stored)
     return stored, asset
+
+
+def resume_listing(listing_id, settlement, *, private_key, vault=None):
+    """Finish a prepared listing with its original encrypted snapshot and key."""
+    from .envelope import open_envelope
+    from .importer import verify_package
+    from .settlement import ListingNotFound
+    vault = vault or SellerVault()
+    stored = vault.read(listing_id)
+    if Account.from_key(private_key).address.lower() != stored.seller.lower():
+        raise PublishError('the configured signer does not own this vault entry')
+    if hasattr(settlement, 'w3') and (settlement.w3.eth.chain_id != stored.chain_id
+            or settlement.contract.address.lower() != stored.listing_contract.lower()):
+        raise PublishError('vault deployment does not match the connected chain and contract')
+    package = open_envelope(vault.envelope(listing_id), vault.content_key(listing_id))
+    verify_package(package, committed_root=stored.committed_root, expected_signer=stored.seller)
+    try:
+        existing = settlement.get(listing_id)
+    except ListingNotFound:
+        existing = None
+    if existing is not None:
+        if (existing.seller.lower() != stored.seller.lower()
+                or existing.hash_commitment.lower() != stored.committed_root.lower()
+                or existing.price != stored.price):
+            raise PublishError('on-chain sale terms do not match the prepared vault entry')
+    else:
+        settlement.list_asset(listing_id=listing_id, agent_id=stored.agent_identity,
+            seller=stored.seller, seller_signature=package.header['signature'],
+            hash_commitment=stored.committed_root, price=stored.price,
+            currency=stored.currency, categories=stored.categories,
+            valuation_reference=stored.valuation_reference)
+    stored = replace(stored, stage='listed' if stored.stage == 'prepared' else stored.stage)
+    vault.update(stored)
+    return stored

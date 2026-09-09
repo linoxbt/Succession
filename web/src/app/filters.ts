@@ -189,8 +189,8 @@ function matches(row: MarketRow, filters: Filters): boolean {
 }
 
 const SORTS: Record<SortKey, (a: MarketRow, b: MarketRow) => number> = {
-  "price-desc": (a, b) => b.listing.price - a.listing.price,
-  "price-asc": (a, b) => a.listing.price - b.listing.price,
+  "price-desc": (a, b) => BigInt(a.listing.price) < BigInt(b.listing.price) ? 1 : BigInt(a.listing.price) > BigInt(b.listing.price) ? -1 : 0,
+  "price-asc": (a, b) => BigInt(a.listing.price) < BigInt(b.listing.price) ? -1 : BigInt(a.listing.price) > BigInt(b.listing.price) ? 1 : 0,
   "records-desc": (a, b) => measure(b).records - measure(a).records,
   "age-desc": (a, b) => measure(b).tenureDays - measure(a).tenureDays,
 };

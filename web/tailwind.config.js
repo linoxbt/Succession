@@ -1,48 +1,48 @@
 /**
  * The design system.
  *
- * The product is an escrow desk for agent memory — real money, irreversible
- * transfers, hashes that either match or do not. So the art direction is
- * editorial rather than promotional: this is set like a broadsheet and a
- * closing document, not like a storefront. What carries the page is scale,
- * rhythm and negative space, and the drama comes from alternating between
- * paper and carbon at full bleed rather than from an accent colour.
+ * The product is an escrow desk for agent memory: real money, irreversible
+ * transfers, hashes that either match or do not. The art direction is a
+ * payments console, which is what it behaves like. White ground, bounded cards,
+ * one blue that means "act", and figures set to line up column to column.
  *
- * Two rules survive from the original system because they are semantic, not
- * stylistic, and the interface would be worse without them:
+ * This replaced two earlier systems that both existed at once, warm editorial
+ * paper on the marketing pages and dark charcoal in the console, each asked for
+ * separately and each coherent alone. Read one after the other they were two
+ * products, so there is now one.
  *
- *   1. Colour encodes transaction state and nothing else. `escrow`, `closed`
- *      and `void` mean funds held, hash verified, and mismatch. A screen where
- *      nothing is pending shows no colour at all. A brand accent would be
- *      decoration by definition, appearing on screens where nothing happens.
- *   2. A hash is evidence, not prose. It no longer gets its own face, so it
- *      earns its distinction through tabular figures, tighter tracking and a
- *      lighter weight than the copy around it.
+ * Two rules survive from the original system because they are semantic rather
+ * than stylistic, and the interface would be worse without them:
  *
- * One family: Inter Tight, across display, interface and figures. Hierarchy is
- * carried by size, weight and tracking rather than by a change of voice, which
- * is a harder discipline and a quieter result.
+ *   1. `escrow`, `closed` and `void` mean funds held, hash verified, and
+ *      mismatch, and nothing else may borrow them. A screen where nothing is
+ *      pending shows none of them, which is what keeps them legible when
+ *      something is. `signal` is the one addition: an accent for interactive
+ *      affordance, which is a different job from encoding state.
+ *   2. A hash is evidence, not prose. There is no monospaced face, so it earns
+ *      its distinction through tabular figures, tighter tracking and a lighter
+ *      weight than the copy around it. See `.evidence-type` in index.css.
+ *
+ * One family: Plus Jakarta Sans, across display, interface and figures.
+ * Hierarchy comes from size, weight and tracking rather than from a change of
+ * voice, which is a harder discipline and a quieter result.
  */
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
-      // Every colour resolves through a CSS variable rather than a literal, so
-      // one subtree of the document can carry a different palette without a
-      // second set of class names. `:root` in index.css holds the values that
-      // used to sit here, so the marketing pages render exactly as before; the
-      // console overrides the same names under `[data-surface="app"]`.
+      // Every colour resolves through a CSS variable rather than a literal.
+      // There is one palette now, in `:root`, but the indirection is kept: it
+      // costs nothing and puts a second palette one block away rather than one
+      // refactor away.
       //
       // The channel-triplet form is not decoration. Around fifteen call sites
       // use alpha modifiers (`bg-paper/95`, `bg-ink/25`, `border-escrow/40`),
       // and a plain `var(--x)` holding a hex would silently drop the alpha and
       // leave those surfaces opaque.
       colors: {
-        // Paper and carbon. On the marketing pages both are warm: the ground
-        // carries a little brown so it reads as stock rather than as a white
-        // screen. In the console the same two names carry a dark institutional
-        // ground and its elevated panel.
+        // The ground, and the half step off it that a card sits on.
         paper: "rgb(var(--c-paper) / <alpha-value>)",
         // A half-step off the page for an inset region.
         shade: "rgb(var(--c-shade) / <alpha-value>)",
@@ -64,53 +64,66 @@ export default {
         chalkFaint: "rgb(var(--c-chalk-faint) / <alpha-value>)",
 
         // State. These mean something: funds held, hash verified, mismatch.
-        // The console re-tints them for legibility on a dark ground; it does
-        // not repurpose them, and nothing else in the system is allowed to
-        // borrow them.
+        // Nothing else in the system is allowed to borrow them.
         escrow: "rgb(var(--c-escrow) / <alpha-value>)",
         closed: "rgb(var(--c-closed) / <alpha-value>)",
         void: "rgb(var(--c-void) / <alpha-value>)",
 
-        // Two names that exist so the console can differ without the marketing
-        // pages moving. `signal` is the console's accent, and resolves to the
-        // escrow blue at `:root` so that a stray use outside the app stays on
-        // system rather than introducing a colour. `press` replaces a literal
-        // `bg-black` in the primary button, and is black at `:root`, so the
-        // marketing pages keep the button they had.
+        // `signal` is the interactive accent: what to press, what is selected,
+        // what a tab is on. Deliberately deep enough to carry text at 4.5,
+        // unlike the brighter cyan the reference uses for large fills, which
+        // fails as a label colour. `press` is its active state.
         signal: "rgb(var(--c-signal) / <alpha-value>)",
         press: "rgb(var(--c-press) / <alpha-value>)",
       },
-      // One family. `display`, `sans` and `mono` all resolve to it so existing
-      // markup keeps working, and hierarchy is carried entirely by size, weight
-      // and tracking. Figures stay aligned through `font-variant-numeric`
-      // rather than through a separate monospaced face.
+      // One family still, as before. Plus Jakarta Sans is the geometric,
+      // friendly grotesque the reference's own face belongs to, where Inter
+      // Tight was a neutral editorial one. `mono` resolves here too: there is no
+      // monospaced face, and hashes are set apart by tabular figures and
+      // tracking instead. See `.evidence-type` in index.css.
       fontFamily: {
-        display: ['"Inter Tight"', "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
-        sans: ['"Inter Tight"', "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
-        mono: ['"Inter Tight"', "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        display: ['"Plus Jakarta Sans"', "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        sans: ['"Plus Jakarta Sans"', "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        mono: ['"Plus Jakarta Sans"', "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
       },
       fontSize: {
-        // The scale is deliberately gapped rather than continuous. Editorial
-        // hierarchy comes from large intervals between few sizes; a smooth
-        // ramp of nine sizes reads as a UI kit.
-        colossal: ["clamp(3rem, 9vw, 7.5rem)", { lineHeight: "0.86", letterSpacing: "-0.035em" }],
-        display: ["clamp(2.25rem, 5.5vw, 4.5rem)", { lineHeight: "0.92", letterSpacing: "-0.03em" }],
-        title: ["clamp(1.75rem, 3.2vw, 2.5rem)", { lineHeight: "1.02", letterSpacing: "-0.025em" }],
-        heading: ["clamp(1.35rem, 2.2vw, 1.85rem)", { lineHeight: "1.15", letterSpacing: "-0.015em" }],
-        figure: ["clamp(1.5rem, 2.4vw, 2.25rem)", { lineHeight: "1.05", letterSpacing: "-0.02em" }],
+        // Brought down from a broadsheet scale to a product one. The old
+        // ceilings were built for a page read at a distance; a console is read
+        // at arm's length and wants more rows and less drama. The intervals
+        // stay gapped so hierarchy is still obvious without shouting.
+        colossal: ["clamp(2.5rem, 6.5vw, 4.75rem)", { lineHeight: "1.02", letterSpacing: "-0.03em" }],
+        display: ["clamp(1.875rem, 3.6vw, 3rem)", { lineHeight: "1.1", letterSpacing: "-0.025em" }],
+        title: ["clamp(1.375rem, 2.2vw, 1.75rem)", { lineHeight: "1.25", letterSpacing: "-0.018em" }],
+        heading: ["clamp(1.125rem, 1.5vw, 1.3125rem)", { lineHeight: "1.35", letterSpacing: "-0.01em" }],
+        figure: ["clamp(1.5rem, 2vw, 2rem)", { lineHeight: "1.15", letterSpacing: "-0.02em" }],
         // The small end: labels and metadata, set wide because they are read
         // as annotation rather than prose.
-        label: ["0.6875rem", { lineHeight: "1.4", letterSpacing: "0.14em" }],
+        label: ["0.6875rem", { lineHeight: "1.45", letterSpacing: "0.08em" }],
         micro: ["0.75rem", { lineHeight: "1.5", letterSpacing: "0.02em" }],
-        body: ["1.0625rem", { lineHeight: "1.65", letterSpacing: "-0.003em" }],
-        lede: ["clamp(1.125rem, 1.6vw, 1.375rem)", { lineHeight: "1.5", letterSpacing: "-0.008em" }],
+        body: ["1rem", { lineHeight: "1.65", letterSpacing: "0" }],
+        lede: ["clamp(1.0625rem, 1.3vw, 1.25rem)", { lineHeight: "1.6", letterSpacing: "-0.005em" }],
+      },
+      borderRadius: {
+        // Named for what they wrap rather than by size, so a control and a card
+        // cannot drift apart as the scale is tuned.
+        control: "0.5rem",
+        card: "0.75rem",
+        panel: "1rem",
+        pill: "999px",
+      },
+      boxShadow: {
+        // One elevation, used sparingly. A card that lifts off the page is a
+        // card the eye reads first, so more than one level would be a ranking
+        // nobody chose.
+        card: "0 1px 2px rgb(1 27 51 / 0.04), 0 4px 16px rgb(1 27 51 / 0.06)",
+        lift: "0 2px 4px rgb(1 27 51 / 0.05), 0 12px 32px rgb(1 27 51 / 0.10)",
       },
       maxWidth: { reading: "42rem", measure: "34rem", wide: "96rem" },
       spacing: {
         // Chapter rhythm. Sections are separated by these, not by margins
         // chosen per component, so the vertical cadence is a system decision.
-        chapter: "clamp(6rem, 14vh, 11rem)",
-        beat: "clamp(3rem, 7vh, 5.5rem)",
+        chapter: "clamp(4rem, 9vh, 6.5rem)",
+        beat: "clamp(2.25rem, 5vh, 3.5rem)",
       },
       transitionTimingFunction: {
         // One curve for interface response, one for entrances. Two is enough;

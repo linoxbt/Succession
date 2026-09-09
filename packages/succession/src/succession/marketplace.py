@@ -23,7 +23,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from .publish import seller_auth_header
+from .auth import request_auth_headers, json_body
 
 __all__ = ["MarketplaceError", "get", "post", "publish_metadata", "deliver_key"]
 
@@ -47,10 +47,11 @@ def _url(base: str, path: str) -> str:
     return f"{base.rstrip('/')}{path}"
 
 
-def get(base: str, path: str) -> Any:
+def get(base: str, path: str, *, headers: dict[str, str] | None = None) -> Any:
     """Read from the marketplace, raising `MarketplaceError` rather than HTTPError."""
     try:
-        with urllib.request.urlopen(_url(base, path), timeout=TIMEOUT) as response:
+        request = urllib.request.Request(_url(base, path), headers=headers) if headers else _url(base, path)
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
             return json.load(response)
     except urllib.error.HTTPError as exc:
         raise MarketplaceError(
@@ -58,11 +59,12 @@ def get(base: str, path: str) -> Any:
             f"{exc.read().decode('utf-8', 'replace')[:200]}",
             status=exc.code,
         ) from exc
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         raise MarketplaceError(f"could not reach {base}: {exc}") from exc
 
 
-def post(base: str, path: str, body: dict[str, Any], *, private_key: str, listing_id: str) -> Any:
+def post(base: str, path: str, body: dict[str, Any], *, private_key: str, listing_id: str,
+         chain_id: int | None = None, contract: str | None = None) -> Any:
     """Write to the marketplace as the listing's seller.
 
     Authentication is a signature over the listing id, not an account: the
@@ -70,13 +72,18 @@ def post(base: str, path: str, body: dict[str, Any], *, private_key: str, listin
     inventing. The service recovers the address and checks it against the chain
     rather than against anything it stores.
     """
+    if chain_id is None or contract is None:
+        deployment = get(base, "/api/chain").get("deployment") or {}
+        chain_id, contract = int(deployment["chain_id"]), deployment["listing_contract"]
+    payload = json_body(body)
     request = urllib.request.Request(
         _url(base, path),
-        data=json.dumps(body).encode(),
+        data=payload,
         method="POST",
         headers={
             "Content-Type": "application/json",
-            **seller_auth_header(private_key, listing_id),
+            **request_auth_headers(private_key, listing_id=listing_id, method="POST", path=path,
+                body=payload, chain_id=chain_id, contract=contract),
         },
     )
     try:
@@ -141,6 +148,7 @@ def publish_metadata(
     return post(
         base, "/api/listings", body,
         private_key=private_key, listing_id=stored.listing_id,
+        chain_id=int(stored.chain_id), contract=stored.listing_contract,
     )
 
 

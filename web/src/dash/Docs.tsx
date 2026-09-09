@@ -8,14 +8,77 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Badge, Section, Rule, Table, Td } from "../ui";
+import {
+  BUYING,
+  COMMANDS,
+  ENVIRONMENT,
+  FOR_AGENTS,
+  INSTALL,
+  SELLING,
+} from "../app/Guide";
+import { REFERENCE } from "../app/reference";
+
+/** Searchable text, built from the generated reference rather than retyped. */
+const ALL_COMMANDS = REFERENCE.succession
+  .map((c) => `${c.name} ${c.flags.map((f) => f.names.join(" ")).join(" ")}`)
+  .join(" ")
+  .concat(" ", REFERENCE["succession-acp"].map((c) => `acp ${c.name}`).join(" "));
+
+const group = (title: string) =>
+  (REFERENCE.groups.find((g) => g.title === title)?.commands ?? []).join(" ");
+
+const SELLER_COMMANDS = group("Selling");
+const BUYER_COMMANDS = group("Buying");
+const ENV_NAMES = REFERENCE.env.map((e) => e.name).join(" ");
 
 interface Doc {
   id: string;
   title: string;
   body: ReactNode;
+  /** Extra text the filter matches, since a body is JSX and cannot be read.
+   *  For the command sections this comes from the generated reference, so a
+   *  renamed flag stays findable without anyone remembering to update a list. */
+  keywords?: string;
 }
 
 const DOCS: Doc[] = [
+  {
+    id: "install",
+    title: "Install and check",
+    body: INSTALL,
+    keywords: "pipx pip install extras chain mcp succession-cli status audit",
+  },
+  {
+    id: "selling",
+    title: "Selling, step by step",
+    body: SELLING,
+    keywords: SELLER_COMMANDS,
+  },
+  {
+    id: "buying",
+    title: "Buying, step by step",
+    body: BUYING,
+    keywords: BUYER_COMMANDS,
+  },
+  {
+    id: "commands",
+    title: "Command reference",
+    body: COMMANDS,
+    // Every command and every flag, so searching "--scope" lands here.
+    keywords: ALL_COMMANDS,
+  },
+  {
+    id: "agents",
+    title: "For agents, over MCP",
+    body: FOR_AGENTS,
+    keywords: "mcp server tools succession-mcp write gate allow writes agent",
+  },
+  {
+    id: "environment",
+    title: "Environment",
+    body: ENVIRONMENT,
+    keywords: ENV_NAMES,
+  },
   {
     id: "overview",
     title: "What Succession is",
@@ -52,10 +115,10 @@ const DOCS: Doc[] = [
             ["List", "The Merkle root is committed to ListingContract on Base, before any buyer exists."],
             ["Preview", "A buyer sees aggregate statistics only, counts, never record bodies, beside whatever ACP job history the agent carries."],
             ["Escrow", "The buyer funds the contract. Nothing has moved: the seller cannot touch the money, the buyer holds no identity."],
-            ["Deliver", "The package travels encrypted. The content key is released only against funded escrow."],
-            ["Re-key", "It imports into a brand-new tenant under the buyer's tenant id."],
-            ["Verify", "The buyer re-exports their own store and re-derives the root."],
-            ["Settle", "confirmTransfer releases payment, transfers the identity token, and sets the sealed flag, in one transaction, or none."],
+            ["Deliver", "The package travels encrypted. Before settlement, only the configured evaluator may collect its key."],
+            ["Verify", "The evaluator imports into an isolated tenant, checks the signature, and independently re-derives the root."],
+            ["Settle", "The evaluator calls confirmTransfer, which releases payment, transfers the identity token, and sets the sealed flag in one transaction."],
+            ["Re-key", "After settlement, the buyer imports into a fresh local tenant."],
             ["Record", "The acquisition is written into the buyer's memory, extending the provenance chain for any future resale."],
           ]}
         />
@@ -268,7 +331,12 @@ export function Docs() {
   const filtered = useMemo(() => {
     if (!query.trim()) return DOCS;
     const q = query.toLowerCase();
-    return DOCS.filter((d) => d.title.toLowerCase().includes(q) || d.id.includes(q));
+    return DOCS.filter(
+      (d) =>
+        d.title.toLowerCase().includes(q) ||
+        d.id.includes(q) ||
+        (d.keywords ?? "").toLowerCase().includes(q),
+    );
   }, [query]);
 
   // Deep links: /app#integrity opens that section.

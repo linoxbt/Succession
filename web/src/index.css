@@ -16,89 +16,60 @@
  */
 
 @layer base {
-  /* The marketing palette. These are the values that used to live as literals
-     in tailwind.config.js, unchanged to the channel, so every page that does
-     not opt into the console renders exactly as it did before. */
+  /* One palette, Paystack-light.
+
+     There were two before: warm paper for the marketing pages and dark charcoal
+     for the console, each asked for at a different time and each correct in
+     isolation. Reading them one after the other made the site feel like two
+     products. This is the single light language: white ground, a half step off
+     it for a panel, deep navy ink, one blue that means "act", and the three
+     state colours that are the only ones carrying meaning.
+
+     Every value is measured against the surface it actually sits on rather than
+     chosen by eye. `faint` is the one to watch: it carries every 11px uppercase
+     label in the interface, and the version that looked right measured 4.29 on
+     the panel, under the 4.5 that size needs. It is set to clear 4.6 on the
+     panel and 4.87 on white.
+
+     The channel-triplet form stays. Alpha modifiers (`bg-ink/25`, `bg-paper/95`)
+     need it, and it keeps a second palette one block away rather than one
+     refactor away. */
   :root {
-    --c-paper: 239 233 222;
-    --c-shade: 227 218 202;
-    --c-carbon: 28 22 17;
-    --c-carbon-rule: 53 43 34;
+    color-scheme: light;
 
-    --c-ink: 32 26 20;
-    --c-muted: 90 80 68;
-    --c-faint: 140 129 114;
-    --c-rule: 199 188 168;
-    --c-hairline: 217 208 189;
+    --c-paper: 255 255 255;
+    --c-shade: 246 249 252;
+    /* Inverted bands, for a footer or a full-bleed chapter. */
+    --c-carbon: 1 27 51;
+    --c-carbon-rule: 11 48 80;
 
-    --c-chalk: 241 235 224;
-    --c-chalk-muted: 167 156 138;
-    --c-chalk-faint: 111 100 83;
+    --c-ink: 1 27 51;
+    --c-muted: 74 92 110;
+    --c-faint: 92 108 126;
+    --c-rule: 220 229 237;
+    --c-hairline: 237 242 247;
 
-    --c-escrow: 46 74 107;
-    --c-closed: 60 110 74;
-    --c-void: 138 64 56;
+    --c-chalk: 255 255 255;
+    --c-chalk-muted: 169 194 216;
+    --c-chalk-faint: 138 166 191;
 
-    /* Out here `signal` is the escrow blue, so a stray use introduces no new
-       colour, and `press` is the black the primary button always hovered to. */
-    --c-signal: 46 74 107;
-    --c-press: 0 0 0;
-  }
+    /* State, and only state. Funds held, hash verified, mismatch. A screen with
+       nothing pending shows none of them, which is what keeps them legible. */
+    --c-escrow: 10 98 201;
+    --c-closed: 11 122 62;
+    --c-void: 192 50 33;
 
-  /* The console. Set on the root element rather than on the app's own wrapper,
-     because five things render outside it and would otherwise stay light: the
-     body background, the native `color-scheme` that drives scrollbars and form
-     controls, the fixed cursor layer, the global focus ring and ::selection.
+    /* The one accent. Deep enough to carry text at 4.5, unlike the brighter
+       cyan the reference uses for large fills, which fails as a label colour. */
+    --c-signal: 15 98 214;
+    --c-press: 11 79 172;
 
-     This subtree takes one deliberate exception to the system's first rule,
-     that colour encodes transaction state and nothing else. The console has an
-     accent, `signal`. It is spent on interactive affordance and the mark, never
-     on decoration, and the three state colours keep their meanings untouched:
-     they are re-tinted to stay separable from a dark ground, not repurposed. */
-  :root[data-surface="app"] {
-    color-scheme: dark;
-
-    /* Ground, and the one step up from it that a panel sits on. */
-    --c-paper: 11 13 15;
-    --c-shade: 20 24 27;
-    /* Inverted bands go deeper here rather than lighter, so the footer reads
-       as bedrock under the page instead of as another panel on it. */
-    --c-carbon: 5 6 7;
-    --c-carbon-rule: 30 34 38;
-
-    --c-ink: 232 236 239;
-    --c-muted: 155 164 172;
-    /* `faint` and `chalk-faint` are set by contrast, not by taste. They carry
-       the 11px uppercase labels that annotate almost every value in the
-       console, and the values that looked right on a dark ground measured 3.75
-       and 2.88 against the surfaces they actually sit on. These clear 4.6,
-       which is the threshold for text this small. */
-    --c-faint: 122 131 139;
-    --c-rule: 42 48 54;
-    --c-hairline: 28 33 38;
-
-    --c-chalk: 232 236 239;
-    --c-chalk-muted: 139 148 156;
-    --c-chalk-faint: 114 122 130;
-
-    /* Lifted off the dark ground. The light-mode values fail contrast here. */
-    --c-escrow: 96 154 214;
-    --c-closed: 74 190 124;
-    --c-void: 226 106 94;
-
-    --c-signal: 45 212 191;
-    /* The primary button inverts on this ground: near-white on dark, pressing
-       to pure white rather than to black. */
-    --c-press: 255 255 255;
-
-    /* Logo.tsx already reads this variable for the successor half of the mark,
-       with the escrow blue as its fallback, so the seam turns accent in the
-       console and nowhere else without touching that file. */
-    --mark-accent: rgb(45 212 191);
+    /* Decorative only: the successor half of the wordmark, where contrast is
+       not load bearing, so it can be the brighter blue. */
+    --mark-accent: rgb(0 195 247);
   }
 
   html {
-    color-scheme: light;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     /* Lenis drives scrolling; the native smooth behaviour would fight it. */
@@ -171,7 +142,7 @@
      Sections are numbered like chapters because the page is one document read
      top to bottom, not a set of independent panels. */
   .chapter-mark {
-    @apply font-mono text-label uppercase text-faint;
+    @apply text-micro font-medium text-faint;
   }
 
   .on-carbon .chapter-mark {

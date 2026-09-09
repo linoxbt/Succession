@@ -13,8 +13,8 @@
  * file on their own disk that no web page can read. The honest interface hands
  * them the command instead of pretending otherwise, which is what `Sell` does.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { WagmiProvider } from "wagmi";
 
 import { config as wagmiConfig } from "./chain/config";
@@ -60,29 +60,23 @@ export default function App() {
 const queryClient = new QueryClient();
 
 function Surface() {
-  const { route, navigate } = useNavigation();
+  const { route, navigate, query, setQuery } = useNavigation();
   const view = route.kind === "app" ? route.view : "overview";
   const listingId = route.kind === "app" ? route.listingId : null;
 
   const [rows, setRows] = useState<MarketRow[]>([]);
   const [demo, setDemo] = useState<MarketRow[]>([]);
-  const [fetched, setFetched] = useState<MarketRow | null>(null);
+  const detail = useQuery({
+    queryKey: ['listing', listingId], queryFn: () => service.listing(listingId!),
+    enabled: Boolean(listingId), retry: 1, staleTime: 15_000,
+  });
+  const fetched = detail.data;
   const [onChain, setOnChain] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [discoveryNotice, setDiscoveryNotice] = useState<string>();
 
   const chainStatus = useChainStatus();
-
-  // The console's palette is scoped by an attribute on the root element rather
-  // than by a wrapper class, because the body background, the native
-  // `color-scheme`, the fixed cursor layer, the focus ring and ::selection all
-  // live outside the app's own tree. `main.tsx` sets the same attribute before
-  // the first paint so a direct load of /app never flashes the light ground.
-  useLayoutEffect(() => {
-    const root = document.documentElement;
-    if (route.kind === "app") root.dataset.surface = "app";
-    else delete root.dataset.surface;
-  }, [route.kind]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,6 +85,7 @@ function Surface() {
       setRows(body.real);
       setDemo(body.demo);
       setOnChain(body.chain);
+      setDiscoveryNotice(body.notice);
       setError(null);
     } catch (e) {
       // A marketplace that cannot reach its service shows nothing and says so.
@@ -120,26 +115,6 @@ function Surface() {
     if (known) return known;
     return fetched?.listing.listing_id === listingId ? fetched : null;
   }, [listingId, rows, demo, fetched]);
-
-  // Fetch the single listing only when the market has not already loaded it.
-  // The ref records which id was attempted so a listing the service cannot
-  // resolve is asked for once, not on every render of a failed lookup.
-  const attempted = useRef<string | null>(null);
-  useEffect(() => {
-    if (!listingId) return;
-    if ([...rows, ...demo].some((r) => r.listing.listing_id === listingId)) return;
-    if (attempted.current === listingId) return;
-    attempted.current = listingId;
-
-    let live = true;
-    void service
-      .listing(listingId)
-      .then((row) => live && setFetched(row))
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, [listingId, rows, demo]);
 
   const open = useCallback(
     (row: MarketRow) => navigate(to.listing(row.listing.listing_id)),
@@ -184,6 +159,7 @@ function Surface() {
           listings animates as a navigation rather than swapping content
           underneath a stationary page. */}
       <Transition routeKey={`${view}:${listingId ?? ""}`}>
+      {discoveryNotice ? <Note>{discoveryNotice}</Note> : null}
       {view === "overview" ? <Dashboard onOpenListing={openById} /> : null}
       {view === "market" ? (
         <Marketplace
@@ -199,16 +175,18 @@ function Surface() {
       {view === "listing" ? (
         <ListingView
           row={selected}
+          loading={detail.isFetching && !selected}
+          error={detail.error?.message}
           chainStatus={chainStatus}
           onBack={() => navigate(to.view("market"))}
-          onClaim={() => navigate(to.view("claim"))}
-          onRefresh={load}
+          onClaim={() => { navigate(to.view("claim")); setQuery({listing: listingId}); }}
+          onRefresh={() => { void load(); void detail.refetch(); }}
         />
       ) : null}
       {view === "sell" ? <Sell chainStatus={chainStatus} /> : null}
       {view === "claim" ? (
         <Claim
-          listingId={selected?.listing.listing_id ?? ""}
+          listingId={query.get("listing") ?? ""}
           rows={rows}
           onOpenListing={openById}
         />

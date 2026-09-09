@@ -11,13 +11,14 @@
  * is a file on their disk, so this page hands over the command and reports what
  * the chain says about the rest.
  */
-import { useEffect, useState } from "react";
+import { shellArgument } from "../app/commands";
+import { useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
 
-import { formatAmount, type AgentsHeld, type MarketRow } from "../api";
+import { formatAmount, type MarketRow } from "../api";
 import { service } from "../services";
 import { explorerAddress } from "../chain/config";
-import { Badge, Copyable, Empty, Note, PageHead, Section } from "../ui";
+import { Badge, Button, Copyable, Empty, Note, PageHead, Section } from "../ui";
 import { Block, CopyLine, Panel, Skeleton } from "../app/ui";
 import { EscrowStatus, SealStatus, STATE_MEANING } from "../app/domain";
 
@@ -31,25 +32,9 @@ export default function Claim({
   onOpenListing: (listingId: string) => void;
 }) {
   const { address, isConnected } = useAccount();
-  const [held, setHeld] = useState<AgentsHeld | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!address) {
-      setHeld(null);
-      return;
-    }
-    let live = true;
-    setLoading(true);
-    void service
-      .agents(address)
-      .then((body) => live && setHeld(body))
-      .catch(() => live && setHeld(null))
-      .finally(() => live && setLoading(false));
-    return () => {
-      live = false;
-    };
-  }, [address]);
+  const registry = useQuery({queryKey: ['agents', address], queryFn: () => service.agents(address!), enabled: Boolean(address), retry: 1});
+  const held = address ? registry.data : undefined;
+  const loading = registry.isFetching;
 
   const mine = address
     ? rows.filter(
@@ -60,7 +45,8 @@ export default function Claim({
   const outstanding = mine.filter((row) => row.listing.state === "escrowed");
 
   // The listing the user arrived from, when they came via a listing page.
-  const arrived = rows.find((row) => row.listing.listing_id === listingId);
+  const detail = useQuery({queryKey: ['listing', listingId], queryFn: () => service.listing(listingId), enabled: Boolean(listingId), retry: 1});
+  const arrived = rows.find((row) => row.listing.listing_id === listingId) || detail.data;
   const pending = outstanding.length ? outstanding : arrived ? [arrived] : [];
 
   return (
@@ -77,10 +63,13 @@ export default function Claim({
           <Note>Connect a wallet to read the ERC-8004 agents it holds.</Note>
         ) : loading ? (
           <Skeleton rows={3} />
+        ) : registry.error ? (
+          <Note>Could not read the registry: {registry.error.message} <Button onClick={() => { void registry.refetch(); }}>Retry</Button></Note>
+        ) : held && !held.complete && held.agents.length === 0 ? (
+          <Note>The scan is incomplete: the wallet reports {held.balance} identities, but none were found in this range.</Note>
         ) : !held || held.agents.length === 0 ? (
           <Empty>
-            This wallet holds no ERC-8004 agents. An acquired memory is imported
-            into an agent you already hold, so a successor has to exist first.
+            No ERC-8004 identities were found. Claiming memory requires a fresh local tenant; you do not need to register another NFT.
           </Empty>
         ) : (
           <>
@@ -90,7 +79,7 @@ export default function Claim({
                   <div className="evidence-type text-body text-ink">
                     {agent.identity}
                   </div>
-                  <div className="mt-2 font-mono text-label uppercase tracking-[0.14em] text-faint">
+                  <div className="mt-2 text-micro font-medium text-faint">
                     token {agent.agent_id}
                   </div>
                 </Panel>
@@ -111,7 +100,7 @@ export default function Claim({
                   href={explorerAddress(address)}
                   target="_blank"
                   rel="noreferrer"
-                  className="link-underline mt-3 inline-block font-mono text-label uppercase text-muted hover:text-ink"
+                  className="link-underline mt-3 inline-block text-micro font-medium text-muted hover:text-ink"
                 >
                   View on Basescan
                 </a>
@@ -127,8 +116,8 @@ export default function Claim({
           <Note>Connect a wallet to see what it has acquired.</Note>
         ) : settled.length === 0 ? (
           <Empty>
-            No settled acquisitions. A sale appears here once confirmTransfer has
-            matched the delivered root and released payment, and not before.
+            No settled acquisitions. A sale appears here once the evaluator has
+            matched the delivered root and released payment.
           </Empty>
         ) : (
           <div className="border-t border-hairline">
@@ -153,6 +142,13 @@ export default function Claim({
                 </span>
                 <Badge tone="closed">title transferred</Badge>
                 {row.listing.sealed ? <Badge tone="closed">origin sealed</Badge> : null}
+                <div className="basis-full pt-3">
+                  <Copyable text={`succession claim \\
+    --listing ${shellArgument(row.listing.listing_id)} \\
+    --db ~/.sibyl-memory/memory.db \\
+    --tenant succession-import \\
+    --marketplace ${shellArgument(window.location.origin)}`} />
+                </div>
               </div>
             ))}
           </div>
@@ -164,7 +160,7 @@ export default function Claim({
         {pending.length === 0 ? (
           <Note>
             Nothing is waiting on you. A funded escrow appears here with the
-            command that collects and imports what it paid for.
+            evaluator status and recovery controls.
           </Note>
         ) : (
           <div className="space-y-12">
@@ -186,31 +182,22 @@ export default function Claim({
 
                     <div>
                       <p className="chapter-mark mb-3">
-                        2, Claim, import and verify
+                        2, Wait for independent evaluation
                       </p>
-                      <Copyable
-                        text={`succession claim \\
-    --listing ${row.listing.listing_id} \\
-    --db ~/.sibyl-memory/memory.db \\
-    --tenant <the agent that inherits> \\
-    --marketplace ${window.location.origin}`}
-                      />
                       <Note>
-                        It prints the hash the seller committed and the one
-                        re-derived from your own store after the import. The
-                        second is derived from what you now hold, not from the
-                        bytes that arrived, which is the only version of the
-                        check worth running.
+                        The configured evaluator alone can collect the key while
+                        escrow remains refundable. It imports into an isolated
+                        store, checks the seller signature, and re-derives the root.
                       </Note>
                     </div>
 
                     <div>
-                      <p className="chapter-mark mb-3">3, Confirm on chain</p>
+                      <p className="chapter-mark mb-3">3, Claim after settlement</p>
                       <p className="max-w-measure text-micro text-muted">
-                        Only if the two hashes match. Confirming releases the
-                        payment, transfers the identity and seals the seller's
-                        copy in one transaction. If they do not match, do not
-                        confirm: the refund path exists for exactly this.
+                        A passing evaluator verdict releases payment and transfers
+                        the identity in one transaction. The buyer key becomes
+                        available only then. Open this listing again to download
+                        a wallet authorization and run the claim command.
                       </p>
                     </div>
                   </div>

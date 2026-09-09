@@ -162,6 +162,25 @@ def strip_reserved(body: Any) -> Any:
     return {k: v for k, v in body.items() if k != RESERVED_KEY}
 
 
+def record_disclosure(record: dict[str, Any]) -> Disclosure:
+    """Resolve flags from the storage fields that actually carry them.
+
+    Reference documents can carry flags in both body and metadata. Neither
+    location may override a restriction imposed by the other.
+    """
+    fields = {"event": ("extra",), "relation": ("metadata",),
+              "reference": ("body", "metadata")}.get(record.get("kind"), ("body",))
+    flags = [read_disclosure(record.get(f)) for f in fields
+             if isinstance(record.get(f), dict) and RESERVED_KEY in record[f]]
+    if not flags:
+        return Disclosure()
+    return Disclosure(
+        sensitivity=Sensitivity.PUBLIC if all(f.preview_visible for f in flags) else Sensitivity.PRIVATE,
+        transferable=all(f.transferable for f in flags),
+        consent=next((f.consent for f in flags if f.consent not in Consent.TRANSFERABLE), flags[0].consent),
+    )
+
+
 def mark(
     body: dict[str, Any],
     *,
@@ -228,7 +247,7 @@ def filter_transferable(
     withheld_flag = 0
     withheld_consent = 0
     for record in records:
-        disclosure = read_disclosure(record.get("body"))
+        disclosure = record_disclosure(record)
         if disclosure.may_transfer:
             kept.append(record)
         elif not disclosure.transferable:

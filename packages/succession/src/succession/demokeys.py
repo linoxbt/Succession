@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from eth_account import Account
 
-__all__ = ["SELLER", "BUYER", "DemoIdentity"]
+__all__ = ["SELLER", "BUYER", "EVALUATOR", "DemoIdentity"]
 
 
 class DemoIdentity:
@@ -31,3 +31,4 @@ class DemoIdentity:
 
 SELLER = DemoIdentity("seller", "0x" + "11" * 32, "erc8004:84532:0417")
 BUYER = DemoIdentity("buyer", "0x" + "22" * 32, "erc8004:84532:1183")
+EVALUATOR = DemoIdentity("evaluator", "0x" + "a7" * 32, "")

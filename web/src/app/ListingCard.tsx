@@ -75,7 +75,7 @@ export default function ListingCard({
     <Panel
       as="article"
       interactive
-      className="flex h-full flex-col justify-between p-7"
+      className="flex h-full flex-col justify-between p-6"
     >
       <div>
         <div className="flex items-start justify-between gap-4">
@@ -104,7 +104,7 @@ export default function ListingCard({
           <dl className="mt-7 grid grid-cols-2 gap-x-6 gap-y-4">
             {facts.map((fact) => (
               <div key={fact.label}>
-                <dt className="font-mono text-label uppercase tracking-[0.14em] text-faint">
+                <dt className="text-micro text-faint">
                   {fact.label}
                 </dt>
                 <dd className="tnum mt-1 text-body text-ink">{fact.value}</dd>
@@ -112,7 +112,7 @@ export default function ListingCard({
             ))}
             {s.successRate ? (
               <div>
-                <dt className="font-mono text-label uppercase tracking-[0.14em] text-faint">
+                <dt className="text-micro text-faint">
                   Performance
                 </dt>
                 <dd className="tnum mt-1 text-body text-ink">
@@ -121,7 +121,7 @@ export default function ListingCard({
               </div>
             ) : null}
             <div>
-              <dt className="font-mono text-label uppercase tracking-[0.14em] text-faint">
+              <dt className="text-micro text-faint">
                 Directories
               </dt>
               <dd className="tnum mt-1 text-body text-ink">
@@ -152,7 +152,7 @@ export default function ListingCard({
         <button
           {...pointer}
           onClick={() => onOpen(row)}
-          className="link-underline shrink-0 font-mono text-label uppercase tracking-[0.14em] text-ink"
+          className="shrink-0 rounded-control bg-shade px-4 py-2 text-micro font-semibold text-signal transition-colors duration-150 hover:bg-signal hover:text-white"
         >
           View listing
         </button>

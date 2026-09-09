@@ -25,12 +25,40 @@ def test_recall_by_company_name(agent):
     assert "2,380" in reply.text
 
 
+def test_pricing_applies_remembered_opening_premium_and_margin_floor(agent):
+    quote = agent.quote('Tallgrass Brewing', target='1000', cost='800')
+    assert quote['opening_rate'] == '1040.00'
+    assert quote['minimum_rate'] == '879.13'
+    assert quote['target_allowed']
+    low = agent.quote('Tallgrass Brewing', target='800', cost='800')
+    assert low['requires_review']
+    assert low['opening_rate'] == low['minimum_rate']
+    assert 'below the stored margin floor' in agent.respond('Tallgrass Brewing target=800 cost=800').text
+
+
+@pytest.mark.parametrize('amount', ['NaN','Infinity','-10','0'])
+def test_pricing_rejects_invalid_money(agent, amount):
+    with pytest.raises(ValueError):
+        agent.quote('Tallgrass Brewing', target=amount, cost='800')
+
+
+@pytest.mark.parametrize('inputs', [
+    'target=-10 cost=800', 'target=NaN cost=800', 'target=Infinity cost=800',
+    'target=1000oops cost=800', 'target=1e999999999 cost=800', 'target=1000', 'cost=800',
+    'target=1000 target=2000 cost=800', 'target= cost=800',
+])
+def test_invalid_quote_message_never_falls_back_to_recall(agent, inputs):
+    reply = agent.respond('Tallgrass Brewing ' + inputs)
+    assert not reply.recalled
+    assert reply.citations == []
+    assert 'open at $' not in reply.text
+
+
 def test_recall_by_lane_without_the_company_name(agent):
     """The realistic case: a customer says what they need, not who they are."""
     reply = agent.respond("We need a reefer from Yakima to Denver again")
     assert reply.recalled
     assert "Cascade Orchards" in reply.text
-
 
 def test_recall_by_equipment_and_origin(agent):
     reply = agent.respond("Anything on the flatbed out of Coeur d'Alene?")
@@ -68,6 +96,10 @@ def test_recall_survives_a_transfer(seller, buyer, agent_id):
     reply = Agent(buyer).respond("We need a reefer from Yakima to Denver again")
     assert reply.recalled
     assert "Cascade Orchards" in reply.text
+
+    quote = Agent(buyer).quote('Tallgrass Brewing', target='1000', cost='800')
+    assert quote['opening_rate'] == '1040.00'
+    assert quote['minimum_rate'] == '879.13'
 
 
 # -- term extraction ------------------------------------------------------

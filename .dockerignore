@@ -1,0 +1,12 @@
+.git
+.venv
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/.env
+.env
+marketplace-state
+**/dist
+contracts/cache
+contracts/lib
+contracts/out

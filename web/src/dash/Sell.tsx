@@ -1,3 +1,4 @@
+import { shellArgument, usdcMinorUnits } from "../app/commands";
 /**
  * Selling, which does not happen in this browser and cannot.
  *
@@ -67,19 +68,18 @@ export default function Sell({ chainStatus }: { chainStatus: ChainStatus | null 
   const scope = included.map((c) => `${c}=${share(c)}`).join(",");
   const partial = SELLABLE_DIRECTORIES.some((c) => share(c) !== 100);
 
-  const minor = Math.round((Number(price) || 0) * 1_000_000);
+  const minor = usdcMinorUnits(price);
   const command = [
-    "SUCCESSION_SIGNING_KEY=0x… \\",
     "  succession list \\",
-    `    --db ${db || "<your store>"} \\`,
-    `    --tenant ${tenant || "<your tenant>"} \\`,
-    `    --agent ${agent || "erc8004:84532:<your agent id>"} \\`,
-    `    --marketplace ${typeof window === "undefined" ? "" : window.location.origin} \\`,
+    `    --db ${shellArgument(db || "<your store>")} \\`,
+    `    --tenant ${shellArgument(tenant || "<your tenant>")} \\`,
+    `    --agent ${shellArgument(agent || "erc8004:84532:<your agent id>")} \\`,
+    `    --marketplace ${shellArgument(window.location.origin)} \\`,
     ...(partial ? [`    --scope ${scope || "<nothing selected>"} \\`] : []),
-    `    --price ${minor}`,
+    `    --price ${minor?.toString() ?? "<valid USDC amount required>"}`,
   ].join("\n");
 
-  const ready = Boolean(tenant && agent && included.length && minor > 0);
+  const ready = Boolean(db.trim() && tenant.trim() && /^erc8004:84532:\d+$/.test(agent) && included.length && minor !== null);
 
   return (
     <div>
@@ -147,6 +147,7 @@ export default function Sell({ chainStatus }: { chainStatus: ChainStatus | null 
       </Section>
 
       <Section index="03" title="Transfer scope" className="mt-chapter">
+        <Note>Scope selects the memory records included in this sale. Settlement transfers the entire ERC-8004 identity token, including when you sell only some memory categories. This is not fractional token ownership.</Note>
         <p className="mb-10 max-w-measure text-body text-muted">
           Each directory is a unit of selection and receives its own Merkle
           subroot, which is what makes a partial succession verifiable on its own
@@ -198,7 +199,7 @@ export default function Sell({ chainStatus }: { chainStatus: ChainStatus | null 
             {GENERATED.map(([name, why]) => (
               <div key={name} className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
                 <span className="w-56 shrink-0 text-body text-faint">{name}</span>
-                <span className="font-mono text-label uppercase tracking-[0.14em] text-faint">
+                <span className="text-micro font-medium text-faint">
                   Coming soon
                 </span>
                 <span className="text-micro text-faint">{why}</span>
@@ -272,6 +273,7 @@ export default function Sell({ chainStatus }: { chainStatus: ChainStatus | null 
           </Note>
         ) : (
           <>
+            <Note>Configure SUCCESSION_SIGNING_KEY in your local environment before running this command. Keep the key out of shared commands and transcripts.</Note>
             <Copyable text={command} />
             <Note>
               The key is read from the environment, never from an argument. A

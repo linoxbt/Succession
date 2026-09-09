@@ -123,7 +123,7 @@ export default function Dashboard({
 
         {totals.listings ? (
           <Note>
-            {totals.with_data_room ?? 0} of {totals.listings} sellers published a
+            {totals.with_data_room ?? 0} of {totals.listings} listings have a
             data room. The rest are listed on chain and undescribed, which is a
             real gap rather than a rendering one.
           </Note>
@@ -143,7 +143,7 @@ export default function Dashboard({
               </Td>
               <Td>
                 <Badge tone={c.transferable ? "closed" : "neutral"}>
-                  {c.transferable ? "live" : "coming soon"}
+                  {c.transferable ? "selectable" : "generated with package"}
                 </Badge>
               </Td>
               <Td className="tnum">
@@ -185,7 +185,7 @@ export default function Dashboard({
                   className="flex flex-wrap items-baseline gap-x-8 gap-y-1 border-b border-hairline py-4"
                 >
                   <span className="evidence-type text-body text-ink">{a.identity}</span>
-                  <span className="text-label uppercase tracking-[0.14em] text-faint">
+                  <span className="text-micro font-medium text-faint">
                     token {a.agent_id}
                   </span>
                 </div>
@@ -220,7 +220,7 @@ export default function Dashboard({
                     {row.name || `Agent ${row.agent_identity}`}
                   </span>
                   {row.has_metadata === false ? (
-                    <span className="ml-3 text-label uppercase tracking-[0.14em] text-faint">
+                    <span className="ml-3 text-micro font-medium text-faint">
                       on chain only
                     </span>
                   ) : null}
@@ -239,7 +239,7 @@ export default function Dashboard({
                 <Td>
                   <button
                     onClick={() => onOpenListing(row.listing.listing_id)}
-                    className="link-underline font-mono text-label uppercase text-muted hover:text-ink"
+                    className="link-underline text-micro font-medium text-muted hover:text-ink"
                   >
                     Open
                   </button>
@@ -266,7 +266,7 @@ export default function Dashboard({
               key={f.name}
               className="flex flex-col gap-1 border-b border-hairline py-4 sm:flex-row sm:items-baseline sm:gap-10"
             >
-              <span className="w-full shrink-0 font-mono text-label uppercase text-faint sm:w-40">
+              <span className="w-full shrink-0 text-micro font-medium text-faint sm:w-40">
                 {f.name}
               </span>
               <span className="tnum w-16 shrink-0 text-ink">{f.weight}</span>
@@ -320,7 +320,7 @@ export default function Dashboard({
 
         <div className="grid gap-12 lg:grid-cols-2">
           <div>
-            <h3 className="mb-6 font-mono text-label uppercase tracking-[0.14em] text-faint">
+            <h3 className="mb-6 text-micro font-medium text-faint">
               In the owner's terminal
             </h3>
             <dl className="border-t border-hairline">
@@ -340,7 +340,7 @@ export default function Dashboard({
           </div>
 
           <div>
-            <h3 className="mb-6 font-mono text-label uppercase tracking-[0.14em] text-faint">
+            <h3 className="mb-6 text-micro font-medium text-faint">
               In this browser
             </h3>
             <dl className="border-t border-hairline">
@@ -381,7 +381,7 @@ export default function Dashboard({
                 key={label}
                 className="flex flex-col gap-1 border-b border-hairline py-4 sm:flex-row sm:items-baseline sm:gap-10"
               >
-                <span className="w-full shrink-0 font-mono text-label uppercase text-faint sm:w-64">
+                <span className="w-full shrink-0 text-micro font-medium text-faint sm:w-64">
                   {label}
                 </span>
                 <a

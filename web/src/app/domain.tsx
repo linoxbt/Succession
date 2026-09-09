@@ -79,7 +79,7 @@ export function DemoMark({ notice }: { notice?: string }) {
   return (
     <span
       title={notice ?? "Demonstration listing. Not on chain and not for sale."}
-      className="inline-flex shrink-0 items-center border border-rule px-2 py-0.5 font-mono text-label uppercase tracking-[0.14em] text-faint"
+      className="inline-flex shrink-0 items-center border border-rule px-2 py-0.5 text-micro font-medium text-faint"
     >
       demo
     </span>
@@ -92,7 +92,7 @@ export function EscrowStatus({ listing }: { listing: Listing }) {
     <div className="flex flex-wrap items-center gap-3">
       <Badge tone={STATE_TONE[state] ?? "neutral"}>{state}</Badge>
       {listing.sealed ? <Badge tone="closed">sealed</Badge> : null}
-      {listing.escrow_balance > 0 ? (
+      {BigInt(listing.escrow_balance) > 0n ? (
         <span className="tnum text-micro text-muted">
           {formatAmount(listing.escrow_balance, listing.currency)} held
         </span>
@@ -122,7 +122,7 @@ export function VerificationBadge({ row }: { row: MarketRow }) {
   const verified = Boolean(manifest?.root);
   if (!verified) {
     return (
-      <span className="font-mono text-label uppercase tracking-[0.14em] text-faint">
+      <span className="text-micro font-medium text-faint">
         no manifest published
       </span>
     );
@@ -131,7 +131,7 @@ export function VerificationBadge({ row }: { row: MarketRow }) {
     manifest?.root?.toLowerCase() === row.listing.hash_commitment.toLowerCase();
   return (
     <Badge tone={agrees ? "closed" : "void"}>
-      {agrees ? "merkle verified" : "root disagrees with chain"}
+      {agrees ? "commitment matches" : "root disagrees with chain"}
     </Badge>
   );
 }
@@ -154,7 +154,7 @@ export function AgentIdentity({
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2">
         <span className="evidence-type text-micro text-muted">{identity}</span>
-        <span className="font-mono text-label uppercase tracking-[0.14em] text-faint">
+        <span className="text-micro font-medium text-faint">
           ERC-8004
         </span>
         {row.vertical ? (
@@ -229,7 +229,7 @@ export function MemoryStats({ row }: { row: MarketRow }) {
           <div className="tnum text-figure text-ink">
             {stat.value ?? <span className="text-faint">not published</span>}
           </div>
-          <div className="mt-1 font-mono text-label uppercase tracking-[0.14em] text-faint">
+          <div className="mt-1 text-micro font-medium text-faint">
             {stat.label}
           </div>
           {stat.note ? (
@@ -269,18 +269,18 @@ export function MemoryPackageViewer({ row }: { row: MarketRow }) {
               <span className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
                 <span className="evidence-type text-body text-ink">{directory}/</span>
                 {generated ? (
-                  <Badge>coming soon</Badge>
+                  <Badge>generated with package</Badge>
                 ) : entry?.offerable ? (
                   <span className="tnum text-micro text-muted">
                     {entry.sellable.toLocaleString()} records
                   </span>
                 ) : (
-                  <span className="font-mono text-label uppercase text-faint">
+                  <span className="text-micro font-medium text-faint">
                     nothing offered
                   </span>
                 )}
                 {subroot ? (
-                  <span className="font-mono text-label uppercase tracking-[0.14em] text-closed">
+                  <span className="text-micro font-semibold text-closed">
                     subroot
                   </span>
                 ) : null}
@@ -320,7 +320,7 @@ export function MemoryPackageViewer({ row }: { row: MarketRow }) {
 
               {subroot ? (
                 <div>
-                  <span className="font-mono text-label uppercase text-faint">
+                  <span className="text-micro font-medium text-faint">
                     Merkle subroot, {subroot.leaf_count} leaves
                   </span>
                   <div className="evidence-type mt-1 break-all text-micro text-ink">
@@ -339,7 +339,7 @@ export function MemoryPackageViewer({ row }: { row: MarketRow }) {
 function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
-      <dt className="font-mono text-label uppercase tracking-[0.14em] text-faint">
+      <dt className="text-micro font-medium text-faint">
         {label}
       </dt>
       <dd className="tnum mt-1 text-body text-ink">{value}</dd>
@@ -420,7 +420,7 @@ export function ValuationBreakdown({ row }: { row: MarketRow }) {
           {valuation.currency === "USD" ? "$" : ""}
           {valuation.amount}
         </span>
-        <span className="font-mono text-label uppercase tracking-[0.14em] text-faint">
+        <span className="text-micro font-medium text-faint">
           computed valuation
         </span>
       </div>
@@ -433,7 +433,7 @@ export function ValuationBreakdown({ row }: { row: MarketRow }) {
 
       <div className="border-t border-hairline">
         <div className="flex items-baseline justify-between gap-6 border-b border-hairline py-4">
-          <span className="font-mono text-label uppercase tracking-[0.14em] text-faint">
+          <span className="text-micro font-medium text-faint">
             base price
           </span>
           <span className="tnum text-body text-ink">{valuation.base_price}</span>
@@ -463,7 +463,7 @@ export function ValuationBreakdown({ row }: { row: MarketRow }) {
       </div>
 
       <div>
-        <h4 className="font-mono text-label uppercase tracking-[0.14em] text-faint">
+        <h4 className="text-micro font-medium text-faint">
           Deliberately not in the formula
         </h4>
         <dl className="mt-3 space-y-2">
@@ -497,7 +497,7 @@ export function ReputationPanel({ reputation }: { reputation: Reputation | null 
       <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
         <span className="tnum text-display text-ink">{reputation.score}</span>
         <Badge>{reputation.grade}</Badge>
-        <span className="font-mono text-label uppercase tracking-[0.14em] text-faint">
+        <span className="text-micro font-medium text-faint">
           {reputation.links} verified handover{reputation.links === 1 ? "" : "s"}
         </span>
       </div>
@@ -567,7 +567,7 @@ export function MerkleRoot({
         <Field label="Global root" value={manifest.root} />
         <Field label="Committed on chain" value={committed} />
         <div className="flex items-baseline justify-between gap-6 border-b border-hairline py-4">
-          <span className="font-mono text-label uppercase tracking-[0.14em] text-faint">
+          <span className="text-micro font-medium text-faint">
             Agreement
           </span>
           <Badge tone={agrees ? "closed" : "void"}>
@@ -578,7 +578,7 @@ export function MerkleRoot({
 
       {manifest.categories?.length ? (
         <div>
-          <h4 className="mb-3 font-mono text-label uppercase tracking-[0.14em] text-faint">
+          <h4 className="mb-3 text-micro font-medium text-faint">
             Subroots, {manifest.leaf_count} leaves in total
           </h4>
           <div className="border-t border-hairline">
@@ -608,7 +608,7 @@ export function MerkleRoot({
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1 border-b border-hairline py-4 sm:flex-row sm:items-baseline sm:gap-8">
-      <span className="w-full shrink-0 font-mono text-label uppercase tracking-[0.14em] text-faint sm:w-52">
+      <span className="w-full shrink-0 text-micro font-medium text-faint sm:w-52">
         {label}
       </span>
       <span className="evidence-type min-w-0 break-all text-micro text-ink">

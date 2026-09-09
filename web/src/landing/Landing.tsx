@@ -14,7 +14,6 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   MaskLine,
   Reveal,
-  useCountUp,
   useCursorState,
   useParallax,
   useScrollScene,
@@ -24,7 +23,6 @@ import { HashVerification, TransferDiagram } from "./visuals";
 import { HashPlate, Lineage, MemoryField } from "./imagery";
 import { Button, Figure } from "../ui";
 import { Wordmark } from "../brand/Logo";
-import { WalletBar } from "../chain/Wallet";
 
 export function Landing({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void }) {
   return (
@@ -81,10 +79,10 @@ function Masthead({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void
       <div className="gutter flex items-center justify-between gap-6">
         <Wordmark size={solid ? 24 : 30} />
         <div className="flex items-center gap-6 sm:gap-8">
-          <WalletBar />
+          <button onClick={onEnter} className="link-underline text-micro font-semibold text-ink">Connect in app</button>
           <button
             onClick={() => setOpen((v) => !v)}
-            className="link-underline font-mono text-label uppercase text-ink"
+            className="link-underline text-micro font-semibold text-ink"
             aria-expanded={open}
             aria-controls="landing-menu"
           >
@@ -117,8 +115,24 @@ function LandingMenu({
 }) {
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
+    if (open) document.querySelector<HTMLButtonElement>('#landing-menu button')?.focus();
+    const key = (event: KeyboardEvent) => {
+      if (!open) return;
+      if (event.key === 'Escape') {
+        onClose();
+        document.querySelector<HTMLButtonElement>('[aria-controls="landing-menu"]')?.focus();
+      }
+      if (event.key === 'Tab') {
+        const items = [...document.querySelectorAll<HTMLButtonElement>('#landing-menu button, [aria-controls="landing-menu"]')];
+        const current = items.indexOf(document.activeElement as HTMLButtonElement);
+        event.preventDefault();
+        items[(current + (event.shiftKey ? -1 : 1) + items.length) % items.length]?.focus();
+      }
+    };
+    document.addEventListener('keydown', key);
     return () => {
       document.body.style.overflow = "";
+      document.removeEventListener('keydown', key);
     };
   }, [open]);
 
@@ -131,6 +145,7 @@ function LandingMenu({
   return (
     <div
       id="landing-menu"
+      hidden={!open}
       className={`fixed inset-0 z-40 bg-paper transition-opacity duration-500 ease-swift ${
         open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
       }`}
@@ -217,7 +232,7 @@ function Hero({ onEnter, onDocs }: { onEnter: () => void; onDocs: () => void }) 
 
         <button
           onClick={() => scrollTo("#thesis")}
-          className="mt-10 font-mono text-label uppercase text-faint transition-colors duration-500 hover:text-ink"
+          className="mt-10 text-micro font-medium text-faint transition-colors duration-500 hover:text-ink"
         >
           Scroll ↓
         </button>
@@ -324,7 +339,7 @@ function Mechanism() {
           {steps.map(([name, detail], i) => (
             <Reveal as="li" key={name} index={i % 3}>
               <div className="group flex flex-col gap-3 border-b border-carbonRule py-8 md:flex-row md:items-baseline md:gap-16">
-                <span className="font-mono text-label uppercase text-chalkFaint md:w-16">
+                <span className="text-micro font-medium text-chalkFaint md:w-16">
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 <h3 className="display-type text-title text-chalk transition-transform duration-700 ease-swift md:w-[38%] md:group-hover:translate-x-2">
@@ -441,7 +456,7 @@ function Commitment() {
                   className="bg-carbon px-6 py-10 transition-[opacity,transform] duration-500 ease-swift"
                   style={{ opacity: 0.22 }}
                 >
-                  <span className="font-mono text-label uppercase text-chalkFaint">
+                  <span className="text-micro font-medium text-chalkFaint">
                     {String(i + 1).padStart(2, "0")}
                   </span>
                   <h3 className="display-type mt-4 text-heading text-chalk">{name}</h3>
@@ -469,8 +484,6 @@ function Commitment() {
 
 /** Figures at display scale, counted up once as they arrive. */
 function Proof() {
-  const tests = useCountUp(354);
-  const contracts = useCountUp(28);
 
   return (
     <section className="gutter border-y border-rule py-beat">
@@ -480,12 +493,12 @@ function Proof() {
 
       <div className="grid gap-14 sm:grid-cols-2 lg:grid-cols-4">
         <Reveal index={0}>
-          <Figure value={<span ref={tests.ref}>{tests.shown}</span>} label="Python tests" />
+          <Figure value="SMP" label="Verified memory imports" />
         </Reveal>
         <Reveal index={1}>
           <Figure
-            value={<span ref={contracts.ref}>{contracts.shown}</span>}
-            label="Contract tests"
+            value="EVM"
+            label="Escrow settlement"
           />
         </Reveal>
         <Reveal index={2}>
@@ -569,7 +582,7 @@ function Lifecycle() {
               key={name}
               className="w-[19rem] shrink-0 bg-paper px-8 py-12 transition-colors duration-700 hover:bg-shade sm:w-[22rem]"
             >
-              <p className="font-mono text-label uppercase text-faint">{state}</p>
+              <p className="text-micro font-medium text-faint">{state}</p>
               <h3 className="display-type mt-5 text-title text-ink">{name}</h3>
               <p className="mt-4 text-body text-muted">{detail}</p>
             </li>
@@ -578,7 +591,7 @@ function Lifecycle() {
       </div>
 
       <div className="gutter mt-6">
-        <p className="font-mono text-label uppercase text-faint">Scroll sideways →</p>
+        <p className="text-micro font-medium text-faint">Scroll sideways →</p>
       </div>
     </section>
   );
@@ -608,7 +621,7 @@ function Close({ onEnter }: { onEnter: () => void }) {
             >
               Open console
             </button>
-            <p className="font-mono text-label uppercase text-chalkFaint">
+            <p className="text-micro font-medium text-chalkFaint">
               Listings are read from the contract
             </p>
           </div>
@@ -624,13 +637,13 @@ function Colophon({ onDocs }: { onDocs: () => void }) {
   return (
     <footer className="gutter py-beat">
       <div className="flex flex-col gap-6 border-t border-rule pt-8 sm:flex-row sm:items-center sm:justify-between">
-        <p className="font-mono text-label uppercase text-faint">
+        <p className="text-micro font-medium text-faint">
           Succession · Base Sepolia · Sibyl Memory
         </p>
         <div className="flex gap-8">
           <button
             onClick={onDocs}
-            className="link-underline font-mono text-label uppercase text-faint transition-colors duration-500 hover:text-ink"
+            className="link-underline text-micro font-medium text-faint transition-colors duration-500 hover:text-ink"
           >
             Docs
           </button>
@@ -638,7 +651,7 @@ function Colophon({ onDocs }: { onDocs: () => void }) {
             href="https://github.com/linoxbt/Succession"
             target="_blank"
             rel="noreferrer"
-            className="link-underline font-mono text-label uppercase text-faint transition-colors duration-500 hover:text-ink"
+            className="link-underline text-micro font-medium text-faint transition-colors duration-500 hover:text-ink"
           >
             Source
           </a>

@@ -15,7 +15,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 
-import { walkthrough, type Listing, type Outcome, type Preview, type Reply } from "../api";
+import { ApiError, walkthrough, type Listing, type Outcome, type Preview, type Reply } from "../api";
 import {
   Badge,
   Button,
@@ -36,6 +36,7 @@ export default function Walkthrough() {
   const [sealed, setSealed] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [writeResult, setWriteResult] = useState<string | null>(null);
 
   const guard = useCallback(async (work: () => Promise<void>) => {
     setBusy(true);
@@ -50,15 +51,24 @@ export default function Walkthrough() {
   }, []);
 
   const refresh = useCallback(async () => {
-    setListing(await walkthrough.listing().catch(() => null));
-    setPreview(await walkthrough.preview().catch(() => null));
-    setOutcome(await walkthrough.outcome().catch(() => null));
-    setSealed(
-      await walkthrough
-        .seal("walkthrough-seller")
-        .then((s) => s.sealed)
-        .catch(() => null),
-    );
+    const optional = <T,>(promise: Promise<T>) => promise.catch(e => {
+      if (e instanceof ApiError && [404,409].includes(e.status)) return null;
+      throw e;
+    });
+    try {
+      // Establish the visitor cookie before requesting the remaining session
+      // resources in parallel. Concurrent first requests create distinct demos.
+      const current = await optional(walkthrough.listing());
+      setListing(current);
+      if (!current) { setPreview(null); setOutcome(null); setSealed(null); return; }
+      const [nextPreview, nextOutcome, seal] = await Promise.all([
+        optional(walkthrough.preview()), optional(walkthrough.outcome()),
+        optional(walkthrough.seal('walkthrough-seller')),
+      ]);
+      setPreview(nextPreview); setOutcome(nextOutcome); setSealed(seal?.sealed ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }, []);
 
   useEffect(() => {
@@ -95,7 +105,7 @@ export default function Walkthrough() {
       {/* Standing condition, not a dismissible alert. It stays for as long as
           the page does, because what it qualifies never stops being true. */}
       <div className="on-carbon -mx-6 mb-beat px-6 py-6 sm:-mx-10 sm:px-10 lg:-mx-16 lg:px-16 xl:-mx-24 xl:px-24">
-        <p className="font-mono text-label uppercase text-chalkFaint">Not a live listing</p>
+        <p className="text-micro font-medium text-chalkFaint">Not a live listing</p>
         <p className="mt-3 max-w-measure text-body text-chalkMuted">
           Settlement here is an in-process mirror of the contract's state machine.
           Real listings are on the Marketplace.
@@ -124,7 +134,7 @@ export default function Walkthrough() {
           <FieldList>
             <Field label="State">
               <Badge tone={listing.state === "open" ? "neutral" : "escrow"}>
-                {listing.state === "open" ? "Open, no buyer" : "Escrow: funds held"}
+                {listing.state === "open" ? "Open, no buyer" : listing.state === "escrowed" ? "Escrow: funds held" : listing.state === "confirmed" ? "Settled" : "Refunded"}
               </Badge>
             </Field>
             <Field label="Committed hash">
@@ -133,7 +143,7 @@ export default function Walkthrough() {
             {preview ? (
               <>
                 <Field label="Records">
-                  {Object.values(preview.counts ?? {}).reduce((a, b) => a + b, 0)}
+                  {preview.counts?.total_records ?? 0}
                 </Field>
                 <Field label="Memory size">{preview.memory_size_bytes} bytes</Field>
               </>
@@ -186,8 +196,8 @@ export default function Walkthrough() {
           </Evidence>
           {sealed ? (
             <Note>
-              The seller's copy is sealed. Its next write is rejected, try it in
-              the conversation below by asking the seller's agent anything.
+              The seller runtime is sealed. <Button disabled={busy} onClick={() => void guard(async () => { setWriteResult(JSON.stringify(await walkthrough.writeAttempt())); })}>Test seller write restriction</Button>
+              {writeResult && <span>{writeResult}</span>}
             </Note>
           ) : null}
         </Section>
@@ -212,7 +222,7 @@ function Conversation({ side }: { side: "seller" | "buyer" }) {
   const [busy, setBusy] = useState(false);
 
   const send = async () => {
-    if (!message.trim()) return;
+    if (busy || !message.trim()) return;
     setBusy(true);
     try {
       setReply(await walkthrough.message(side, message));

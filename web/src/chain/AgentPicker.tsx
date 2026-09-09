@@ -19,7 +19,8 @@
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 
-import { market, type AgentsHeld } from "../api";
+import { type AgentsHeld } from "../api";
+import { service } from "../services";
 import { Note } from "../ui";
 
 export default function AgentPicker({
@@ -35,13 +36,16 @@ export default function AgentPicker({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    onSelect("");
+    setHeld(null);
+    setError(null);
     if (!address) {
       setHeld(null);
       return;
     }
     let live = true;
     setLoading(true);
-    market
+    service
       .agents(address)
       .then((body) => {
         if (!live) return;
@@ -71,11 +75,13 @@ export default function AgentPicker({
   if (error) {
     return <Note>Could not read the registry ({error}).</Note>;
   }
+  if (held && !held.complete && held.agents.length === 0) {
+    return <Note>The registry scan is incomplete. This wallet reports {held.balance} identities, but none were found in the scanned range.</Note>;
+  }
   if (!held || held.agents.length === 0) {
     return (
       <Note>
-        No ERC-8004 agents found for this wallet. Register one before buying, so
-        the memory has a successor to land in.
+        No ERC-8004 agents found for this wallet. A local import requires a fresh tenant; owning another NFT is not required.
       </Note>
     );
   }

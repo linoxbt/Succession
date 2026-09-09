@@ -30,6 +30,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from succession.chain import ChainSettlement  # noqa: E402
 from succession.publish import SellerVault, publish_listing, seller_auth_header  # noqa: E402
+from succession.auth import request_auth_headers, json_body
 from succession.redaction import Sensitivity, mark  # noqa: E402
 
 from chain import deploy, load_artifacts  # noqa: E402
@@ -71,11 +72,12 @@ def market(tmp_path, monkeypatch, seller):
         del sys.modules[module]
 
     w3 = Web3(EthereumTesterProvider())
+    monkeypatch.setattr(sys.modules[__name__], "AGENT", f"erc8004:{w3.eth.chain_id}:{AGENT_ID}")
     artifacts = load_artifacts()
     funder = w3.eth.accounts[0]
 
-    seller_account, buyer_account = Account.create(), Account.create()
-    for who in (seller_account.address, buyer_account.address):
+    seller_account, buyer_account, evaluator_account = Account.create(), Account.create(), Account.create()
+    for who in (seller_account.address, buyer_account.address, evaluator_account.address):
         w3.eth.send_transaction(
             {"from": funder, "to": who, "value": w3.to_wei(10, "ether")}
         )
@@ -84,7 +86,7 @@ def market(tmp_path, monkeypatch, seller):
     registry = deploy(w3, artifacts, "MockIdentityRegistry", sender=funder)
     listings = deploy(
         w3, artifacts, "ListingContract",
-        token.address, registry.address, funder, sender=funder,
+        token.address, registry.address, evaluator_account.address, sender=funder,
     )
     registry.functions.register(seller_account.address, AGENT_ID, "ipfs://x").transact(
         {"from": funder}
@@ -94,6 +96,7 @@ def market(tmp_path, monkeypatch, seller):
     backend = ChainSettlement(
         w3, contract_address=listings.address,
         seller_key=seller_account.key.hex(), buyer_key=buyer_account.key.hex(),
+        evaluator_key=evaluator_account.key.hex(),
     )
     backend.approve_identity(registry.address, seller_account.address, AGENT_ID)
     backend.approve_payment(token.address, buyer_account.address, PRICE * 4)
@@ -130,8 +133,56 @@ def market(tmp_path, monkeypatch, seller):
             "seller": seller_account.address,
             "buyer": buyer_account.address,
             "buyer_key": buyer_account.key.hex(),
+            "evaluator": evaluator_account.address,
+            "evaluator_key": evaluator_account.key.hex(),
+            "tmp_path": tmp_path,
             "record": record,
         }
+
+
+def _headers(market, key, path, body=None, **kwargs):
+    return request_auth_headers(key, listing_id=(body or {}).get("listing_id", market["stored"].listing_id),
+        method="GET" if body is None else "POST", path=path, body=b"" if body is None else json_body(body),
+        chain_id=market["record"]["chain_id"], contract=market["record"]["listing_contract"], **kwargs)
+
+
+def _key_headers(market, key):
+    return _headers(market, key, f'/api/listing/{market["stored"].listing_id}/key',
+        {"content_key":market["asset"].content_key.hex()})
+
+
+def _collect(market):
+    path=f'/api/listing/{market["stored"].listing_id}/key'
+    return market["client"].get(path, headers=_headers(market, market["buyer_key"], path))
+
+
+def _evaluate_and_settle(market):
+    """Exercise the evaluator-only key route and independent store check."""
+    from succession.envelope import SealedEnvelope, open_envelope
+    from succession.evaluator import Evaluator
+    from succession.importer import import_package
+    from succession.memory.sibyl import open_tenant
+
+    sid = market["stored"].listing_id
+    path = f"/api/listing/{sid}/key/evaluator"
+    response = market["client"].get(
+        path, headers=_headers(market, market["evaluator_key"], path)
+    )
+    response.raise_for_status()
+    package = open_envelope(
+        SealedEnvelope.from_dict(market["client"].get(f"/api/listing/{sid}/envelope").json()),
+        bytes.fromhex(response.json()["content_key"]),
+    )
+    sink = open_tenant(market["tmp_path"] / f"evaluator-{sid}.db", "isolated")
+    import_package(package, sink, committed_root=market["stored"].committed_root,
+                   expected_signer=market["seller"])
+    evaluator = Evaluator(market["evaluator_key"])
+    verdict = evaluator.evaluate(
+        listing_id=sid, committed_root=market["stored"].committed_root,
+        buyer_sink=sink, package=package, expected_signer=market["seller"],
+        categories=package.header.get("categories"),
+    )
+    return evaluator.settle(market["backend"], verdict, buyer_identity=market["buyer"])
 
 
 def _publish(market, **overrides):
@@ -149,18 +200,19 @@ def _publish(market, **overrides):
         "envelope": market["asset"].envelope.to_dict(),
     }
     body.update(overrides)
-    headers = seller_auth_header(market["seller_key"], body["listing_id"])
+    headers = _headers(market, market["seller_key"], "/api/listings", body)
     return market["client"].post("/api/listings", json=body, headers=headers)
 
 
 # --- publishing ----------------------------------------------------------
 
 
-def test_the_marketplace_is_empty_until_a_seller_publishes(market):
-    """No seed data. An empty market is the true answer, not a bug."""
+def test_chain_listings_are_discovered_before_metadata_is_published(market):
+    """An on-chain sale exists even before its seller posts the data room."""
     body = market["client"].get("/api/marketplace").json()
-    assert body["count"] == 0
-    assert body["listings"] == []
+    assert body["count"] == 1
+    assert body['listings'][0]['listing']['listing_id'] == market['stored'].listing_id
+    assert body['listings'][0]['has_metadata'] is False
 
 
 def test_a_seller_publishes_and_the_row_comes_from_chain(market):
@@ -196,10 +248,10 @@ def test_a_stranger_cannot_publish_someone_elses_listing(market):
         "chain_id": market["stored"].chain_id,
         "contract": market["stored"].listing_contract,
     }
-    headers = seller_auth_header(stranger.key.hex(), body["listing_id"])
+    headers = _headers(market, stranger.key.hex(), "/api/listings", body)
     response = market["client"].post("/api/listings", json=body, headers=headers)
     assert response.status_code == 403
-    assert "is not the seller" in response.json()["detail"]
+    assert "on-chain counterparty" in response.json()["detail"]
 
 
 def test_publishing_without_a_signature_is_refused(market):
@@ -242,14 +294,14 @@ def test_a_key_is_not_accepted_before_escrow(market):
     response = market["client"].post(
         f"/api/listing/{listing_id}/key",
         json={"content_key": market["asset"].content_key.hex()},
-        headers=seller_auth_header(market["seller_key"], listing_id),
+        headers=_key_headers(market, market["seller_key"]),
     )
     assert response.status_code == 409
-    assert "funded escrow" in response.json()["detail"]
+    assert "escrow is funded" in response.json()["detail"]
 
 
-def test_the_key_flows_once_escrow_is_funded(market):
-    """Seller releases, buyer collects, and what comes back opens the envelope."""
+def test_the_key_flows_through_the_evaluator_before_the_buyer(market):
+    """Seller releases to the evaluator; the buyer waits for settlement."""
     from succession.envelope import SealedEnvelope, open_envelope
 
     _publish(market)
@@ -259,12 +311,14 @@ def test_the_key_flows_once_escrow_is_funded(market):
     released = market["client"].post(
         f"/api/listing/{listing_id}/key",
         json={"content_key": market["asset"].content_key.hex()},
-        headers=seller_auth_header(market["seller_key"], listing_id),
+        headers=_key_headers(market, market["seller_key"]),
     )
     assert released.status_code == 200
     assert released.json()["buyer"] == market["buyer"]
 
-    collected = market["client"].get(f"/api/listing/{listing_id}/key")
+    assert _collect(market).status_code == 409
+    _evaluate_and_settle(market)
+    collected = _collect(market)
     assert collected.status_code == 200
 
     key = bytes.fromhex(collected.json()["content_key"])
@@ -283,7 +337,7 @@ def test_a_stranger_cannot_release_a_key(market):
     response = market["client"].post(
         f"/api/listing/{listing_id}/key",
         json={"content_key": market["asset"].content_key.hex()},
-        headers=seller_auth_header(stranger.key.hex(), listing_id),
+        headers=_key_headers(market, stranger.key.hex()),
     )
     assert response.status_code == 403
 
@@ -295,7 +349,7 @@ def test_a_malformed_key_is_rejected(market):
     response = market["client"].post(
         f"/api/listing/{listing_id}/key",
         json={"content_key": "not-hex"},
-        headers=seller_auth_header(market["seller_key"], listing_id),
+        headers=_key_headers(market, market["seller_key"]),
     )
     assert response.status_code == 422
 
@@ -548,6 +602,10 @@ def test_a_sale_completes_across_two_machines(market, tmp_path, monkeypatch):
             cli, "_chain_backend", lambda a, k: (market["backend"], market["record"])
         )
         monkeypatch.setenv("SUCCESSION_SIGNING_KEY", market["seller_key"])
+        monkeypatch.setenv("SUCCESSION_BUYER_KEY", market["buyer_key"])
+        monkeypatch.setenv("SUCCESSION_EVALUATOR_KEY", market["evaluator_key"])
+        monkeypatch.setattr(cli, "_buyer_backend", lambda a, k: (market["backend"], market["record"]))
+        monkeypatch.setattr(cli, "_evaluator_backend", lambda a, k: (market["backend"], market["record"]))
 
         # Seller's machine. The fixture put the listing on chain; this is the
         # step that publishes it to the marketplace, and it is deliberately the
@@ -572,6 +630,12 @@ def test_a_sale_completes_across_two_machines(market, tmp_path, monkeypatch):
         assert cli.main(
             ["fulfil", "--listing", listing_id, "--once", "--marketplace", base]
         ) == 0
+
+        assert cli.main([
+            "evaluate", "--listing", listing_id,
+            "--db", str(tmp_path / "evaluator.db"), "--tenant", "isolated",
+            "--marketplace", base, "--yes",
+        ]) == 0
 
         # Buyer's machine: a store that did not exist a moment ago.
         buyer_db = tmp_path / "second-machine" / "memory.db"
@@ -620,7 +684,7 @@ def test_fulfil_without_delivery_leaves_the_buyer_stranded(market, monkeypatch):
     assert outcome.released is True, "the chain does permit release"
 
     # And yet nothing reached the marketplace, so the buyer cannot collect.
-    assert market["client"].get(f"/api/listing/{listing_id}/key").status_code == 404
+    assert _collect(market).status_code == 409
 
 
 def test_activity_reports_events_not_just_state(market):
@@ -713,7 +777,7 @@ def test_show_reports_the_data_room_and_the_proof(market, capsys, monkeypatch):
 
 
 def test_buy_describes_the_transactions_before_sending_them(market, capsys, monkeypatch):
-    """Funding escrow is irreversible from the buyer's side.
+    """Funding escrow sends transactions and explains pre-settlement recovery.
 
     Without --yes the command must explain and stop, because a mistyped listing
     id should not cost money.
@@ -729,7 +793,9 @@ def test_buy_describes_the_transactions_before_sending_them(market, capsys, monk
     out = capsys.readouterr().out
     assert code == 1, "no --yes means nothing was sent"
     assert "two transactions" in out
-    assert "irreversible" in out
+    assert "held until" in out
+    assert "refund" in out
+    assert "expired escrow" in out
     assert market["backend"].get(market["stored"].listing_id).state.value == "open"
 
 
@@ -762,43 +828,36 @@ def test_buy_refuses_a_listing_that_is_not_open(market, monkeypatch):
     assert "escrowed" in str(exc.value)
 
 
-def test_confirm_warns_loudly_on_a_mismatched_root(market, capsys, monkeypatch):
-    """Submitting a wrong root refunds and abandons the sale.
+def test_buyer_confirmation_command_is_disabled(market):
+    with pytest.raises(SystemExit, match="buyer confirmation is disabled"):
+        cli.main(["confirm", "--listing", market["stored"].listing_id,
+                  "--root", "0x" + "00" * 32])
 
-    That is correct for a bad delivery and expensive on a good one, so the
-    command has to say which it is looking at before it sends anything.
-    """
+
+def test_evaluator_cli_settles_on_its_independently_derived_root(market, capsys, monkeypatch, tmp_path):
     from succession import cli as cli_module
+    from succession import marketplace as client_api
 
-    monkeypatch.setenv("SUCCESSION_BUYER_KEY", market["buyer_key"])
+    monkeypatch.setenv("SUCCESSION_EVALUATOR_KEY", market["evaluator_key"])
     monkeypatch.setattr(
-        cli_module, "_buyer_backend", lambda a, k: (market["backend"], market["record"])
+        cli_module, "_evaluator_backend", lambda a, k: (market["backend"], market["record"])
     )
     listing_id = market["stored"].listing_id
     market["backend"].buy(listing_id, buyer=market["buyer"], amount=PRICE)
+    _publish(market).raise_for_status()
+    path = f"/api/listing/{listing_id}/key"
+    market["client"].post(path, json={"content_key": market["asset"].content_key.hex()},
+                          headers=_key_headers(market, market["seller_key"])).raise_for_status()
 
-    code = cli.main([
-        "confirm", "--listing", listing_id, "--root", "0x" + "00" * 32,
-    ])
-    out = capsys.readouterr().out
-    assert code == 1
-    assert "MISMATCH" in out
-    assert market["backend"].get(listing_id).state.value == "escrowed", "nothing was sent"
-
-
-def test_confirm_settles_on_the_committed_root(market, capsys, monkeypatch):
-    from succession import cli as cli_module
-
-    monkeypatch.setenv("SUCCESSION_BUYER_KEY", market["buyer_key"])
-    monkeypatch.setattr(
-        cli_module, "_buyer_backend", lambda a, k: (market["backend"], market["record"])
-    )
-    listing_id = market["stored"].listing_id
-    market["backend"].buy(listing_id, buyer=market["buyer"], amount=PRICE)
+    def get(base, path, headers=None):
+        response = market["client"].get(path, headers=headers or {})
+        response.raise_for_status()
+        return response.json()
+    monkeypatch.setattr(client_api, "get", get)
 
     assert cli.main([
-        "confirm", "--listing", listing_id,
-        "--root", market["stored"].committed_root, "--yes",
+        "evaluate", "--listing", listing_id, "--yes",
+        "--db", str(tmp_path / "evaluator-cli.db"), "--tenant", "isolated",
     ]) == 0
     out = capsys.readouterr().out
     assert "released" in out
@@ -832,3 +891,121 @@ def _serve(market, monkeypatch) -> str:
 
     atexit.register(stop)
     return f"http://127.0.0.1:{server.servers[0].sockets[0].getsockname()[1]}"
+
+
+def test_key_access_is_buyer_only_and_replay_protected(market):
+    import time
+    _publish(market)
+    sid=market['stored'].listing_id
+    path=f'/api/listing/{sid}/key'
+    market['backend'].buy(sid,buyer=market['buyer'],amount=PRICE)
+    body={'content_key':market['asset'].content_key.hex()}
+    auth=_key_headers(market,market['seller_key'])
+    assert market['client'].post(path,json=body,headers=auth).status_code==200
+    assert market['client'].post(path,json=body,headers=auth).status_code==401
+    anonymous=market['client'].get(path)
+    assert anonymous.status_code==409
+    assert 'no-store' in anonymous.headers['cache-control']
+    assert market['client'].get(path,headers=_headers(market,market['seller_key'],path)).status_code==409
+    _evaluate_and_settle(market)
+    assert market['client'].get(path,headers=_headers(market,market['seller_key'],path)).status_code==403
+    expired=_headers(market,market['buyer_key'],path,timestamp=int(time.time())-301)
+    assert market['client'].get(path,headers=expired).status_code==401
+    buyer_auth=_headers(market,market['buyer_key'],path)
+    received=market['client'].get(path,headers=buyer_auth)
+    assert received.status_code==200
+    assert received.json()['content_key']==body['content_key']
+    assert market['client'].get(path,headers=buyer_auth).status_code==401
+
+
+def test_signature_cannot_authorize_a_different_body_or_deployment(market):
+    sid=market['stored'].listing_id
+    path=f'/api/listing/{sid}/key'
+    market['backend'].buy(sid,buyer=market['buyer'],amount=PRICE)
+    auth=_key_headers(market,market['seller_key'])
+    assert market['client'].post(path,json={'content_key':'ab'*32},headers=auth).status_code==401
+    wrong=request_auth_headers(market['seller_key'],listing_id=sid,method='POST',path=path,
+        body=json_body({'content_key':market['asset'].content_key.hex()}),chain_id=1,contract=market['record']['listing_contract'])
+    assert market['client'].post(path,json={'content_key':market['asset'].content_key.hex()},headers=wrong).status_code==401
+
+
+def test_expired_relay_key_can_be_released_again(market):
+    from service import app as module
+    sid=market['stored'].listing_id
+    _publish(market).raise_for_status()
+    path=f'/api/listing/{sid}/key'
+    market['backend'].buy(sid,buyer=market['buyer'],amount=PRICE)
+    body={'content_key':market['asset'].content_key.hex()}
+    assert market['client'].post(path,json=body,headers=_key_headers(market,market['seller_key'])).status_code==200
+    module.STORE.key_expiry[sid]=0
+    assert _collect(market).status_code==409
+    assert sid not in module.STORE.released
+    assert market['client'].post(path,json=body,headers=_key_headers(market,market['seller_key'])).status_code==200
+    _evaluate_and_settle(market)
+    assert _collect(market).status_code==200
+
+
+@pytest.mark.parametrize('preview', [
+    {'category_transferability':['invalid']}, {'counts':{'total_records':-1}},
+    {'inventory':{'identity':{'category':{},'sellable':1}}},
+    {'reputation':{'score':{},'factors':'wrong'}},
+])
+def test_malformed_public_metadata_cannot_poison_market(market,preview):
+    assert _publish(market,preview=preview).status_code==422
+    assert market['client'].get('/api/overview').status_code==200
+
+
+def test_public_reputation_is_never_presented_as_verified(market):
+    assert _publish(market,preview={'reputation':{'score':'99','grade':'established','basis':'verified by all owners'}}).status_code==200
+    data=market['client'].get(f'/api/listing/{market["stored"].listing_id}').json()
+    assert data['preview']['reputation']['grade']=='unverified'
+    assert 'not been independently verified' in data['preview']['reputation']['basis']
+
+
+def test_contract_wallet_claims_with_authorization_file_and_recovers_browser_settlement(market, tmp_path, monkeypatch):
+    import json
+    from succession import marketplace as client_api
+    from succession.acquisition import AcquisitionJournal
+    from succession.memory.sibyl import open_tenant
+    from succession.chain import load_artifact
+    from chain import deploy, load_artifacts
+    backend = market['backend']
+    w3 = backend.w3
+    owner = w3.eth.accounts[0]
+    owner_key = w3.provider.ethereum_tester.backend.account_keys[0].to_hex()
+    wallet = deploy(w3, load_artifacts(), 'SigningWallet', owner, sender=owner)
+    token = w3.eth.contract(address=market['record']['payment_token'], abi=load_artifact('MockERC20')['abi'])
+    token.functions.mint(wallet.address, PRICE).transact({'from':owner})
+    wallet.functions.execute(token.address, token.functions.approve(backend.contract.address, PRICE)._encode_transaction_data()).transact({'from':owner})
+    sid = market['stored'].listing_id
+    from succession.chain import listing_id_to_bytes32
+    encoded = listing_id_to_bytes32(sid)
+    wallet.functions.execute(backend.contract.address, backend.contract.functions.buy(encoded)._encode_transaction_data()).transact({'from':owner})
+    _publish(market).raise_for_status()
+    path = f'/api/listing/{sid}/key'
+    market['client'].post(path, json={'content_key':market['asset'].content_key.hex()},
+                          headers=_key_headers(market, market['seller_key'])).raise_for_status()
+    headers = _headers(market, owner_key, path)
+    headers['X-Succession-Address'] = wallet.address
+    auth = tmp_path/'authorization.json'
+    auth.write_text(json.dumps({'listing_id':sid,'chain_id':market['record']['chain_id'],
+        'contract':backend.contract.address,'address':wallet.address,'headers':headers}))
+    monkeypatch.delenv('SUCCESSION_BUYER_KEY', raising=False)
+    monkeypatch.setattr(cli, '_buyer_backend', lambda args, key:(backend, market['record']))
+    def get(base, path, headers=None):
+        response = market['client'].get(path, headers=headers or {})
+        response.raise_for_status()
+        return response.json()
+    monkeypatch.setattr(client_api, 'get', get)
+    db = tmp_path/'contract-buyer.db'
+    argv = ['claim','--listing',sid,'--db',str(db),'--tenant','buyer','--auth-file',str(auth)]
+    _evaluate_and_settle(market)
+    # A real RPC head keeps moving while the buyer imports. Recovery must scan
+    # from the contract deployment, not from the post-settlement import block.
+    market['record']['deployment_block'] = 0
+    w3.provider.ethereum_tester.mine_blocks(2)
+    assert cli.main(argv) == 0
+    assert cli.main(argv) == 0  # no second key request or replay of the authorization
+    journal = AcquisitionJournal(open_tenant(db, 'buyer'), market['record'], backend.get(sid), wallet.address)
+    assert journal.read()['certificate']['successor_agent'] == wallet.address
+    assert journal.read()['stage'] == 'complete'

@@ -138,7 +138,8 @@ def test_the_score_comes_out_of_the_package_a_buyer_received(seller, agent_id):
     result = score_package(export.package, now=NOW)
     assert result.links == 1
     assert result.score > 0
-    assert "Recomputed" in result.to_dict()["basis"]
+    assert result.to_dict()['grade'] == 'unverified'
+    assert "does not authenticate historical transfers" in result.to_dict()["basis"]
 
 
 def test_a_seller_cannot_assert_a_score_into_the_package(seller, agent_id):

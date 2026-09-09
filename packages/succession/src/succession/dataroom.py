@@ -37,7 +37,7 @@ from typing import Any
 from .canonical import canonical_bytes
 from .memory.base import MemorySource
 from .export import memory_version_of
-from .redaction import Sensitivity, read_disclosure
+from .redaction import Sensitivity, record_disclosure
 from .scope import take_inventory
 from .smp import DATA_CATEGORIES, route
 from .valuation import Valuation, value_tenant
@@ -141,18 +141,18 @@ def build_preview(
             acp_history = None
 
     entities = [
-        e for e in source.entities() if read_disclosure(e["body"]).transferable
+        e for e in source.entities() if record_disclosure(e).may_transfer
     ]
     archived = [
-        a for a in source.archived() if read_disclosure(a["body"]).transferable
+        a for a in source.archived() if record_disclosure(a).may_transfer
     ]
     withheld = (len(source.entities()) - len(entities)) + (
         len(source.archived()) - len(archived)
     )
-    events = source.events()
-    states = source.states()
-    references = source.references()
-    relations = source.relations()
+    events = [r for r in source.events() if record_disclosure(r).may_transfer]
+    states = [r for r in source.states() if record_disclosure(r).may_transfer]
+    references = [r for r in source.references() if record_disclosure(r).may_transfer]
+    relations = [r for r in source.relations() if record_disclosure(r).may_transfer]
 
     # Size is measured over the canonical serialization of what is actually for
     # sale, not the SQLite file on disk. A buyer comparing two listings should
@@ -198,7 +198,7 @@ def build_preview(
         # sellable here would offer the seller more than they can actually sell.
         key = (
             "sellable"
-            if read_disclosure(record.get("body")).may_transfer
+            if record_disclosure(record).may_transfer
             else "withheld"
         )
         bucket[key] += 1
@@ -208,7 +208,7 @@ def build_preview(
             e["name"]
             for e in entities
             if e["category"] == "relationship"
-            and read_disclosure(e["body"]).sensitivity == Sensitivity.PUBLIC
+            and record_disclosure(e).sensitivity == Sensitivity.PUBLIC
         )
     )[:sample_limit]
 

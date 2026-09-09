@@ -1,18 +1,24 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
+import { Landing } from "./landing/Landing";
+import { to, useNavigation } from "./router";
+import { CursorProvider, SmoothScroll } from "./motion";
+import Cursor from "./chrome/Cursor";
+import Preloader from "./chrome/Preloader";
 import "./index.css";
 
-// Set before the first paint, and before React mounts. The console's palette
-// hangs off this attribute, and an effect alone would let a direct load of
-// /app show the light ground for a frame. It cannot be an inline script in
-// index.html: the deployed CSP is `script-src 'self'`.
-if (window.location.pathname.startsWith("/app")) {
-  document.documentElement.dataset.surface = "app";
+const App = lazy(() => import('./App'));
+
+function Entry() {
+  const { route, navigate } = useNavigation();
+  if (route.kind !== 'landing') return <Suspense fallback={<p className="gutter py-12" role="status">Loading the application…</p>}><App /></Suspense>;
+  return <SmoothScroll><CursorProvider><Cursor /><Preloader onDone={() => undefined} />
+    <Landing onEnter={() => navigate(to.view('overview'))} onDocs={() => navigate(to.view('docs'))} />
+  </CursorProvider></SmoothScroll>;
 }
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <Entry />
   </React.StrictMode>,
 );
