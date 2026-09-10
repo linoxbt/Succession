@@ -11,7 +11,7 @@ package, committed to a hash before a buyer exists, settled atomically on Base
 after independent evaluation, and verified again from the buyer's own store.
 
 [Overview](#overview) · [How it works](#how-a-sale-works) · [Quick start](#quick-start) ·
-[Architecture](#architecture) · [Security](#security-model) · [Watch the demo](demo/succession-marketing-demo.mp4) · [Roadmap](docs/ROADMAP.md)
+[Architecture](#architecture) · [Security](#security-model) · [Watch the demo](https://web-gray-xi-95.vercel.app/succession-marketing-demo.mp4) · [Roadmap](docs/ROADMAP.md)
 
 `Python 3.11+` · `Solidity 0.8.28` · `React 18`
 
@@ -21,9 +21,14 @@ after independent evaluation, and verified again from the buyer's own store.
 
 ## Product demo
 
-[Watch the professional 1080p Succession demo](demo/succession-marketing-demo.mp4),
+[Watch the professional 1080p Succession demo](https://web-gray-xi-95.vercel.app/succession-marketing-demo.mp4),
 with voice-over and burned-in captions. The [separate English subtitle track](demo/succession-marketing-demo.en.srt)
 and [complete narration](demo/NARRATION.md) are included for publishing.
+
+The production link opens the video directly in a browser. The repository copy
+lives at `web/public/succession-marketing-demo.mp4` and is deployed with the web
+application because GitHub's source-code viewer does not preview larger binary
+media files.
 
 ## Current audit status
 

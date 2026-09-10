@@ -1,10 +1,11 @@
 # Succession marketing demo
 
-`succession-marketing-demo.mp4` is the 1080p product walkthrough. It uses the
-live Succession interface and the verified Base Sepolia acceptance transfer
-from agent `erc8004:84532:0692` to `erc8004:84532:0693`.
+[Watch the 1080p product walkthrough](https://web-gray-xi-95.vercel.app/succession-marketing-demo.mp4).
+It uses the live Succession interface and the verified Base Sepolia acceptance
+transfer from agent `erc8004:84532:0692` to `erc8004:84532:0693`.
 
-The video includes a professional English voice-over and burned-in captions.
+The repository media file is `web/public/succession-marketing-demo.mp4`. The
+video includes a professional English voice-over and burned-in captions.
 `succession-marketing-demo.en.srt` is included for players and publishing
 platforms that support a separate caption track. The complete voice-over copy
 is in [NARRATION.md](NARRATION.md).
