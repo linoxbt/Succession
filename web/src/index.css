@@ -1,76 +1,49 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@font-face {
-  font-family: "Space Grotesk";
-  src: url("/fonts/space-grotesk-latin.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 500 700;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Space Mono";
-  src: url("/fonts/space-mono-400-latin.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Space Mono";
-  src: url("/fonts/space-mono-700-latin.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-}
-
 :root {
-  --font-display: "Space Grotesk", sans-serif;
-  --font-mono: "Space Mono", monospace;
-  --bg: #0e0d0b;
-  --surface: #17150f;
-  --surface-2: #1e1b14;
-  --ink: #f3efe6;
-  --muted: #948c7a;
-  --accent: #c08a3e;
-  --accent-dim: #8a6431;
-  --line: #2a2721;
-  --pass: #7fae7f;
-  --partial: #c9a227;
-  --fail: #c0524a;
-  --sev-high: #d97a3d;
+  --background: oklch(0.965 0.013 80);
+  --foreground: oklch(0.255 0.043 52);
+  --card: oklch(0.992 0.006 82);
+  --card-foreground: oklch(0.255 0.043 52);
+  --primary: oklch(0.72 0.18 347);
+  --primary-hover: oklch(0.66 0.205 347);
+  --primary-foreground: oklch(0.23 0.04 52);
+  --secondary: oklch(0.925 0.02 79);
+  --secondary-foreground: oklch(0.285 0.045 52);
+  --muted: oklch(0.925 0.015 78);
+  --muted-foreground: oklch(0.505 0.026 67);
+  --accent: oklch(0.78 0.138 151);
+  --destructive: oklch(0.58 0.19 25.3);
+  --success: oklch(0.57 0.14 151);
+  --warning: oklch(0.76 0.16 74);
+  --border: oklch(0.84 0.025 72);
+  --input: oklch(0.84 0.025 72);
+  --ring: oklch(0.72 0.18 347);
+  --sidebar: oklch(0.985 0.008 82);
+  --sidebar-foreground: oklch(0.255 0.043 52);
+  --shadow-glow: 0 18px 52px -32px color-mix(in oklab, var(--primary) 46%, transparent);
+  --shadow-panel: inset 0 1px 0 color-mix(in oklab, white 80%, transparent), 0 30px 90px -54px color-mix(in oklab, var(--foreground) 32%, transparent);
 }
 
-:root[data-theme="light"] {
-  --bg: #f5f1e8;
-  --surface: #ffffff;
-  --surface-2: #fbf8f1;
-  --ink: #1b1811;
-  --muted: #6b6455;
-  --accent: #a66b22;
-  --accent-dim: #c9a063;
-  --line: #e4ddcb;
-  --pass: #4b7a4e;
-  --partial: #8a6b12;
-  --fail: #a13f38;
-  --sev-high: #b35e1f;
+* { border-color: var(--border); }
+html { scroll-behavior: smooth; }
+html, body, #root { min-height: 100%; }
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: radial-gradient(circle at 18% 12%, color-mix(in oklab, var(--primary) 18%, transparent), transparent 28rem), radial-gradient(circle at 86% 22%, color-mix(in oklab, var(--accent) 18%, transparent), transparent 26rem), var(--background);
+  color: var(--foreground);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0;
 }
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    --bg: #f5f1e8; --surface: #ffffff; --surface-2: #fbf8f1; --ink: #1b1811;
-    --muted: #6b6455; --accent: #a66b22; --accent-dim: #c9a063; --line: #e4ddcb;
-    --pass: #4b7a4e; --partial: #8a6b12; --fail: #a13f38; --sev-high: #b35e1f;
-  }
-}
-
-* { border-color: var(--line); }
-html, body, #root { min-height: 100%; background: var(--bg); color: var(--ink); }
-body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-::selection { background: var(--accent); color: var(--bg); }
-a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
-  outline: 2px solid var(--accent); outline-offset: 2px;
-}
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
-}
+::selection { background: color-mix(in oklab, var(--primary) 35%, transparent); color: var(--foreground); }
+.bg-grid { background-image: linear-gradient(color-mix(in oklab, var(--foreground) 5%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklab, var(--foreground) 5%, transparent) 1px, transparent 1px); background-size: 72px 72px; }
+.shelby-surface { background: linear-gradient(135deg, color-mix(in oklab, var(--primary) 22%, transparent), transparent 42%), linear-gradient(315deg, color-mix(in oklab, var(--accent) 20%, transparent), transparent 45%), var(--card); }
+.animate-float { animation: float-panel 6s ease-in-out infinite; }
+.animate-fade-in { animation: fade-in 420ms ease both; }
+@keyframes float-panel { 0%,100% { transform: translate3d(0,0,0); } 50% { transform: translate3d(0,-10px,0); } }
+@keyframes fade-in { from { opacity: 0; transform: translate3d(0,10px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+@media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration:.001ms!important; animation-iteration-count:1!important; scroll-behavior:auto!important; transition-duration:.001ms!important; } }

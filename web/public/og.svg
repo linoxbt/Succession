@@ -1,13 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
-  <rect width="1200" height="630" fill="#0e0d0b"/>
-  <g transform="translate(80 72) scale(1.1)" fill="#c08a3e">
-    <polygon points="50,10 68,28 50,46 32,28"/><polygon points="68.6,46 86.6,64 68.6,82 50.6,64"/><polygon points="31.4,46 49.4,64 31.4,82 13.4,64"/>
-  </g>
-  <text x="200" y="130" fill="#f3efe6" font-family="Space Mono, monospace" font-size="36" font-weight="700">SUCCES<tspan fill="#c08a3e">SION</tspan></text>
-  <line x1="80" y1="180" x2="1120" y2="180" stroke="#2a2721"/>
-  <text x="80" y="300" fill="#f3efe6" font-family="Space Grotesk, sans-serif" font-size="68" font-weight="700">The code is replaceable.</text>
-  <text x="80" y="385" fill="#f3efe6" font-family="Space Grotesk, sans-serif" font-size="68" font-weight="700">The memory is not.</text>
-  <text x="80" y="468" fill="#948c7a" font-family="Arial, sans-serif" font-size="27">Verified memory transfer and atomic settlement on Base.</text>
-  <line x1="80" y1="530" x2="1120" y2="530" stroke="#2a2721"/>
-  <text x="80" y="575" fill="#c08a3e" font-family="Space Mono, monospace" font-size="20" letter-spacing="2">SIBYL MEMORY · BASE · ERC-8004</text>
+  <defs><radialGradient id="p"><stop stop-color="#ea78ad" stop-opacity=".42"/><stop offset="1" stop-color="#f7efe2" stop-opacity="0"/></radialGradient><radialGradient id="g"><stop stop-color="#77cf92" stop-opacity=".4"/><stop offset="1" stop-color="#f7efe2" stop-opacity="0"/></radialGradient></defs><rect width="1200" height="630" fill="#f7efe2"/><circle cx="180" cy="100" r="390" fill="url(#p)"/><circle cx="1050" cy="160" r="380" fill="url(#g)"/>
+  <g transform="translate(76 62)"><rect width="68" height="68" rx="11" fill="#ea78ad" stroke="#493326" stroke-width="3"/><rect x="11" y="11" width="46" height="46" rx="5" fill="none" stroke="#493326" stroke-width="3"/><rect x="26" y="26" width="16" height="16" transform="rotate(45 34 34)" fill="#f7efe2" stroke="#493326" stroke-width="3"/></g><text x="166" y="111" fill="#493326" font-family="Inter, sans-serif" font-size="38" font-weight="900">Succession</text>
+  <text x="76" y="286" fill="#493326" font-family="Inter, sans-serif" font-size="72" font-weight="800">Transfer memory with</text><text x="76" y="371" fill="#493326" font-family="Inter, sans-serif" font-size="72" font-weight="800">verifiable ownership.</text><text x="76" y="449" fill="#796b61" font-family="Inter, sans-serif" font-size="26">Signed packages · independent evaluation · atomic Base settlement</text><rect x="76" y="510" width="244" height="58" rx="9" fill="#ea78ad"/><text x="113" y="548" fill="#493326" font-family="Inter, sans-serif" font-size="20" font-weight="800">OPEN DASHBOARD</text>
 </svg>

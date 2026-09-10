@@ -22,7 +22,7 @@ live evaluator, buyer-wallet and restart-recovery acceptance.
 | S13 dependencies | Compatibility fixed locally; no independent Python advisory audit | Prior web npm audit reported zero vulnerabilities, including development dependencies. ACP's Ethereum dependency conflicts were repaired by resolving all extras together; `pip check` passes. CI now installs ACP alongside MCP and checks SDK imports and dependency consistency. |
 | S8 zero listing ID | Deployed | Foundry regression passes and the checked deployment input exactly matches reviewed bytecode. |
 | P1 indexing; P2 health | Deployed with policy | Durable index starts at deployment block. Writes and recovered receipts require three confirmations. Deep Base/L1 reorg reconciliation remains operational work for mainnet. |
-| P4 frontend loading | Verified locally | Browser wallet and listing components were removed. The frontend now mirrors Triacta's component structure, theme, local Space fonts, motion, dashboard sidebar and guide layouts. |
+| P4 frontend loading | Verified locally | Browser wallet and listing components were removed. The frontend now mirrors ShelbyHost's Inter/JetBrains typography, warm cream and pink/green palette, editorial hero, fixed dashboard shell, stat cards, workflow panels and mobile navigation. |
 | M8 documentation | Reconciled | README, generated guide, operations, handoff, roadmap and service/web docs distinguish live release evidence, synthetic demos and remaining external gates. |
 
 Pilot readiness on Base Sepolia is established for the tested EOA flow. This is

@@ -1,74 +1,34 @@
-import { FadeIn } from "../components/FadeIn";
-import { PipelineMotion } from "../components/PipelineMotion";
-import { SiteHeader } from "../components/SiteHeader";
-import { StatusTicker } from "../components/StatusTicker";
+import { ArrowRight, Boxes, Globe2, ShieldCheck, Sparkles } from "lucide-react";
+import { LogoMark } from "../components/AppShell";
 import { to } from "../router";
 
 type Navigate = (route: ReturnType<typeof to.view> | ReturnType<typeof to.landing>) => void;
+const features = [
+  { Icon: Boxes, title: "Portable memory packages", body: "Export consent-filtered Sibyl memory with signed provenance and one Merkle root per directory." },
+  { Icon: ShieldCheck, title: "Independent evaluation", body: "Import into an isolated store, verify the seller signature, and derive the destination root again." },
+  { Icon: Globe2, title: "Atomic Base settlement", body: "Release USDC, transfer ERC-8004 identity, and seal the handover in one contract transaction." },
+];
 
 export function Landing({ navigate }: { navigate: Navigate }) {
-  return (
-    <div>
-      <StatusTicker />
-      <div className="mx-auto max-w-5xl px-6">
-        <SiteHeader navigate={navigate} />
+  return <main className="min-h-screen overflow-hidden bg-background text-foreground">
+    <section className="shelby-surface relative min-h-[92vh] overflow-hidden text-foreground">
+      <img src="/editorial-memory-studio.jpg" alt="Editorial deployment studio" width="1600" height="1000" className="absolute inset-0 h-full w-full object-cover opacity-[0.16] mix-blend-multiply" />
+      <div className="absolute inset-0 bg-background/35" />
+      <header className="relative z-10 mx-auto max-w-7xl px-5 py-6 sm:px-8"><div className="flex items-center justify-between"><LogoMark navigate={navigate} /><nav className="hidden items-center gap-7 text-sm font-extrabold uppercase text-foreground sm:flex"><a href="#features" className="transition hover:opacity-70">Features</a><a href="#workflow" className="transition hover:opacity-70">Workflow</a><button onClick={() => navigate(to.view("terminal"))} className="transition hover:opacity-70">Video Script</button><button onClick={() => navigate(to.view("dashboard"))} className="transition hover:opacity-70">Dashboard</button></nav><button onClick={() => navigate(to.view("dashboard"))} className="rounded-md bg-primary px-3 py-2 text-sm font-bold text-primary-foreground sm:hidden">Dashboard</button></div><nav className="mt-5 grid grid-cols-2 gap-2 text-sm font-bold sm:hidden"><button onClick={() => navigate(to.view("guide"))} className="rounded-md border border-foreground/20 bg-card/65 px-3 py-2 text-center text-foreground backdrop-blur transition hover:border-primary">Guide</button><button onClick={() => navigate(to.view("terminal"))} className="rounded-md bg-primary px-3 py-2 text-center text-primary-foreground transition hover:bg-primary-hover">Video Script</button></nav></header>
+      <div className="relative z-10 mx-auto grid min-h-[76vh] max-w-7xl content-center px-5 pb-24 pt-12 text-center sm:px-8"><div className="mx-auto max-w-5xl animate-fade-in"><div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-card/70 px-3 py-1.5 text-sm font-semibold text-foreground shadow-panel backdrop-blur"><Sparkles className="h-4 w-4" /> the property layer for agent memory</div><h1 className="text-balance text-5xl font-extrabold leading-none tracking-normal text-foreground sm:text-7xl lg:text-8xl">Transfer memory with verifiable ownership.</h1><p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">A complete workflow for agent memory: signed packages, independent destination verification, evaluator-gated settlement, and ERC-8004 identity transfer.</p><div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row"><button onClick={() => navigate(to.view("dashboard"))} className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-6 py-4 text-sm font-extrabold text-primary-foreground shadow-glow transition hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-ring">Open Dashboard <ArrowRight className="h-4 w-4" /></button><button onClick={() => navigate(to.view("guide"))} className="inline-flex items-center justify-center rounded-md border border-foreground/20 bg-card/65 px-6 py-4 text-sm font-extrabold text-foreground backdrop-blur transition hover:border-primary hover:text-primary">Read the Guide</button></div></div></div>
+    </section>
 
-        <header className="grid gap-10 py-20 md:grid-cols-[1.2fr,1fr] md:items-center">
-          <FadeIn>
-            <p className="mb-4 font-mono text-xs uppercase tracking-widest text-accent">&gt; the property layer for agent memory</p>
-            <h1 className="text-balance font-display text-4xl font-bold leading-[1.1] md:text-5xl">The code is replaceable. The memory is not.</h1>
-            <p className="mt-6 max-w-xl text-[15px] leading-relaxed text-ink/80">Succession packages an agent&apos;s accumulated memory, verifies it in an isolated store, and settles payment with ERC-8004 identity on Base.</p>
-            <div className="mt-8 flex items-center gap-4">
-              <button onClick={() => navigate(to.view("dashboard"))} className="rounded-sm bg-accent px-5 py-2.5 font-mono text-sm font-medium text-bg hover:opacity-90">Open Dashboard</button>
-              <button onClick={() => navigate(to.view("guide"))} className="font-mono text-sm text-muted hover:text-ink">Read the guide →</button>
-            </div>
-          </FadeIn>
-          <FadeIn delay={.15}><PipelineMotion /></FadeIn>
-        </header>
+    <section className="border-y border-border bg-card px-5 py-7"><div className="mx-auto grid max-w-7xl gap-4 text-center sm:grid-cols-3">{[["7/7","live audit checks"],["6","accepted testnet sales"],["3","finality confirmations"]].map(([number,label]) => <p key={label} className="text-muted-foreground"><span className="font-mono text-xl font-bold text-foreground">{number}</span> {label}</p>)}</div></section>
 
-        <section id="pipeline" className="border-t border-line py-16">
-          <FadeIn>
-            <p className="mb-3 font-mono text-xs uppercase tracking-widest text-muted">How it works</p>
-            <h2 className="max-w-2xl text-balance font-display text-2xl font-bold">Three checks, one atomic handover.</h2>
-            <div className="mt-10 grid gap-6 md:grid-cols-3">
-              {[
-                ["01 — Package", "Commit before delivery", "The seller filters consent, signs the full provenance header, encrypts locally, and commits the Merkle root before a buyer receives plaintext."],
-                ["02 — Verify", "Re-hash the destination", "The independent evaluator imports into a separate store and derives the root again. A matching courier package alone is not enough."],
-                ["03 — Settle", "Atomic on Base", "One contract transaction releases USDC, transfers ERC-8004 identity, and seals the sale after the evaluator approves."],
-              ].map(([eyebrow, title, copy]) => (
-                <div key={title} className="rounded-sm border border-line p-6" style={{ background: "radial-gradient(circle at 20% 20%, var(--accent-dim) 0%, transparent 60%)" }}>
-                  <span className="font-mono text-xs tracking-widest text-accent">{eyebrow}</span>
-                  <h3 className="mt-2 font-display text-lg font-bold">{title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-ink/75">{copy}</p>
-                </div>
-              ))}
-            </div>
-          </FadeIn>
-        </section>
+    <section id="features" className="mx-auto max-w-7xl px-5 py-24 sm:px-8"><div className="mb-10 max-w-3xl"><p className="text-sm font-extrabold uppercase text-muted-foreground">Protocol</p><h2 className="mt-3 text-4xl font-extrabold leading-tight text-foreground sm:text-5xl">The ownership control plane for persistent agent memory.</h2></div><div className="grid gap-4 md:grid-cols-3">{features.map(({Icon,title,body}) => <article key={title} className="rounded-lg border border-border bg-card p-6 transition hover:-translate-y-0.5 hover:border-foreground/40 hover:shadow-glow"><Icon className="h-7 w-7 text-primary" /><h2 className="mt-5 text-xl font-bold text-foreground">{title}</h2><p className="mt-3 text-sm leading-6 text-muted-foreground">{body}</p></article>)}</div></section>
 
-        <section id="surfaces" className="border-t border-line py-16">
-          <FadeIn>
-            <p className="mb-3 font-mono text-xs uppercase tracking-widest text-muted">Operate and verify</p>
-            <h2 className="max-w-2xl text-balance font-display text-2xl font-bold">Each role runs beside its own wallet and local memory store.</h2>
-            <div className="mt-10 grid gap-6 md:grid-cols-2">
-              <button onClick={() => navigate(to.view("guide"))} className="block rounded-sm border border-line bg-surface p-6 text-left transition hover:border-accent/50">
-                <p className="mb-2 font-mono text-[11px] uppercase tracking-widest text-accent">Operator guide</p>
-                <h3 className="font-display text-lg font-bold">Seller · evaluator · buyer</h3>
-                <p className="mt-2 text-sm leading-relaxed text-ink/75">Install, inspect, commit, fund, independently evaluate, claim, and recover.</p>
-                <span className="mt-4 inline-block font-mono text-xs text-accent">Open the guide →</span>
-              </button>
-              <button onClick={() => navigate(to.view("terminal"))} className="block rounded-sm border border-line bg-surface p-6 text-left transition hover:border-accent/50">
-                <p className="mb-2 font-mono text-[11px] uppercase tracking-widest text-accent">Video runbook</p>
-                <h3 className="font-display text-lg font-bold">Record verifiable evidence</h3>
-                <p className="mt-2 text-sm leading-relaxed text-ink/75">A timed script with safe, copyable commands and the expected result of every terminal scene.</p>
-                <span className="mt-4 inline-block font-mono text-xs text-accent">Open the runbook →</span>
-              </button>
-            </div>
-          </FadeIn>
-        </section>
+    <section id="workflow" className="mx-auto max-w-7xl px-5 pb-24 sm:px-8"><div className="grid gap-4 lg:grid-cols-3">{[
+      ["Prepare and commit", "Inventory the seller store, prove a local round trip, then commit the signed root on Base."],
+      ["Fund and evaluate", "The buyer funds escrow while an independent evaluator receives and verifies the package."],
+      ["Settle and recover", "The contract transfers value and identity; durable journals make interrupted hosts replay-safe."],
+    ].map(([title,body],index) => <div key={title} className="rounded-lg border border-border bg-card p-6"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-extrabold text-primary-foreground">{index+1}</div><p className="mt-5 font-bold text-foreground">{title}</p><p className="mt-2 text-sm text-muted-foreground">{body}</p></div>)}</div></section>
 
-        <footer className="flex items-center justify-between border-t border-line py-10 font-mono text-xs text-muted"><span>© {new Date().getFullYear()} Succession</span><span>Built on Sibyl Memory, Base, and ERC-8004</span></footer>
-      </div>
-    </div>
-  );
+    <section className="border-y border-border bg-card px-5 py-16 sm:px-8"><div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr]"><div><p className="text-sm font-extrabold uppercase text-primary">Release evidence</p><h2 className="mt-3 text-3xl font-extrabold text-foreground">The Base Sepolia workflow is live and independently checkable.</h2></div><div className="grid gap-3 sm:grid-cols-2">{["Evaluator-gated delivery","Destination re-hash","Two-host restart recovery","Three-confirmation policy","ERC-8004 transfer","Independent contract review"].map(item => <div key={item} className="rounded-md border border-border bg-background/50 p-4"><p className="font-bold text-foreground">{item}</p><p className="mt-1 text-sm text-muted-foreground">Documented with reproducible commands and transaction evidence.</p></div>)}</div></div></section>
+    <footer className="border-t border-border bg-sidebar px-5 py-8 text-sm text-muted-foreground sm:px-8"><div className="mx-auto flex max-w-7xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><LogoMark navigate={navigate} /><p>powered by Sibyl Memory · Base · ERC-8004</p></div></footer>
+  </main>;
 }

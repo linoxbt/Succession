@@ -1,16 +1,20 @@
-/** Exact theme structure used by the Triacta frontend. */
+/** ShelbyHost's visual tokens, expressed through the existing Tailwind build. */
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
-  darkMode: ["selector", '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
-        bg: "var(--bg)", surface: "var(--surface)", surface2: "var(--surface-2)",
-        ink: "var(--ink)", muted: "var(--muted)", accent: "var(--accent)",
-        "accent-dim": "var(--accent-dim)", line: "var(--line)", pass: "var(--pass)",
-        partial: "var(--partial)", fail: "var(--fail)", "sev-high": "var(--sev-high)",
+        background: "var(--background)", foreground: "var(--foreground)",
+        card: "var(--card)", "card-foreground": "var(--card-foreground)",
+        primary: "var(--primary)", "primary-hover": "var(--primary-hover)", "primary-foreground": "var(--primary-foreground)",
+        secondary: "var(--secondary)", "secondary-foreground": "var(--secondary-foreground)",
+        muted: "var(--muted)", "muted-foreground": "var(--muted-foreground)",
+        accent: "var(--accent)", success: "var(--success)", warning: "var(--warning)",
+        destructive: "var(--destructive)", border: "var(--border)", input: "var(--input)", ring: "var(--ring)",
+        sidebar: "var(--sidebar)", "sidebar-foreground": "var(--sidebar-foreground)",
       },
-      fontFamily: { display: ["var(--font-display)"], mono: ["var(--font-mono)"] },
+      fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"], mono: ["JetBrains Mono", "ui-monospace", "monospace"] },
+      boxShadow: { glow: "var(--shadow-glow)", panel: "var(--shadow-panel)" },
     },
   },
   plugins: [],

@@ -10,11 +10,11 @@ Browser wallet connections and marketplace listing screens are deliberately
 absent. Keys and local Sibyl databases remain on the role-specific hosts; the
 web app only reads `/api/health` and `/api/chain`.
 
-Its visual system mirrors the Triacta frontend: Space Grotesk and Space Mono,
-the same charcoal/cream themes and bronze accent, status ticker, landing-page
-grid, collapsible dashboard sidebar, stat cards, evidence table, guide steps,
-copy controls, breakpoints, spacing and type sizes. The font files are bundled
-locally in `public/fonts`.
+Its visual system mirrors the ShelbyHost frontend from
+`linoxbt/shelby-deploy-magic`: Inter and JetBrains Mono, warm cream surfaces,
+pink and green accents, soft radial glows, editorial hero imagery, a fixed
+desktop sidebar, compact utility bar, mobile bottom navigation, stat cards,
+workflow panels, copy controls, and ShelbyHost's breakpoints and spacing.
 
 Run locally:
 
