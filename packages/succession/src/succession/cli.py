@@ -729,7 +729,10 @@ def cmd_claim(args: argparse.Namespace) -> int:
     if listing.buyer.lower() != buyer.lower():
         raise SystemExit("only the wallet that funded this listing can claim it")
     sink = open_tenant(args.db, args.tenant)
-    journal = AcquisitionJournal(sink, deployment, listing, buyer)
+    journal = AcquisitionJournal(
+        sink, deployment, listing, buyer,
+        successor_agent=getattr(args, "successor_agent", None),
+    )
     entry = journal.read()
     if entry is not None:
         if listing.state.value != 'confirmed':
@@ -1280,6 +1283,11 @@ def main(argv: list[str] | None = None) -> int:
     tenant_args(p)
     deployment_arg(p)
     p.add_argument("--listing", required=True, help="the listing you funded escrow on")
+    p.add_argument(
+        "--successor-agent",
+        default=None,
+        help="ERC-8004 identity receiving this memory, recorded in the certificate",
+    )
     marketplace_arg(p)
     p.set_defaults(func=cmd_claim)
 

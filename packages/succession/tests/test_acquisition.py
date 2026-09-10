@@ -68,6 +68,19 @@ def test_completion_failure_is_resumable_and_idempotent(acquisition, monkeypatch
     assert journal.sink.events() == events
 
 
+def test_certificate_can_name_a_successor_agent_while_wallet_authorises(acquisition):
+    journal, package, backend = acquisition
+    journal.successor_agent = "erc8004:84532:0695"
+    journal.import_once(package)
+    receipt = backend.confirm_transfer(
+        "journal", delivered_hash=journal.listing.hash_commitment,
+        buyer_identity=BUYER.address, caller=EVALUATOR.address,
+    )
+    completed = journal.complete(receipt)
+    assert completed["buyer"] == BUYER.address
+    assert completed["certificate"]["successor_agent"] == "erc8004:84532:0695"
+
+
 def test_resale_export_carries_completed_acquisition_history(acquisition):
     from succession.export import export_tenant
     from succession.importer import verify_package

@@ -10,8 +10,9 @@ from .transfer import _write_post_sale_record
 
 
 class AcquisitionJournal:
-    def __init__(self, sink, deployment, listing, buyer):
+    def __init__(self, sink, deployment, listing, buyer, successor_agent=None):
         self.sink, self.listing, self.buyer = sink, listing, buyer
+        self.successor_agent = successor_agent or buyer
         self.storage = sink.client.storage
         self.key = (sink.tenant_id, int(deployment['chain_id']),
                     deployment['listing_contract'].lower(), listing.listing_id)
@@ -72,10 +73,12 @@ class AcquisitionJournal:
             self.verify_destination(entry)
             result = ImportResult(**entry['result'])
             _write_post_sale_record(self.sink, header=entry['header'], listing=self.listing,
-                receipt=receipt, verified_hash=result.reimported_root, buyer_identity=self.buyer)
+                receipt=receipt, verified_hash=result.reimported_root,
+                buyer_identity=self.successor_agent)
             certificate = SuccessionCertificate.from_transfer(header=entry['header'],
                 import_result=result, transfer_date=receipt.settled_at,
-                successor_agent=self.buyer, settlement_reference=receipt.reference)
+                successor_agent=self.successor_agent,
+                settlement_reference=receipt.reference)
             entry.update(stage='complete', receipt=receipt.to_dict(), certificate=certificate.to_dict())
             self._write(entry)
             return entry

@@ -1,0 +1,38 @@
+{
+  "network": "base-sepolia",
+  "contract": "0x642dFC05C9DCC0617c67B318C78dd5AE94134603",
+  "transfers": [
+    {
+      "index": 1,
+      "agent_id": "erc8004:84532:0692",
+      "listing_id": "listing-692",
+      "intentionally_corrupted": false,
+      "outcome": "verified",
+      "committed_root": "0x2463d651040c6c25af83e836f6d7bcaa00ab640b3c75a1baa8c7c5ececde27b4",
+      "delivered_root": "0x2463d651040c6c25af83e836f6d7bcaa00ab640b3c75a1baa8c7c5ececde27b4",
+      "tx": "0xec4c2dddbc9378b6da0f9f574fb5636523d98af603bbf1777cbd9d2927704737",
+      "explorer": "https://sepolia.basescan.org/tx/0xec4c2dddbc9378b6da0f9f574fb5636523d98af603bbf1777cbd9d2927704737",
+      "certificate": {
+        "memory_asset": "#0692",
+        "origin_agent": "erc8004:84532:0692",
+        "successor_agent": "erc8004:84532:0693",
+        "memory_version": 23,
+        "records_transferred": 49,
+        "integrity_hash": "0x2463d651040c6c25af83e836f6d7bcaa00ab640b3c75a1baa8c7c5ececde27b4",
+        "categories_transferred": [
+          "commitments",
+          "history",
+          "identity",
+          "learned-behaviors",
+          "preferences",
+          "relationships"
+        ],
+        "seller_signature": "0x1430d47f4fcdbfd0966f679b8026286a5ee9b74057d9c75847aa4d930c8106375c0917284127f1ab3b969eb424950dbe08d39f503d1cfbc325a8444fabaad7c41b",
+        "seller_tenant_sealed_at": "2026-09-10T12:29:32Z",
+        "settlement_reference": "0xec4c2dddbc9378b6da0f9f574fb5636523d98af603bbf1777cbd9d2927704737",
+        "transfer_date": "2026-09-10T12:29:28Z",
+        "transfer_status": "VERIFIED"
+      }
+    }
+  ]
+}
