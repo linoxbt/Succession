@@ -1,10 +1,10 @@
 # Succession web
 
-The frontend is a read-only operator surface with three routes:
+The frontend is a read-only product and documentation surface with three routes:
 
-- `/app` — live API, chain, contract, evaluator, and finality status
-- `/app/guide` — the seller, evaluator, and buyer CLI workflow
-- `/app/terminal` — the recording checklist and exact demo commands
+- `/app` — hosted API and settlement-network status
+- `/app/guide` — installation through the first complete memory transfer
+- `/app/docs` — architecture, deployment, protocol, command and operations reference
 
 Browser wallet connections and marketplace listing screens are deliberately
 absent. Keys and local Sibyl databases remain on the role-specific hosts; the

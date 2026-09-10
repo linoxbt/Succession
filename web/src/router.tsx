@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-export type AppView = "dashboard" | "guide" | "terminal";
+export type AppView = "dashboard" | "guide" | "docs";
 export type Route = { kind: "landing" } | { kind: "app"; view: AppView };
 
 const SEGMENTS: Record<Exclude<AppView, "dashboard">, string> = {
   guide: "guide",
-  terminal: "terminal",
+  docs: "docs",
 };
 
 export function parse(pathname: string): Route {
   if (!pathname.startsWith("/app")) return { kind: "landing" };
   const segment = pathname.slice(4).replace(/^\/+|\/+$/g, "").split("/")[0];
-  if (segment === "guide" || segment === "docs") return { kind: "app", view: "guide" };
-  if (segment === "terminal") return { kind: "app", view: "terminal" };
+  if (segment === "guide") return { kind: "app", view: "guide" };
+  if (segment === "docs") return { kind: "app", view: "docs" };
   return { kind: "app", view: "dashboard" };
 }
 
