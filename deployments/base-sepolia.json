@@ -1,11 +1,14 @@
 {
   "network": "base-sepolia",
   "chain_id": 84532,
-  "listing_contract": "0xBE16BD086BF00c90B2E1e49E5393b3C18519927E",
+  "listing_contract": "0x642dFC05C9DCC0617c67B318C78dd5AE94134603",
   "identity_registry": "0x7177a6867296406881E20d6647232314736Dd09A",
   "identity_registry_is_mock": false,
   "payment_token": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-  "arbiter": "0x6485B4B339E90970AD3ebb421748Fab76E52d8ed",
+  "arbiter": "0x518477058d12e60D74E42b799F5ad0f5c4FFf31b",
   "deployer": "0x6485B4B339E90970AD3ebb421748Fab76E52d8ed",
-  "explorer": "https://sepolia.basescan.org/address/0xBE16BD086BF00c90B2E1e49E5393b3C18519927E"
+  "deployment_tx": "0xa1a73112ea9c9dcb87bf29c26098e91e9ca9f9812a7b623c7a75e796acd03357",
+  "deployment_block": 46599979,
+  "runtime_code_hash": "f6180b8abc84c730a545f636515f5d451713756b8506e680ad9be1db3b8c1240",
+  "explorer": "https://sepolia.basescan.org/address/0x642dFC05C9DCC0617c67B318C78dd5AE94134603"
 }

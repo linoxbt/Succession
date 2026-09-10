@@ -22,7 +22,7 @@ reading it.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable, Iterable
 
 from .publish import PublishError, SellerVault, StoredListing
@@ -91,10 +91,37 @@ def release_for(
     vault = vault or SellerVault()
     stored = vault.read(listing_id)
 
+    if hasattr(settlement, "w3") and (
+        settlement.w3.eth.chain_id != stored.chain_id
+        or settlement.contract.address.lower() != stored.listing_contract.lower()
+    ):
+        raise FulfilmentError("vault deployment does not match the connected chain and contract")
+
     try:
         listing = settlement.get(listing_id)
     except SettlementError as exc:
         raise FulfilmentError(f"cannot read {listing_id} from chain: {exc}") from exc
+
+    if (listing.hash_commitment.lower() != stored.committed_root.lower()
+            or listing.seller.lower() != stored.seller.lower()):
+        raise FulfilmentError("on-chain seller or commitment does not match the vault")
+
+    if listing.state is ListingState.CONFIRMED:
+        # Republish for the buyer before retiring the source. The relay is
+        # process-local, so this is also the restart-recovery path.
+        key = vault.content_key(listing_id)
+        if deliver is not None:
+            deliver(stored, key, listing.buyer or "")
+        if stored.stage != "sealed":
+            if not stored.source_db or not stored.source_tenant:
+                raise FulfilmentError("confirmed legacy listing has no source location; retire its seller tenant explicitly")
+            from .memory.sibyl import open_tenant
+            source = open_tenant(stored.source_db, stored.source_tenant)
+            source.seal(reason=f"confirmed succession listing {listing_id}",
+                        agent_identity=stored.agent_identity, transfer_id=listing_id)
+            vault.update(replace(stored, stage="sealed"))
+        return Fulfilment(listing_id, listing.buyer or "", True,
+                          "confirmed; buyer key republished and local seller tenant retired")
 
     if listing.state is ListingState.OPEN:
         return Fulfilment(listing_id, "", False, "no buyer has funded escrow yet")
@@ -139,14 +166,12 @@ def watch(
     latency floor, not a correctness parameter.
     """
     vault = vault or SellerVault()
-    done: set[str] = set()
     results: list[Fulfilment] = []
 
     while True:
+        results = []
         wanted = list(listings) if listings else [s.listing_id for s in vault.all()]
         for listing_id in wanted:
-            if listing_id in done:
-                continue
             try:
                 outcome = release_for(
                     listing_id, settlement, vault=vault, deliver=deliver
@@ -155,7 +180,6 @@ def watch(
                 log(f"  {listing_id}: {exc}")
                 continue
             if outcome.released:
-                done.add(listing_id)
                 results.append(outcome)
                 log(f"  {listing_id}: key released to {outcome.buyer}")
             else:

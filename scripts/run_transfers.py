@@ -43,6 +43,7 @@ from succession.erc8004 import (
     agent_identity,
 )  # noqa: E402
 from succession.envelope import seal_package  # noqa: E402
+from succession.evaluator import Evaluator  # noqa: E402
 from succession.memory.sibyl import open_tenant  # noqa: E402
 from succession.seal import SealRegistry  # noqa: E402
 from succession.seed import seed_seller  # noqa: E402
@@ -102,6 +103,11 @@ def main() -> int:
 
         os.environ.setdefault("SELLER_PRIVATE_KEY", "0x" + "11" * 32)
         os.environ.setdefault("BUYER_PRIVATE_KEY", "0x" + "22" * 32)
+        os.environ.setdefault("SUCCESSION_EVALUATOR_KEY", "0x" + "44" * 32)
+        os.environ.setdefault(
+            "ARBITER_ADDRESS",
+            Account.from_key(os.environ["SUCCESSION_EVALUATOR_KEY"]).address,
+        )
         # An in-process EVM dies with the process that made it, so a local run
         # deploys its own contracts rather than reading an earlier run's file.
         from deploy_base_sepolia import deploy_all
@@ -118,14 +124,23 @@ def main() -> int:
         )
 
     seller_key, buyer_key = env("SELLER_PRIVATE_KEY"), env("BUYER_PRIVATE_KEY")
+    evaluator_key = env("SUCCESSION_EVALUATOR_KEY")
     seller_addr = Account.from_key(seller_key).address
     buyer_addr = Account.from_key(buyer_key).address
+    evaluator_addr = Account.from_key(evaluator_key).address
+    if evaluator_addr.lower() != deployment["arbiter"].lower():
+        sys.exit(
+            f"SUCCESSION_EVALUATOR_KEY belongs to {evaluator_addr}, but the "
+            f"deployment configures {deployment['arbiter']}"
+        )
 
     settlement = ChainSettlement(
         w3,
         contract_address=deployment["listing_contract"],
         seller_key=seller_key,
         buyer_key=buyer_key,
+        evaluator_key=evaluator_key,
+        confirmations=1 if args.local else None,
     )
 
     registry = IdentityRegistry(w3, address=deployment["identity_registry"])
@@ -144,7 +159,7 @@ def main() -> int:
                             {"name": "amount", "type": "uint256"}], "outputs": []},
             ],
         )
-        for who in (seller_addr, buyer_addr):
+        for who in (seller_addr, buyer_addr, evaluator_addr):
             w3.eth.send_transaction(
                 {"from": w3.eth.accounts[0], "to": who, "value": w3.to_wei(50, "ether")}
             )
@@ -198,6 +213,9 @@ def main() -> int:
         seller = open_tenant(args.workdir / f"seller-{i}.db", f"tenant-seller-{i}")
         seed_seller(seller, agent_identity=agent_id)
         buyer = open_tenant(args.workdir / f"buyer-{i}.db", f"tenant-buyer-{i}")
+        evaluator_sink = open_tenant(
+            args.workdir / f"evaluator-{i}.db", f"tenant-evaluator-{i}"
+        )
 
         listed = list_asset(
             seller, settlement,
@@ -223,6 +241,7 @@ def main() -> int:
             seals=SealRegistry(args.workdir / "seals.db"),
             envelope=envelope, content_key=listed.content_key,
             seller_tenant_id=seller.tenant_id, buyer_sink=buyer,
+            evaluator_sink=evaluator_sink, evaluator=Evaluator(evaluator_key),
             buyer_identity=successor_id,
             buyer_address=buyer_addr, expected_signer=seller_addr,
         )

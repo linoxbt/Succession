@@ -21,7 +21,8 @@ from pathlib import Path
 from typing import Any
 
 from .dataroom import build_preview
-from .demokeys import BUYER, SELLER
+from .demokeys import BUYER, SELLER, EVALUATOR
+from .evaluator import Evaluator
 from .memory.sibyl import open_tenant
 from .seal import SealRegistry, TenantSealed, guard
 from .seed import seed_seller
@@ -56,7 +57,7 @@ def run_demo(workdir: Path, *, quiet: bool = False, fresh: bool = True) -> dict[
         shutil.rmtree(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
 
-    settlement = LocalSettlement(workdir / "settlement.db")
+    settlement = LocalSettlement(workdir / "settlement.db", arbiter=EVALUATOR.address)
     seals = SealRegistry(workdir / "seals.db")
 
     # -- 0:00 the seller's agent, mid-relationship ---------------------
@@ -113,6 +114,8 @@ def run_demo(workdir: Path, *, quiet: bool = False, fresh: bool = True) -> dict[
         content_key=listed.content_key,
         seller_tenant_id=seller.tenant_id,
         buyer_sink=buyer,
+        evaluator_sink=open_tenant(workdir / "evaluator.db", "tenant-evaluator"),
+        evaluator=Evaluator(EVALUATOR.private_key),
         buyer_identity=BUYER.agent_id,
         buyer_address=BUYER.address,
         expected_signer=SELLER.address,

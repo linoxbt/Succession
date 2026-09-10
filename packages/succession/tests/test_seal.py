@@ -85,3 +85,34 @@ def test_an_unsealed_tenant_is_untouched(seller, registry):
 def test_registry_has_no_unseal():
     """Sealing is permanent by construction, not by policy."""
     assert not hasattr(SealRegistry, "unseal")
+
+
+def test_default_seal_covers_existing_and_reopened_clients(tmp_path):
+    from succession.memory.sibyl import open_tenant
+    path = tmp_path / "memory.db"
+    first = open_tenant(path, "seller")
+    second = open_tenant(path, "seller")
+    first.client.set_entity("preference", "before", {"ok": True})
+    seal = first.seal(reason="confirmed sale")
+    assert not seal.credential_revoked
+    for memory in (first, second, open_tenant(path, "seller")):
+        assert memory.entities()
+        with pytest.raises(TenantSealed):
+            memory.client.set_entity("preference", "after", {"ok": False})
+        with pytest.raises(TenantSealed):
+            memory.client.write_event(acted={"late": True})
+        with pytest.raises(TenantSealed):
+            memory.purge()
+    second.client.set_tenant("other")
+    second.client.set_state("okay", {"value": 1})
+    second.client.set_tenant("seller")
+    with pytest.raises(TenantSealed):
+        second.client.set_state("forbidden", {"value": 1})
+
+
+def test_concurrent_seals_preserve_first_record(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    registry = SealRegistry(tmp_path / "seals.db")
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(lambda n: registry.seal("tenant", reason=str(n)), range(8)))
+    assert all(result == results[0] for result in results)

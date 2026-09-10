@@ -100,6 +100,8 @@ def list_asset(
     scope: Any = None,
     base_price: Decimal | str | int | None = None,
     provenance_chain: list[dict[str, Any]] | None = None,
+    prepared_export: ExportResult | None = None,
+    before_commit: Any = None,
 ) -> ListedAsset:
     """Steps 2-3: build and sign the package, then post the commitment.
 
@@ -109,7 +111,9 @@ def list_asset(
     one memory and ship another that happened to hash the same way only because
     nobody re-checked.
     """
-    export = export_tenant(
+    from .memory.snapshot import MemorySnapshot
+    seller = MemorySnapshot.capture(seller)
+    export = prepared_export or export_tenant(
         seller,
         agent_identity=agent_identity,
         private_key=private_key,
@@ -117,18 +121,19 @@ def list_asset(
         scope=scope,
         provenance_chain=provenance_chain,
     )
+    selected = seller.selected(export.package)
     valuation = (
-        value_tenant(seller, base_price=base_price)
+        value_tenant(selected, base_price=base_price)
         if base_price is not None
-        else value_tenant(seller)
+        else value_tenant(selected)
     )
     preview = build_preview(
-        seller,
+        selected,
         agent_identity=agent_identity,
         committed_root=export.root_hex,
         base_price=base_price,
     )
-    listing = settlement.list_asset(
+    terms = dict(
         listing_id=listing_id,
         agent_id=agent_identity,
         seller=seller_address,
@@ -144,13 +149,17 @@ def list_asset(
         listing_id=listing_id,
         hash_commitment=export.root_hex,
     )
-    return ListedAsset(
-        listing=listing,
+    asset = ListedAsset(
+        listing=Listing(**terms),
         export=export,
         preview=preview,
         envelope=envelope,
         content_key=key,
     )
+    if before_commit is not None:
+        before_commit(asset)
+    asset.listing = settlement.list_asset(**terms)
+    return asset
 
 
 def execute_transfer(
@@ -162,11 +171,18 @@ def execute_transfer(
     content_key: bytes,
     seller_tenant_id: str,
     buyer_sink: Any,
+    evaluator_sink: Any,
+    evaluator: Any,
     buyer_identity: str,
     buyer_address: str,
     expected_signer: str,
 ) -> TransferOutcome:
-    """Steps 6-12: decrypt, import, verify, settle, seal, record."""
+    """Evaluate before settlement, then deliver to the buyer after payment.
+
+    The evaluator is the only party that receives plaintext while escrow can
+    still be refunded. The buyer's import occurs only after the evaluator has
+    independently derived the committed root and settled the sale.
+    """
     listing = settlement.get(listing_id)
     if listing.state is not ListingState.ESCROWED:
         raise SettlementError(
@@ -175,21 +191,34 @@ def execute_transfer(
         )
 
     committed = listing.hash_commitment
-    package = open_envelope(envelope, content_key)
 
-    # -- step 7-8: deliver, re-key, verify -----------------------------
+    if not buyer_sink.is_empty():
+        raise SettlementError("buyer destination must be a fresh tenant before evaluation")
+    if not evaluator_sink.is_empty():
+        raise SettlementError("evaluator destination must be a fresh isolated tenant")
+
+    # -- evaluator delivery and independent verification ---------------
     try:
-        import_result = import_package(
+        package = open_envelope(envelope, content_key)
+        evaluator_import = import_package(
             package,
-            buyer_sink,
+            evaluator_sink,
             committed_root=committed,
             expected_signer=expected_signer,
         )
+        verdict = evaluator.evaluate(
+            listing_id=listing_id,
+            committed_root=committed,
+            buyer_sink=evaluator_sink,
+            package=package,
+            expected_signer=expected_signer,
+            categories=package.header.get("categories"),
+        )
     except Exception as exc:
         delivered = getattr(exc, "delivered", "")
-        buyer_sink.purge()
         receipt = settlement.refund(
-            listing_id, reason=str(exc), delivered_hash=delivered
+            listing_id, reason=str(exc), delivered_hash=delivered,
+            caller=evaluator.address, confirmed_by="arbiter",
         )
         return TransferOutcome(
             listing_id=listing_id,
@@ -200,22 +229,28 @@ def execute_transfer(
             failure_reason=str(exc),
         )
 
-    # -- step 7 (chain leg): payment + identity + sealed flag, atomically
-    receipt = settlement.confirm_transfer(
-        listing_id,
-        delivered_hash=import_result.reimported_root,
-        buyer_identity=buyer_identity,
-    )
+    # -- evaluator settlement: payment + identity + chain seal ----------
+    receipt = evaluator.settle(settlement, verdict, buyer_identity=buyer_identity)
     if receipt.outcome != "released":
-        buyer_sink.purge()
         return TransferOutcome(
             listing_id=listing_id,
             outcome="refunded",
             receipt=receipt,
             committed_root=committed,
-            delivered_root=import_result.reimported_root,
+            delivered_root=evaluator_import.reimported_root,
             failure_reason="settlement declined to release escrow",
         )
+
+    # -- post-settlement buyer delivery ---------------------------------
+    # The package has already been independently checked. If this local write
+    # is interrupted, the buyer can retry into a fresh tenant; settlement is
+    # recovered from chain and the seller watcher republishes the key.
+    import_result = import_package(
+        package,
+        buyer_sink,
+        committed_root=committed,
+        expected_signer=expected_signer,
+    )
 
     # -- step 9: seal the seller's copy ---------------------------------
     seal_record = seals.seal(

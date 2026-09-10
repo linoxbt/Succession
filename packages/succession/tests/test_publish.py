@@ -78,8 +78,8 @@ def chain_env(tmp_path):
     # tester's own account. They are not tester-managed accounts: every
     # transaction they send is signed locally and pushed as raw, which is
     # exactly what a real user's wallet does and what `ChainSettlement` is for.
-    seller_account, buyer_account = Account.create(), Account.create()
-    for who in (seller_account.address, buyer_account.address):
+    seller_account, buyer_account, evaluator_account = Account.create(), Account.create(), Account.create()
+    for who in (seller_account.address, buyer_account.address, evaluator_account.address):
         w3.eth.send_transaction(
             {"from": funder, "to": who, "value": w3.to_wei(10, "ether")}
         )
@@ -88,7 +88,7 @@ def chain_env(tmp_path):
     registry = deploy(w3, artifacts, "MockIdentityRegistry", sender=funder)
     listings = deploy(
         w3, artifacts, "ListingContract",
-        token.address, registry.address, funder, sender=funder,
+        token.address, registry.address, evaluator_account.address, sender=funder,
     )
     registry.functions.register(seller_account.address, AGENT_ID, "ipfs://x").transact(
         {"from": funder}
@@ -97,9 +97,10 @@ def chain_env(tmp_path):
 
     seller_key = seller_account.key.hex()
     buyer_key = buyer_account.key.hex()
+    evaluator_key = evaluator_account.key.hex()
     backend = ChainSettlement(
         w3, contract_address=listings.address,
-        seller_key=seller_key, buyer_key=buyer_key,
+        seller_key=seller_key, buyer_key=buyer_key, evaluator_key=evaluator_key,
     )
     backend.approve_identity(registry.address, seller_account.address, AGENT_ID)
     backend.approve_payment(token.address, buyer_account.address, PRICE * 4)
@@ -110,6 +111,7 @@ def chain_env(tmp_path):
         "seller_key": seller_key,
         "seller": seller_account.address,
         "buyer": buyer_account.address,
+        "arbiter": evaluator_account.address,
         "listings": listings,
         "record": {"chain_id": w3.eth.chain_id, "listing_contract": listings.address},
     }
@@ -150,7 +152,7 @@ def test_the_listing_id_is_derived_from_what_is_being_sold(chain_env, seller, tm
     stored, asset = publish_listing(
         seller, chain_env["backend"], agent_identity=AGENT,
         private_key=chain_env["seller_key"], price=PRICE,
-        chain_id=1, listing_contract=chain_env["record"]["listing_contract"], vault=vault,
+        chain_id=chain_env["record"]["chain_id"], listing_contract=chain_env["record"]["listing_contract"], vault=vault,
     )
     assert stored.listing_id == listing_id_for(AGENT, stored.committed_root)
 
@@ -161,7 +163,7 @@ def test_relisting_unchanged_memory_is_refused(chain_env, seller, tmp_path):
     vault = SellerVault(tmp_path / "vault")
     kw = dict(
         agent_identity=AGENT, private_key=chain_env["seller_key"], price=PRICE,
-        chain_id=1, listing_contract=chain_env["record"]["listing_contract"], vault=vault,
+        chain_id=chain_env["record"]["chain_id"], listing_contract=chain_env["record"]["listing_contract"], vault=vault,
     )
     publish_listing(seller, chain_env["backend"], **kw)
     with pytest.raises(PublishError, match="already listed"):
@@ -173,7 +175,7 @@ def test_the_key_is_not_released_before_escrow(chain_env, seller, tmp_path):
     vault = SellerVault(tmp_path / "vault")
     stored, _ = publish_listing(
         seller, chain_env["backend"], agent_identity=AGENT,
-        private_key=chain_env["seller_key"], price=PRICE, chain_id=1,
+        private_key=chain_env["seller_key"], price=PRICE, chain_id=chain_env["record"]["chain_id"],
         listing_contract=chain_env["record"]["listing_contract"], vault=vault,
     )
     handed_over = []
@@ -192,7 +194,7 @@ def test_the_key_is_released_once_escrow_is_funded(chain_env, seller, tmp_path):
     vault = SellerVault(tmp_path / "vault")
     stored, asset = publish_listing(
         seller, chain_env["backend"], agent_identity=AGENT,
-        private_key=chain_env["seller_key"], price=PRICE, chain_id=1,
+        private_key=chain_env["seller_key"], price=PRICE, chain_id=chain_env["record"]["chain_id"],
         listing_contract=chain_env["record"]["listing_contract"], vault=vault,
     )
 
@@ -212,6 +214,27 @@ def test_the_key_is_released_once_escrow_is_funded(chain_env, seller, tmp_path):
     # the root the contract has been holding since before a buyer existed.
     package = open_envelope(vault.envelope(stored.listing_id), handed_over["key"])
     assert package.integrity["root"].lower() == stored.committed_root.lower()
+
+
+def test_watcher_reconciles_confirmation_after_restart(chain_env, seller, tmp_path):
+    from succession.memory.sibyl import open_tenant
+    from succession.seal import TenantSealed
+    vault = SellerVault(tmp_path / "vault")
+    backend = chain_env["backend"]
+    stored, asset = publish_listing(seller, backend, agent_identity=AGENT,
+        private_key=chain_env["seller_key"], price=PRICE,
+        chain_id=chain_env["record"]["chain_id"],
+        listing_contract=chain_env["record"]["listing_contract"], vault=vault)
+    backend.buy(stored.listing_id, buyer=chain_env["buyer"], amount=PRICE)
+    backend.confirm_transfer(stored.listing_id, delivered_hash=asset.committed_root,
+                             buyer_identity=chain_env["buyer"], caller=chain_env["arbiter"])
+    assert release_for(stored.listing_id, backend, vault=vault).released is True
+    assert vault.read(stored.listing_id).stage == "sealed"
+    for source in (seller, open_tenant(stored.source_db, stored.source_tenant)):
+        with pytest.raises(TenantSealed):
+            source.client.set_entity("preference", "late", {})
+    # Repeated watcher reconciliation is harmless.
+    assert release_for(stored.listing_id, backend, vault=vault).released is True
 
 
 def test_seller_auth_recovers_the_listing_owner(chain_env):

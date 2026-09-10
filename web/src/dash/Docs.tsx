@@ -1,414 +1,49 @@
-/**
- * The documentation, in the app.
- *
- * The repository has the full specs; this is the version someone reads while
- * looking at the console, so it stays at the level of "what is this and why is
- * it built that way" rather than reproducing the format byte layout. Sections
- * are addressable, so a link into a specific answer works.
- */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Badge, Section, Rule, Table, Td } from "../ui";
+import { CheckCircle2, Database, KeyRound, RefreshCw, ShieldCheck, Workflow } from "lucide-react";
+import type { ReactNode } from "react";
+import { AppShell, StatusBadge } from "../components/AppShell";
+import { CommandBlock } from "../components/CommandBlock";
+import { to } from "../router";
 
-interface Doc {
-  id: string;
-  title: string;
-  body: ReactNode;
-}
-
-const DOCS: Doc[] = [
-  {
-    id: "overview",
-    title: "What Succession is",
-    body: (
-      <>
-        <P>
-          Code gives an agent capability. A model gives it reasoning. Memory gives
-          it continuity, and Succession gives that continuity an economic life
-          beyond the original agent.
-        </P>
-        <P>
-          The model and the code are the employee. The accumulated memory is the
-          customer book: the relationships, preferences and institutional
-          knowledge that make an operating business worth more than its
-          equipment. Succession does not sell the employee. It makes the customer
-          book itself a transferable asset.
-        </P>
-        <Callout>
-          Delete the memory layer and there is no product, no asset, no hash to
-          commit, no data room, and no cutover. That is the test, and it is the
-          point.
-        </Callout>
-      </>
-    ),
-  },
-  {
-    id: "flow",
-    title: "How a sale works",
-    body: (
-      <>
-        <Ol
-          items={[
-            ["Export", "The seller's tenant is filtered, serialized and hashed into a Succession Memory Package, signed with the key holding the agent's ERC-8004 identity."],
-            ["List", "The Merkle root is committed to ListingContract on Base, before any buyer exists."],
-            ["Preview", "A buyer sees aggregate statistics only, counts, never record bodies, beside whatever ACP job history the agent carries."],
-            ["Escrow", "The buyer funds the contract. Nothing has moved: the seller cannot touch the money, the buyer holds no identity."],
-            ["Deliver", "The package travels encrypted. The content key is released only against funded escrow."],
-            ["Re-key", "It imports into a brand-new tenant under the buyer's tenant id."],
-            ["Verify", "The buyer re-exports their own store and re-derives the root."],
-            ["Settle", "confirmTransfer releases payment, transfers the identity token, and sets the sealed flag, in one transaction, or none."],
-            ["Record", "The acquisition is written into the buyer's memory, extending the provenance chain for any future resale."],
-          ]}
-        />
-        <Callout>
-          Verification re-hashes the destination, not the bytes on the wire.
-          Checking what arrived only proves the courier was honest; re-hashing the
-          buyer's store proves the importer wrote what it received and the engine
-          did not silently coerce anything.
-        </Callout>
-      </>
-    ),
-  },
-  {
-    id: "smp",
-    title: "The memory package",
-    body: (
-      <>
-        <P>
-          Nine directories. Six carry memory; three are generated at build time
-          and describe the package rather than living inside it.
-        </P>
-        <Table head={["Directory", "Carries"]}>
-          {[
-            ["identity/", "The agent's own registration record"],
-            ["relationships/", "Per-counterparty entities, and the edges between them"],
-            ["preferences/", "Learned settings and operating limits"],
-            ["history/", "The journal, archived records, and verifiable ACP job history"],
-            ["commitments/", "Open quotes, agreed terms, and live working state"],
-            ["learned-behaviors/", "Adapted patterns and encoded playbooks"],
-            ["provenance/", "Origin, version, prior-owner chain, signature"],
-            ["permissions/", "Redaction flags, consent basis, access tiers"],
-            ["integrity-proof/", "Merkle root and per-category subroots"],
-          ].map(([dir, carries]) => (
-            <tr key={dir}>
-              <Td className="font-mono text-escrow">{dir}</Td>
-              <Td className="text-muted">{carries}</Td>
-            </tr>
-          ))}
-        </Table>
-        <P className="mt-6">
-          A directory is a <em>selection unit</em>, not a storage location, it is
-          what partial succession filters on and what gets its own Merkle subroot.
-          Every record also carries its <Code>origin</Code>, the exact tier and
-          category it held in the source engine, which is what the importer
-          re-keys against. So the grouping can be opinionated without ever being
-          lossy.
-        </P>
-      </>
-    ),
-  },
-  {
-    id: "integrity",
-    title: "The integrity scheme",
-    body: (
-      <>
-        <P>
-          A two-level Merkle tree over keccak256: a subroot per category, then a
-          root over the <Code>(category, subroot)</Code> pairs. The two-level
-          shape is what makes partial succession verifiable without a redesign; a
-          flat hash would have needed one.
-        </P>
-        <Table head={["Decision", "Why"]}>
-          {[
-            ["Leaves and nodes are domain-separated", "Stops an internal node being presented as a leaf, the classic second-preimage attack"],
-            ["An odd node is promoted, never duplicated", "Duplication makes two different leaf sets produce the same root"],
-            ["The category name is bound to its subroot", "A seller cannot relabel a cheap directory as an expensive one"],
-            ["Timestamps and row ids are excluded from leaves", "Destinations assign their own; hashing them would fail every honest import"],
-            ["Ties break on content hash, not row id", "Row ids do not survive a transfer; two events in one millisecond must still sort identically"],
-          ].map(([d, why]) => (
-            <tr key={d}>
-              <Td>{d}</Td>
-              <Td className="text-muted">{why}</Td>
-            </tr>
-          ))}
-        </Table>
-        <P className="mt-6">
-          The provenance header is signed in full, not just the root. Signing the
-          bare root would leave the agent identity and the owner chain
-          unauthenticated, an intercepted package could keep a valid signature
-          while claiming to be a different, more valuable agent.
-        </P>
-      </>
-    ),
-  },
-  {
-    id: "privacy",
-    title: "Privacy and redaction",
-    body: (
-      <>
-        <P>Two independent axes, deliberately not collapsed into one.</P>
-        <Table head={["Flag", "Meaning"]}>
-          {[
-            ["sensitivity: public", "Visible in the pre-purchase data room"],
-            ["sensitivity: private", "Transfers with the sale, never previewed"],
-            ["sensitivity: redacted-preview-only", "Counts toward aggregates; body never leaves before purchase"],
-            ["transferable: false", "Absolute. Outranks every tier, buyer and category selection, permanently"],
-          ].map(([flag, meaning]) => (
-            <tr key={flag}>
-              <Td className="font-mono text-escrow">{flag}</Td>
-              <Td className="text-muted">{meaning}</Td>
-            </tr>
-          ))}
-        </Table>
-        <Callout>
-          Filtering runs before hashing, not before display. A withheld record
-          never reaches the Merkle tree in recoverable form, otherwise anyone
-          able to diff two packages could recover it.
-        </Callout>
-        <P className="mt-6">
-          An unflagged record defaults to <Code>private</Code> and{" "}
-          <Code>transferable</Code>: part of the asset, but not leaking into a
-          preview because nobody remembered to flag it.
-        </P>
-      </>
-    ),
-  },
-  {
-    id: "valuation",
-    title: "Valuation",
-    body: (
-      <>
-        <P>
-          Five clamped factors, exact decimal, re-derivable by hand. Every factor
-          reports its own inputs and a sentence explaining what it did with them.
-        </P>
-        <Pre>{`valuation = base_price
-          × tenure_factor        age of the tenant
-          × interaction_density  journal events per day
-          × relationship_breadth distinct counterparties
-          × task_performance     ACP outcomes, else the journal
-          × recency_weight       time since the last write`}</Pre>
-        <P className="mt-6">
-          <Code>task_performance</Code> prefers a completed-versus-cancelled
-          ratio from Virtuals ACP over reading English out of the seller's own
-          journal. It falls back on a thin sample rather than treating
-          two-for-two as a perfect record.
-        </P>
-        <Callout>
-          The ACP reader is built and tested, but against a recorded snapshot
-          rather than the live registry: this agent is not yet registered with
-          Virtuals, which needs a whitelisted wallet and an entity id. Every
-          figure sourced that way is labelled with its provenance, and a
-          listing with no ACP history scores from its journal instead. Nothing
-          on a listing claims live earnings that were not fetched.
-        </Callout>
-        <Callout tone="escrow">
-          There is no buyer-demand term in the valuation. Demand is a real input
-          at protocol scale and meaningless in a market this size, and a
-          hardcoded "12 buyers watching" is exactly the pattern a technical
-          reader probes first. Reputation is deliberately kept out of the price
-          for a different reason: it is derived from the provenance chain and
-          recomputed on every read, so folding it into a figure the seller
-          publishes would let a seller assert their own standing. It is shown
-          beside the price instead, and a buyer re-derives it from the package
-          they received.
-        </Callout>
-      </>
-    ),
-  },
-  {
-    id: "sealing",
-    title: "Sealing the seller's copy",
-    body: (
-      <>
-        <P>What stops a seller keeping a copy and carrying on? Two layers.</P>
-        <Ol
-          items={[
-            ["Contract-level", "confirmTransfer sets a sealed flag against the agentId, readable by anyone. A sealed agent cannot be relisted."],
-            ["Service-level", "The seller's credentials for that tenant are revoked, and every write path, the adapter and the underlying client, checks the seal first and rejects unconditionally."],
-          ]}
-        />
-        <Callout tone="escrow">
-          What sealing does not claim: the seller's database file still exists on
-          their disk, and nothing reaches onto their machine. The guarantee is
-          narrower and actually enforceable, that copy can no longer
-          authenticate, sync, or be represented anywhere as the live agent. The
-          asset was never the bytes; it was the right to be that agent.
-        </Callout>
-        <P className="mt-6">
-          There is deliberately no <Code>unseal</Code>. It would recreate exactly
-          the state the seal prevents, and an admin escape hatch is the same hole
-          with a login page in front of it.
-        </P>
-      </>
-    ),
-  },
-  {
-    id: "limits",
-    title: "Known limits",
-    body: (
-      <>
-        <P>Stated rather than discovered.</P>
-        <Ul
-          items={[
-            "The buyer asserts the delivered hash. A dishonest buyer can submit a wrong one, take the automatic refund, and keep the decrypted package. No on-chain logic closes this, the chain cannot see the delivered bytes. The contract's arbiter role is the hook for an Evaluator-style agent that re-derives it independently.",
-            "Atomicity is by ordering, not by magic. One transaction cannot span the chain and an off-chain store; confirmTransfer is genuinely atomic because it is one EVM transaction, and delivery and sealing are ordered around it so every intermediate state is safe to abandon.",
-            "relationships/ carries the WARM edges, so its subroot depends on which other categories travel with it, an edge is pruned when the entity at its far end is not part of the sale.",
-            "Relationship records describe real counterparties. A production version needs a real answer to what terms let that data move with a sale, grounded in the operator's own terms of service. A hackathon build should not pretend to solve it.",
-          ]}
-        />
-      </>
-    ),
-  },
+type Navigate = (route: ReturnType<typeof to.view> | ReturnType<typeof to.landing>) => void;
+const Section = ({ id, title, children }: { id: string; title: string; children: ReactNode }) => <section id={id} className="scroll-mt-24 border-b border-border py-10 first:pt-0 last:border-0"><h2 className="text-3xl font-extrabold">{title}</h2><div className="mt-5 space-y-5 text-sm leading-7 text-muted-foreground">{children}</div></section>;
+const addresses = [
+  ["Succession escrow", "0x642dFC05C9DCC0617c67B318C78dd5AE94134603"],
+  ["ERC-8004 registry", "0x7177a6867296406881E20d6647232314736Dd09A"],
+  ["USDC payment token", "0x036CbD53842c5426634e7929541eC2318f3dCF7e"],
+  ["Independent evaluator", "0x518477058d12e60D74E42b799F5ad0f5c4FFf31b"],
+];
+const commands = [
+  ["inventory", "Show sellable and withheld records by category."], ["prove", "Run an isolated export/import/re-hash before listing."],
+  ["list", "Commit a signed root on chain and publish ciphertext."], ["publish", "Resume marketplace publication from the durable vault."],
+  ["market", "Browse published listings."], ["show", "Inspect one listing before payment."], ["buy", "Approve the exact price and fund escrow."],
+  ["fulfil", "Release eligible content keys from the seller vault."], ["evaluate", "Verify in isolation and submit the evaluator verdict."],
+  ["claim", "Import into a fresh buyer tenant and write a certificate."], ["status", "Report local, service, and chain configuration."],
+  ["audit", "Verify the product claims; optionally compare chain roots."], ["listings", "Show locally retained seller listing records."],
+];
+const env = [
+  ["SUCCESSION_MARKETPLACE", "Hosted metadata, ciphertext, and authenticated key relay URL."],
+  ["BASE_SEPOLIA_RPC_URL", "Base Sepolia JSON-RPC endpoint."], ["SUCCESSION_SIGNING_KEY", "Seller wallet; owns and lists the origin identity."],
+  ["SUCCESSION_BUYER_KEY", "Buyer wallet; approves USDC, funds escrow, and claims."], ["SUCCESSION_EVALUATOR_KEY", "Dedicated evaluator wallet configured by the contract."],
+  ["SUCCESSION_FINALITY_CONFIRMATIONS", "Receipt depth; defaults to three on Base Sepolia."], ["SUCCESSION_VAULT", "Seller package and content-key recovery directory."],
+  ["SUCCESSION_DEPLOYMENT", "Optional path to a deployment record."], ["SUCCESSION_MCP_ALLOW_WRITES", "Must be 1 before MCP tools may mutate files or chain state."],
 ];
 
-export function Docs() {
-  const [active, setActive] = useState(DOCS[0]!.id);
-  const [query, setQuery] = useState("");
-
-  const filtered = useMemo(() => {
-    if (!query.trim()) return DOCS;
-    const q = query.toLowerCase();
-    return DOCS.filter((d) => d.title.toLowerCase().includes(q) || d.id.includes(q));
-  }, [query]);
-
-  // Deep links: /app#integrity opens that section.
-  useEffect(() => {
-    const hash = window.location.hash.replace("#", "");
-    if (hash && DOCS.some((d) => d.id === hash)) setActive(hash);
-  }, []);
-
-  const doc = DOCS.find((d) => d.id === active) ?? DOCS[0]!;
-
-  return (
-    <div className="grid gap-6 lg:grid-cols-[15rem_1fr]">
-      <nav className="lg:sticky lg:top-24 lg:self-start">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter"
-          aria-label="Filter documentation"
-          className="mb-3 w-full border border-rule bg-paper px-3 py-2 text-micro placeholder:text-faint"
-        />
-        <ul className="space-y-0.5">
-          {filtered.map((d) => (
-            <li key={d.id}>
-              <button
-                onClick={() => {
-                  setActive(d.id);
-                  window.history.replaceState({}, "", `#${d.id}`);
-                }}
-                aria-current={active === d.id ? "page" : undefined}
-                className={`w-full border-l py-2 pl-4 pr-3 text-left text-micro transition-[border-color,color,transform] duration-500 ease-swift ${
-                  active === d.id
-                    ? "border-ink text-ink"
-                    : "border-transparent text-faint hover:translate-x-1 hover:text-ink"
-                }`}
-              >
-                {d.title}
-              </button>
-            </li>
-          ))}
-          {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-micro text-faint">No match.</li>
-          ) : null}
-        </ul>
-      </nav>
-
-      <Section title={doc.title}>
-        <article className="px-6 py-6">{doc.body}</article>
-        <Rule />
-        <div className="flex flex-wrap items-center gap-3 px-6 py-4 text-xs text-faint">
-          <span>Full specifications in the repository:</span>
-          <a
-            href="https://github.com/linoxbt/Succession/blob/main/docs/smp-format.md"
-            className="text-escrow hover:underline"
-          >
-            SMP format
-          </a>
-          <a
-            href="https://github.com/linoxbt/Succession/blob/main/docs/sibyl-setup.md"
-            className="text-escrow hover:underline"
-          >
-            Memory brief
-          </a>
-          <a
-            href="https://github.com/linoxbt/Succession/blob/main/docs/ROADMAP.md"
-            className="text-escrow hover:underline"
-          >
-            Roadmap
-          </a>
-        </div>
-      </Section>
+export function Docs({ navigate }: { navigate: Navigate }) {
+  return <AppShell current="docs" navigate={navigate}><div className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
+    <header className="border-b border-border pb-7"><p className="text-sm font-extrabold uppercase text-muted-foreground">Technical documentation</p><h1 className="mt-2 text-4xl font-extrabold sm:text-5xl">Succession protocol reference.</h1><p className="mt-3 max-w-3xl text-lg leading-8 text-muted-foreground">Architecture, deployed contracts, memory-package integrity, settlement states, CLI commands, environment configuration, security boundaries, and recovery behavior.</p></header>
+    <div className="mt-8 grid gap-8 xl:grid-cols-[16rem_1fr]"><aside className="hidden xl:block"><div className="sticky top-20 rounded-lg border border-border bg-card p-5"><p className="text-xs font-extrabold uppercase text-muted-foreground">Documentation</p><nav className="mt-4 space-y-1 text-sm">{[["architecture","Architecture"],["deployment","Live deployment"],["roles","Roles and workflow"],["integrity","Package integrity"],["lifecycle","Settlement lifecycle"],["commands","CLI reference"],["configuration","Configuration"],["api","HTTP and MCP"],["security","Security model"],["recovery","Recovery and finality"]].map(([id,label]) => <a key={id} href={"#" + id} className="block rounded px-2 py-1.5 font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground">{label}</a>)}</nav><button onClick={() => navigate(to.view("guide"))} className="mt-5 w-full rounded-md bg-primary px-3 py-2 text-sm font-extrabold text-primary-foreground">First-transfer guide</button></div></aside>
+      <article className="min-w-0">
+        <Section id="architecture" title="Architecture"><p>Succession transfers the durable memory associated with an agent while keeping plaintext processing on role-specific hosts. The chain coordinates value and ERC-8004 ownership; the hosted service distributes public metadata and encrypted packages and relays keys only to authenticated participants.</p><div className="grid gap-3 md:grid-cols-3">{[["Local memory","Sibyl SQLite stores remain on seller, evaluator, and buyer hosts."],["Hosted relay","Metadata and ciphertext are public; content keys are role-gated."],["Base settlement","USDC release, identity transfer, and sealing occur in one transaction."]].map(([title,body]) => <div key={title} className="rounded-md border border-border bg-card p-5"><p className="font-bold text-foreground">{title}</p><p className="mt-2 leading-6">{body}</p></div>)}</div><div className="rounded-lg border border-border bg-foreground p-5 font-mono text-xs leading-7 text-background"><p>seller store → filter → canonical package → Merkle root → seller signature</p><p>signed root → Base listing · encrypted package → hosted relay</p><p>buyer escrow → seller key release → evaluator isolated import + re-hash</p><p>matching verdict → USDC release + ERC-8004 transfer + sealed sale</p><p>buyer claim → transactional import + destination re-hash + certificate</p></div></Section>
+        <Section id="deployment" title="Live Base Sepolia deployment"><div className="flex items-center gap-3"><StatusBadge status="live"/><span className="font-semibold text-foreground">Chain ID 84532 · three-confirmation receipt policy</span></div><div className="overflow-hidden rounded-lg border border-border bg-card">{addresses.map(([name,address]) => <div key={name} className="grid gap-1 border-b border-border p-4 last:border-0 sm:grid-cols-[13rem_1fr]"><span className="font-semibold text-foreground">{name}</span><code className="break-all font-mono text-xs">{address}</code></div>)}</div><p>The evaluator address is the only account authorized to submit delivery verdicts. The current deployment uses Circle test USDC and the verified ERC-8004 registry.</p></Section>
+        <Section id="roles" title="Roles and workflow"><div className="grid gap-3 md:grid-cols-3">{[["01 · Seller","Proves, signs, encrypts, commits, publishes, and releases the key only after escrow."],["02 · Evaluator","Authenticates delivery, imports into an isolated store, checks signature and root, then settles."],["03 · Buyer","Reviews the commitment, funds escrow, and claims into a fresh destination after settlement."]].map(([title,body]) => <div key={title} className="rounded-lg border border-border bg-card p-5"><Workflow className="h-5 w-5 text-primary"/><p className="mt-5 font-bold text-foreground">{title}</p><p className="mt-2 leading-6">{body}</p></div>)}</div><p>Use separate wallets and separate databases. Evaluator independence is an operational property: its key and destination store must not be controlled by the seller or buyer.</p></Section>
+        <Section id="integrity" title="Memory package and integrity model"><p>The Succession Memory Package groups six categories: identity, relationships, preferences, history, commitments, and learned behaviors. Disclosure rules can withhold records. Remaining records are canonicalized deterministically, hashed into category subroots, and combined into one Merkle root.</p><div className="grid gap-3 sm:grid-cols-2">{[["Commitment precedes delivery","The listing root exists before the buyer receives plaintext."],["Whole-header signature","Agent identity, categories, owner history, and root are authenticated together."],["Destination re-hash","The evaluator and buyer derive roots from their imported stores."],["Encrypted transport","AES-256-GCM protects the package; the content key is withheld until escrow."]].map(([title,body]) => <div key={title} className="rounded-md border border-border bg-card p-4"><CheckCircle2 className="h-4 w-4 text-success"/><p className="mt-3 font-bold text-foreground">{title}</p><p className="mt-1 leading-6">{body}</p></div>)}</div></Section>
+        <Section id="lifecycle" title="Settlement lifecycle"><div className="overflow-x-auto rounded-lg border border-border bg-card"><table className="w-full min-w-[640px] text-left"><thead className="border-b border-border bg-secondary"><tr><th className="p-4">State</th><th className="p-4">Entered by</th><th className="p-4">Meaning</th></tr></thead><tbody>{[["Open","Seller list","Root committed; identity approval held; no buyer funds."],["Escrowed","Buyer buy","Exact USDC price held by the contract."],["Confirmed","Evaluator verdict","Root matched; payment and identity transferred; sale sealed."],["Refunded","Evaluator mismatch or authorized recovery","Escrow returned; identity remains transferable unless separately settled."]].map(row => <tr key={row[0]} className="border-b border-border last:border-0">{row.map((cell,i) => <td key={cell} className={"p-4 align-top " + (i===0 ? "font-mono font-bold text-foreground" : "")}>{cell}</td>)}</tr>)}</tbody></table></div></Section>
+        <Section id="commands" title="CLI command reference"><p>Run <code className="font-mono text-foreground">succession COMMAND --help</code> for all arguments. Mutating chain commands describe their action first unless explicitly passed <code className="font-mono text-foreground">--yes</code>.</p><div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2">{commands.map(([name,body]) => <div key={name} className="bg-card p-4"><code className="font-mono font-bold text-primary">{name}</code><p className="mt-1 leading-6">{body}</p></div>)}</div><CommandBlock>{"succession --help\nsuccession COMMAND --help\nsuccession status\nsuccession audit\nsuccession audit --check-chain"}</CommandBlock></Section>
+        <Section id="configuration" title="Environment configuration"><div className="overflow-x-auto rounded-lg border border-border bg-card"><table className="w-full min-w-[700px] text-left"><thead className="border-b border-border bg-secondary"><tr><th className="p-4">Variable</th><th className="p-4">Purpose</th></tr></thead><tbody>{env.map(([name,body]) => <tr key={name} className="border-b border-border last:border-0"><td className="p-4 font-mono text-xs font-bold text-foreground">{name}</td><td className="p-4">{body}</td></tr>)}</tbody></table></div></Section>
+        <Section id="api" title="HTTP service and MCP"><p>The production service exposes read-only health, chain, market, and listing data plus signed seller delivery and buyer/evaluator key endpoints. Administrative routes use a separate API token. Signed requests bind method, path, body, chain, contract, timestamp, and nonce.</p><CommandBlock>{"GET /api/health\nGET /api/chain\nGET /api/market\nGET /api/listing/{listing_id}\nGET /api/listing/{listing_id}/envelope"}</CommandBlock><p>The MCP server starts with <code className="font-mono text-foreground">succession-mcp</code>. Inspection tools are read-only by default. File writes, publication, delivery, and transactions require <code className="font-mono text-foreground">SUCCESSION_MCP_ALLOW_WRITES=1</code>; keys still come from the host environment.</p></Section>
+        <Section id="security" title="Security model"><div className="grid gap-3 md:grid-cols-3">{[{Icon:KeyRound,title:"Key custody",body:"Seller, buyer, and evaluator keys stay in their role environments."},{Icon:ShieldCheck,title:"Independent verdict",body:"Only the configured evaluator can settle a delivery."},{Icon:Database,title:"Local stores",body:"Seller and buyer memory stays in separate transactional databases."}].map(({Icon,title,body}) => <div key={title} className="rounded-lg border border-border bg-card p-5"><Icon className="h-5 w-5 text-primary"/><p className="mt-4 font-bold text-foreground">{title}</p><p className="mt-2 leading-6">{body}</p></div>)}</div><p>The contract can prove value movement, identity movement, and the committed/delivered roots. It cannot prevent a filesystem owner from copying a database before sale. Seller retirement is therefore enforced by a durable local seal and operational policy, with on-chain evidence of the handover.</p></Section>
+        <Section id="recovery" title="Recovery and finality"><p>Prepared seller assets are fsynced to the vault before listing. The seller watcher can republish a key after relay restart. Buyer imports and acquisition certificates share a durable journal, so repeating claim resumes rather than duplicating records. Use the same listing, database, and tenant during recovery.</p><div className="rounded-md border border-primary/30 bg-primary/10 p-5"><div className="flex gap-3"><RefreshCw className="mt-1 h-5 w-5 shrink-0 text-primary"/><p><strong className="text-foreground">Base Sepolia policy:</strong> transaction commands wait for three confirmations. This is a practical testnet threshold. A mainnet release should additionally reconcile L1-finalized state before irreversible external retirement.</p></div></div><CommandBlock>{"succession publish --listing listing-ID\nsuccession fulfil --listing listing-ID --once\nsuccession claim --listing listing-ID --db buyer.db --tenant successor\nsuccession audit --check-chain"}</CommandBlock></Section>
+      </article>
     </div>
-  );
-}
-
-// -- small prose primitives ------------------------------------------------
-
-/** Body copy is ink. Muted is for labels and asides, a document whose own
- *  argument is set in the secondary colour reads as a footnote to itself. */
-function P({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return (
-    <p className={`mt-4 max-w-[70ch] text-body text-ink ${className}`}>
-      {children}
-    </p>
-  );
-}
-
-function Code({ children }: { children: ReactNode }) {
-  return (
-    <code className="bg-shade px-1.5 py-0.5 font-mono text-micro text-ink">
-      {children}
-    </code>
-  );
-}
-
-function Pre({ children }: { children: string }) {
-  return (
-    <pre className="mt-5 overflow-x-auto border border-rule bg-shade p-4 font-mono text-micro leading-relaxed text-ink">
-      {children}
-    </pre>
-  );
-}
-
-function Callout({ children, tone = "escrow" }: { children: ReactNode; tone?: "escrow" | "void" }) {
-  const border = tone === "void" ? "border-void/40" : "border-escrow/40";
-  return (
-    <div className={`mt-6 border-l-2 ${border} pl-4`}>
-      <p className="max-w-[68ch] text-body text-ink">{children}</p>
-    </div>
-  );
-}
-
-function Ol({ items }: { items: [string, string][] }) {
-  return (
-    <ol className="mt-5 space-y-3">
-      {items.map(([term, line], i) => (
-        <li key={term} className="flex gap-4">
-          <span className="tnum w-5 shrink-0 pt-0.5 text-xs text-faint">{i + 1}</span>
-          <span className="max-w-[66ch] text-body">
-            <span className="font-medium text-ink">{term}. </span>
-            <span className="text-ink">{line}</span>
-          </span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function Ul({ items }: { items: string[] }) {
-  return (
-    <ul className="mt-5 space-y-3">
-      {items.map((line) => (
-        <li key={line} className="flex gap-3">
-          <span className="pt-2 text-faint" aria-hidden>
-            <Badge>·</Badge>
-          </span>
-          <span className="max-w-[68ch] text-body text-ink">
-            {line}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
+  </div></AppShell>;
 }

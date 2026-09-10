@@ -6,6 +6,16 @@ on:
   pull_request:
 
 jobs:
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the deployable image from a clean checkout
+        run: docker build --tag succession-ci .
+      - name: Verify installed service and packaged contract data
+        run: docker run --rm succession-ci python -c "from service.app import app; from succession.chain import load_artifact; assert app.routes; assert load_artifact('ListingContract')['abi']"
+      - name: Verify container dependency compatibility
+        run: docker run --rm succession-ci python -m pip check
   test:
     runs-on: ubuntu-latest
     steps:
@@ -30,10 +40,25 @@ jobs:
       # The `test` extra declares every dependency the suite needs, so CI and a
       # contributor on a fresh clone install exactly the same set.
       - name: Install the package
-        run: pip install -e "packages/succession[test,service,chain,mcp]"
+        run: pip install -e "packages/succession[test,service,chain,mcp,acp]"
+
+      - name: Check all integrations share compatible dependencies
+        run: |
+          pip check
+          python -c "from virtuals_acp.client import VirtualsACP; from virtuals_acp.contract_clients.contract_client import ACPContractClient; from succession.mcp_server import build_server; assert build_server()"
 
       - name: Test
         run: pytest packages/succession/tests -p no:warnings
+
+      # The command reference the app renders is generated from the argparse
+      # parsers, so it is the same class of file as the contract ABI and needs
+      # the same guard. A generated file edited by hand kept CI red for 27
+      # commits before anyone noticed.
+      - name: The generated command reference is current
+        run: |
+          python scripts/generate_reference.py
+          git diff --exit-code -- web/src/app/reference.ts README.md \
+            || (echo "::error::stale reference; run python scripts/generate_reference.py and commit" && exit 1)
 
   web:
     runs-on: ubuntu-latest
@@ -56,9 +81,6 @@ jobs:
       - working-directory: web
         run: npm ci
 
-      # A hand-edited or stale ABI does not fail at build time — it fails as an
-      # unexplained revert with a buyer's money in escrow. Regenerate and
-      # insist nothing moved.
       - name: Check the generated ABI is current
         working-directory: web
         run: |
@@ -67,6 +89,14 @@ jobs:
 
       - working-directory: web
         run: npm run build
+
+      - name: Install Chromium for browser regression checks
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser regression checks
+        working-directory: web
+        run: npm run test:browser
 
   forge:
     runs-on: ubuntu-latest
@@ -139,4 +169,3 @@ jobs:
       - name: Every claim the project makes, from the installed package
         working-directory: /tmp
         run: /tmp/stranger/bin/succession audit
-

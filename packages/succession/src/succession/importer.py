@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+from eth_utils import keccak
 
 from .canonical import canonical_bytes
 from .export import build_package
@@ -34,7 +35,7 @@ from .memory.base import (
 )
 from .merkle import from_hex, to_hex
 from .provenance import SignatureError, verify_header
-from .smp import SMPPackage
+from .smp import SMPPackage, SMP_VERSION, DATA_CATEGORIES
 
 __all__ = [
     "ImportError_",
@@ -90,7 +91,8 @@ def verify_package(
 
     Runs before a single row is written. Returns the recovered signer address.
     """
-    delivered_root = to_hex(package.tree().root)
+    tree = package.tree()
+    delivered_root = to_hex(tree.root)
 
     header_root = package.header.get("integrity_root")
     if header_root != delivered_root:
@@ -114,6 +116,15 @@ def verify_package(
             committed=manifest_root or "",
             delivered=delivered_root,
         )
+
+    if package.header.get("smp_version") != SMP_VERSION:
+        raise ImportError_("unsupported SMP version")
+    if set(package.data) - set(DATA_CATEGORIES) or package.header.get("categories") != list(package.categories):
+        raise ImportError_("signed category declaration does not match the package")
+    if package.header.get("permissions_hash") != "0x" + keccak(canonical_bytes(package.permissions)).hex():
+        raise IntegrityMismatch("permissions do not match their signed digest", committed=committed_root, delivered=delivered_root)
+    if package.integrity != tree.to_manifest():
+        raise ImportError_("integrity manifest counts or category proofs disagree with the package")
 
     # The signature covers the whole header, so this also authenticates
     # agent_identity, the category list, and the provenance chain.
@@ -147,6 +158,17 @@ def import_package(
     expected_signer: str,
     category_map: dict[str, str] | None = None,
 ) -> ImportResult:
+    """An import either commits in full or leaves the destination unchanged."""
+    atomic = getattr(sink, "atomic_import", None)
+    if atomic is None:
+        raise ImportError_("destination adapter must support atomic_import before accepting memory")
+    with atomic():
+        return _import_package(package, sink, committed_root=committed_root,
+                               expected_signer=expected_signer, category_map=category_map)
+
+
+def _import_package(package: SMPPackage, sink: Any, *, committed_root: str,
+                    expected_signer: str, category_map: dict[str, str] | None = None) -> ImportResult:
     """Verify, write into a fresh tenant, then re-hash the destination.
 
     Raises :class:`IntegrityMismatch` on any mismatch — before writing if the

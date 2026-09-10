@@ -1,0 +1,30 @@
+{
+  "network": "base-sepolia",
+  "date": "2026-09-09",
+  "contract": "0x642dFC05C9DCC0617c67B318C78dd5AE94134603",
+  "service": "https://succession-production-7320.up.railway.app",
+  "frontend": "https://web-gray-xi-95.vercel.app",
+  "hosts": [
+    "Railway service with persistent /data volume",
+    "isolated seller, evaluator and buyer processes with separate local stores"
+  ],
+  "listing_id": "listing-08c10fa29aa950efda2106c3",
+  "agent_id": "erc8004:84532:0686",
+  "committed_root": "0x48922967b663404f33c79eca7cd43a9228e379d6c7dd41bbaf90fb3bfbb60a28",
+  "transactions": {
+    "evaluator_funding": "0x6a7abd4c16e46bab85ff416ef69f2012fad9af5a03cab8192bb50f9873fab7df",
+    "listed": "0xfdb630cff93b3483f1682ed2aea2431247e5be8978f716b75af67065e8d7a17b",
+    "payment_approval": "0x93b298249aa52eb5a9bb4df4ebefd4423302b2ebdb162ada06e424fc72b75565",
+    "escrowed": "0x08b88da1d08d0d05d71b58b7d11dc95cbdfe5f0249969465311454cbb22e8e30",
+    "settled": "0x07978210269e15d46f8bd2b3fdfea10bdb3decb50d11dd245f90e964a46c279d"
+  },
+  "recovery": {
+    "interruption": "Hosted process restarted after seller key release and before evaluation",
+    "observed_after_restart": "Evaluator key request returned HTTP 404",
+    "recovery_action": "Seller watcher republished from its durable vault",
+    "evaluator_result": "matching root and valid seller signature",
+    "settlement_result": "released by configured arbiter after three confirmations",
+    "buyer_result": "49 records imported; journal resumed after the initial certificate cursor failure",
+    "certificate_status": "VERIFIED"
+  }
+}

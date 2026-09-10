@@ -32,17 +32,22 @@ from __future__ import annotations
 
 import json
 import os
+import time
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from secrets import compare_digest
 from typing import Any
 
 from eth_utils import to_checksum_address
-from fastapi import Depends, FastAPI, HTTPException, Request
+from eth_account import Account
+from eth_account.messages import encode_defunct, defunct_hash_message
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
+from starlette.concurrency import run_in_threadpool
 
-from succession.publish import recover_seller_auth
+from succession.auth import request_message, MAX_AGE
 from succession.reputation import (
     LINEAGE_TARGET,
     MIN_RESOLVED,
@@ -53,11 +58,12 @@ from succession.reputation import (
     W_LINEAGE,
     W_SPAN,
 )
-from succession.settlement import ListingState, SettlementError
+from succession.settlement import ListingState, ListingNotFound, SettlementError
 from succession.smp import DATA_CATEGORIES, GENERATED_CATEGORIES
 
 from .demo import demo_rows, is_demo
 from .registry import MetadataRegistry
+from .models import public_preview, Envelope, Manifest, Header, UNVERIFIED_BASIS
 
 WORKDIR = Path(os.environ.get("SUCCESSION_WORKDIR", "marketplace-state"))
 
@@ -87,6 +93,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def private_key_responses(request: Request, call_next):
+    STORE.expire_keys()
+    response = await call_next(request)
+    if request.url.path.endswith("/key"):
+        response.headers["Cache-Control"] = "no-store, private"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Vary"] = "X-Succession-Address, X-Succession-Signature"
+    return response
 
 
 def require_admin(request: Request) -> None:
@@ -130,6 +147,13 @@ class Store:
         # the sale it belongs to, and this one is only useful for a few minutes
         # between the seller seeing escrow and the buyer importing.
         self.released: dict[str, str] = {}
+        self.key_expiry: dict[str, float] = {}
+
+    def expire_keys(self) -> None:
+        for listing_id, expires in list(self.key_expiry.items()):
+            if expires <= time.time():
+                self.released.pop(listing_id, None)
+                self.key_expiry.pop(listing_id, None)
 
     @property
     def registry(self) -> MetadataRegistry:
@@ -148,10 +172,8 @@ def _deployment() -> dict[str, Any] | None:
     import would keep reporting no chain until someone restarted it.
     """
     path = Path(
-        os.environ.get(
-            "SUCCESSION_DEPLOYMENT",
-            Path(__file__).resolve().parents[1] / "deployments" / "base-sepolia.json",
-        )
+        os.environ.get("SUCCESSION_DEPLOYMENT")
+        or Path(__file__).resolve().parents[1] / "deployments" / "base-sepolia.json"
     )
     if not path.is_file():
         return None
@@ -220,6 +242,19 @@ class ListingPost(BaseModel):
     integrity: dict[str, Any] = {}
     provenance: dict[str, Any] = {}
 
+    @field_validator('preview')
+    @classmethod
+    def valid_preview(cls, value):
+        public_preview(value)
+        return value
+
+    @field_validator('envelope','integrity','provenance')
+    @classmethod
+    def valid_documents(cls, value, info):
+        if value:
+            {'envelope':Envelope,'integrity':Manifest,'provenance':Header}[info.field_name].model_validate(value)
+        return value
+
 
 class KeyPost(BaseModel):
     """A content key a seller is releasing against funded escrow."""
@@ -243,46 +278,61 @@ def _seller_of(listing_id: str):
     chain, record = CHAIN_PROVIDER()
     try:
         return chain.get(listing_id), chain, record
-    except SettlementError as exc:
+    except ListingNotFound as exc:
         raise HTTPException(404, f"no listing {listing_id!r} on chain: {exc}") from exc
+    except SettlementError as exc:
+        raise HTTPException(503, "could not read the listing from the chain; please retry") from exc
 
 
-def _authenticate_seller(request: Request, listing_id: str, on_chain) -> str:
-    """Prove the caller is the address the *contract* records as this seller.
-
-    Checked against the chain rather than against anything stored here, so this
-    service cannot be talked into believing in a seller the contract does not
-    know about.
-    """
+async def _authenticate(request: Request, listing_id: str, expected: str, chain, record) -> str:
+    """Authenticate this exact request as an EOA or ERC-1271 contract wallet."""
     signature = request.headers.get("x-succession-signature", "")
-    if not signature:
-        raise HTTPException(401, "X-Succession-Signature is required")
     try:
-        recovered = recover_seller_auth(listing_id, signature)
-    except Exception as exc:  # noqa: BLE001 - any malformed signature is a 401
-        raise HTTPException(401, f"signature could not be recovered: {exc}") from exc
-    if to_checksum_address(recovered) != to_checksum_address(on_chain.seller):
-        raise HTTPException(
-            403,
-            f"{recovered} is not the seller of {listing_id}; the contract records "
-            f"{on_chain.seller}",
-        )
-    return recovered
+        timestamp = int(request.headers.get("x-succession-timestamp", ""))
+        nonce = request.headers.get("x-succession-nonce", "")
+        address = to_checksum_address(request.headers.get("x-succession-address", ""))
+        now = int(time.time())
+        if timestamp < now - MAX_AGE or timestamp > now + 30 or not re.fullmatch(r"[a-fA-F0-9]{32,64}", nonce):
+            raise ValueError("expired request or invalid nonce")
+        if address != to_checksum_address(expected):
+            raise HTTPException(403, "only the on-chain counterparty may authorize this operation")
+        message = request_message(listing_id=listing_id, method=request.method,
+            path=request.url.path, body=await request.body(), chain_id=int(record["chain_id"]),
+            contract=record["listing_contract"], timestamp=timestamp, nonce=nonce)
+        try:
+            valid = to_checksum_address(Account.recover_message(encode_defunct(text=message), signature=signature)) == address
+        except Exception:
+            valid = False
+        if not valid and chain.w3.eth.get_code(address):
+            wallet = chain.w3.eth.contract(address=address, abi=[{
+                "type":"function", "name":"isValidSignature", "stateMutability":"view",
+                "inputs":[{"name":"hash","type":"bytes32"},{"name":"signature","type":"bytes"}],
+                "outputs":[{"name":"magic","type":"bytes4"}]}])
+            valid = bytes(wallet.functions.isValidSignature(defunct_hash_message(text=message), bytes.fromhex(signature.removeprefix("0x"))).call()) == bytes.fromhex("1626ba7e")
+        if not valid:
+            raise ValueError("invalid signature")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(401, "valid, unexpired request authorization is required") from exc
+    if not STORE.registry.consume_nonce(address, nonce, expires=timestamp + MAX_AGE, now=now):
+        raise HTTPException(401, "authorization has already been used; sign a new request")
+    return address
 
 
 # --- routes --------------------------------------------------------------
 
 
 @app.post("/api/listings")
-def post_listing(body: ListingPost, request: Request) -> dict[str, Any]:
+async def post_listing(body: ListingPost, request: Request) -> dict[str, Any]:
     """Publish the parts of a listing the chain does not carry.
 
     The listing must already exist on chain and the caller must be its seller.
     Both are checked here rather than trusted, so this table cannot describe a
     sale that was never committed to.
     """
-    on_chain, _chain_backend, record = _seller_of(body.listing_id)
-    _authenticate_seller(request, body.listing_id, on_chain)
+    on_chain, _chain_backend, record = await run_in_threadpool(_seller_of, body.listing_id)
+    await _authenticate(request, body.listing_id, on_chain.seller, _chain_backend, record)
 
     if on_chain.hash_commitment.lower() != body.committed_root.lower():
         raise HTTPException(
@@ -290,6 +340,28 @@ def post_listing(body: ListingPost, request: Request) -> dict[str, Any]:
             f"the contract commits {body.listing_id} to {on_chain.hash_commitment}, "
             f"not {body.committed_root}",
         )
+
+    from succession.erc8004 import parse_agent_identity
+    from succession.provenance import verify_header
+    try:
+        identity_chain, token = parse_agent_identity(body.agent_identity)
+        actual_token = int(str(on_chain.agent_id).split(':')[-1])
+        if identity_chain != int(record['chain_id']) or token != actual_token:
+            raise ValueError('identity differs from the contract')
+        if body.chain_id != int(record['chain_id']) or body.contract.lower() != record['listing_contract'].lower():
+            raise ValueError('deployment differs from the contract')
+        if body.preview.get('agent_identity') not in (None, '', body.agent_identity):
+            raise ValueError('preview names a different identity')
+        if body.envelope and (body.envelope['listing_id'] != body.listing_id or body.envelope['hash_commitment'].lower() != on_chain.hash_commitment.lower()):
+            raise ValueError('envelope describes a different asset')
+        if body.integrity and body.integrity['root'].lower() != on_chain.hash_commitment.lower():
+            raise ValueError('manifest describes a different root')
+        if body.provenance:
+            verify_header(body.provenance, on_chain.seller)
+            if body.provenance['agent_identity'] != body.agent_identity or body.provenance['integrity_root'].lower() != on_chain.hash_commitment.lower():
+                raise ValueError('signed header describes a different asset')
+    except Exception as exc:
+        raise HTTPException(422, f'inconsistent listing metadata: {exc}') from exc
 
     STORE.registry.put(
         listing_id=body.listing_id,
@@ -345,10 +417,12 @@ def marketplace() -> dict[str, Any]:
     # to be missing from *both* to disappear, and anything either one invents is
     # dropped when the chain does not confirm it.
     discovered: list[str] = []
+    discovery = {'complete': False}
     try:
-        discovered = chain.listed_ids()
-    except Exception:  # noqa: BLE001 - a refused scan degrades, it does not blank
-        discovered = []
+        from .chain_index import discover
+        discovered, discovery = discover(chain, STORE.registry.db_path, _record)
+    except Exception as exc:
+        raise HTTPException(503, 'Could not read the listing index from chain; please retry.') from exc
 
     seen = set(discovered)
     listing_ids = list(discovered)
@@ -361,8 +435,10 @@ def marketplace() -> dict[str, Any]:
     for listing_id in listing_ids:
         try:
             on_chain = chain.get(listing_id)
-        except SettlementError:
+        except ListingNotFound:
             continue
+        except SettlementError as exc:
+            raise HTTPException(503, 'Could not refresh on-chain listing state; please retry.') from exc
         meta = STORE.registry.get(listing_id) or {}
         rows.append(_row_of(on_chain, meta))
 
@@ -375,6 +451,7 @@ def marketplace() -> dict[str, Any]:
         "listings": rows,
         "count": len(rows),
         "chain": True,
+        "discovery": discovery,
         "demo_listings": demo_rows(),
     }
 
@@ -388,9 +465,26 @@ def _row_of(on_chain: Any, meta: dict[str, Any]) -> dict[str, Any]:
     where the marketplace fell back to the on-chain value, which made a detail
     page render less than the row that linked to it.
     """
+    try:
+        preview = public_preview(meta.get('preview') or {})
+    except (ValueError, TypeError):
+        preview = {}
+    documents = {}
+    for name, model in [('integrity', Manifest), ('provenance', Header)]:
+        try:
+            document = meta.get(name) or {}
+            if document:
+                model.model_validate(document)
+            documents[name] = document
+        except (ValueError, TypeError):
+            documents[name] = {}
+    listing_data = on_chain.to_dict()
+    for field in ('price', 'escrow_balance'):
+        if abs(listing_data[field]) > 2**53 - 1:
+            listing_data[field] = str(listing_data[field])
     return {
-        "listing": on_chain.to_dict(),
-        "preview": meta.get("preview", {}),
+        "listing": listing_data,
+        "preview": preview,
         "name": meta.get("name", ""),
         "vertical": meta.get("vertical", ""),
         "valuation": meta.get("valuation", ""),
@@ -402,8 +496,8 @@ def _row_of(on_chain: Any, meta: dict[str, Any]) -> dict[str, Any]:
         # The Merkle manifest and the signed provenance header, when the seller
         # published them. Neither carries a record body: the manifest is roots
         # and counts, the header is the ownership chain and its signature.
-        "integrity": meta.get("integrity") or {},
-        "provenance": meta.get("provenance") or {},
+        "integrity": documents['integrity'],
+        "provenance": documents['provenance'],
         # Stated on every row, not only on the demo ones. A field that is
         # present-or-absent invites `row.demo === undefined` to read as false in
         # one place and as missing in another.
@@ -445,7 +539,7 @@ def envelope(listing_id: str) -> dict[str, Any]:
 
 
 @app.post("/api/listing/{listing_id}/key")
-def release_key(listing_id: str, body: KeyPost, request: Request) -> dict[str, Any]:
+async def release_key(listing_id: str, body: KeyPost, request: Request) -> dict[str, Any]:
     """A seller releases the content key. Escrow is re-checked here, not trusted.
 
     The seller has already satisfied themselves that escrow is funded — that is
@@ -454,32 +548,70 @@ def release_key(listing_id: str, body: KeyPost, request: Request) -> dict[str, A
     seller's say-so would be a service that could be talked into storing it
     early.
     """
-    on_chain, _chain, _record = _seller_of(listing_id)
-    _authenticate_seller(request, listing_id, on_chain)
+    on_chain, _chain, _record = await run_in_threadpool(_seller_of, listing_id)
+    await _authenticate(request, listing_id, on_chain.seller, _chain, _record)
+    STORE.expire_keys()
 
-    if on_chain.state is not ListingState.ESCROWED:
+    if on_chain.state not in (ListingState.ESCROWED, ListingState.CONFIRMED):
         raise HTTPException(
             409,
-            f"{listing_id} is {on_chain.state.value}; a key is only accepted "
-            "against funded escrow",
+            f"{listing_id} is {on_chain.state.value}; a key is accepted only "
+            "while escrow is funded or after evaluator settlement",
         )
     STORE.released[listing_id] = body.content_key
-    return {"listing_id": listing_id, "accepted": True, "buyer": on_chain.buyer}
+    # Long enough for post-settlement buyer recovery. The seller watcher
+    # republishes after relay restarts and while reconciling confirmation.
+    STORE.key_expiry[listing_id] = time.time() + 86_400
+    return {"listing_id": listing_id, "accepted": True, "buyer": on_chain.buyer,
+            "stage": on_chain.state.value}
+
+
+@app.get("/api/listing/{listing_id}/key/evaluator")
+async def collect_evaluator_key(listing_id: str, request: Request) -> dict[str, Any]:
+    """Release plaintext only to the configured evaluator before settlement."""
+    on_chain, chain, record = await run_in_threadpool(_seller_of, listing_id)
+    STORE.expire_keys()
+    if on_chain.state is not ListingState.ESCROWED:
+        raise HTTPException(409, f"{listing_id} is {on_chain.state.value}; evaluation requires funded escrow")
+    evaluator = await run_in_threadpool(lambda: chain.arbiter)
+    if not evaluator or evaluator == "0x0000000000000000000000000000000000000000":
+        raise HTTPException(503, "this deployment has no evaluator")
+    await _authenticate(request, listing_id, evaluator, chain, record)
+    key = STORE.released.get(listing_id)
+    if key is None:
+        raise HTTPException(404, "the seller has not released the evaluator key yet")
+    return {"listing_id": listing_id, "content_key": key}
 
 
 @app.get("/api/listing/{listing_id}/key")
-def collect_key(listing_id: str) -> dict[str, Any]:
-    """The buyer collects the key, once the seller has released it.
+async def collect_key(listing_id: str, request: Request) -> dict[str, Any]:
+    """The buyer collects the key only after evaluator settlement.
 
     Escrow is checked again on the way out. The window in which this service
     holds a usable key is the gap between the seller releasing it and the buyer
     importing, and it is bounded on both sides by the chain.
     """
-    on_chain, _chain, _record = _seller_of(listing_id)
-    if on_chain.state is not ListingState.ESCROWED:
+    on_chain, _chain, _record = await run_in_threadpool(_seller_of, listing_id)
+    STORE.expire_keys()
+    if on_chain.state is not ListingState.CONFIRMED:
+        if on_chain.state is ListingState.REFUNDED:
+            STORE.released.pop(listing_id, None)
+            STORE.key_expiry.pop(listing_id, None)
         raise HTTPException(
-            409, f"{listing_id} is {on_chain.state.value}; no key is available"
+            409, f"{listing_id} is {on_chain.state.value}; the buyer key is available only after evaluator settlement"
         )
+    try:
+        await run_in_threadpool(
+            _chain.confirmed_receipt,
+            listing_id,
+            from_block=int(_record.get("deployment_block", 0)),
+        )
+    except SettlementError as exc:
+        raise HTTPException(
+            425,
+            "evaluator settlement is mined but has not reached the configured finality depth",
+        ) from exc
+    await _authenticate(request, listing_id, on_chain.buyer, _chain, _record)
     key = STORE.released.get(listing_id)
     if key is None:
         raise HTTPException(
@@ -559,8 +691,20 @@ def chain_status() -> dict[str, Any]:
             "chain_id": None,
             "deployment": None,
         }
+    try:
+        chain, _ = CHAIN_PROVIDER()
+        actual_chain = chain.w3.eth.chain_id
+        if actual_chain != int(record['chain_id']):
+            raise ValueError('wrong network')
+        if not chain.w3.eth.get_code(record['listing_contract']):
+            raise ValueError('no deployed contract')
+        head = chain.w3.eth.block_number
+    except Exception:
+        return {'mode': 'unavailable', 'explanation': 'Deployment configured, but chain or contract health could not be verified.',
+                'chain_id': record.get('chain_id'), 'deployment': record}
     return {
         "mode": "chain",
+        "head_block": head,
         "explanation": "Reading listings from ListingContract on Base Sepolia.",
         "chain_id": record.get("chain_id"),
         "deployment": record,
@@ -647,11 +791,7 @@ def _reputation_model() -> dict[str, Any]:
     document a formula the code does not use.
     """
     return {
-        "basis": (
-            "Recomputed from the package on every read. Never stored, never "
-            "supplied by the seller, so a buyer derives the same figure from "
-            "the memory they received."
-        ),
+        "basis": UNVERIFIED_BASIS,
         "factors": [
             {
                 "name": "integrity",
@@ -762,8 +902,8 @@ def overview() -> dict[str, Any]:
             "by_state": by_state,
             # Minor units, like every other figure the API returns, so the
             # frontend formats money in exactly one place.
-            "volume_settled": volume_settled,
-            "volume_open": volume_open,
+            "volume_settled": str(volume_settled) if volume_settled > 2**53 - 1 else volume_settled,
+            "volume_open": str(volume_open) if volume_open > 2**53 - 1 else volume_open,
             "agents": len(agents),
             "sellers": len(sellers),
             # How many listings their seller actually described. The gap is
@@ -834,6 +974,10 @@ def health() -> dict[str, str]:
 # referenced nowhere else: no route above reads its state, and it never writes
 # to the metadata registry the marketplace reads. Every response it returns is
 # stamped ``simulated: true``.
-from .walkthrough import router as walkthrough_router  # noqa: E402
+from .walkthrough import session_middleware, router as walkthrough_router  # noqa: E402
 
+app.middleware("http")(session_middleware)
 app.include_router(walkthrough_router)
+
+from .request_limits import RequestSizeLimit  # noqa: E402
+app.add_middleware(RequestSizeLimit)

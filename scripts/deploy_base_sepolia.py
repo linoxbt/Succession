@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 from eth_account import Account
@@ -62,7 +63,7 @@ def require(name: str) -> str:
     return value
 
 
-def deploy(w3: Web3, account, name: str, *args) -> str:
+def deploy(w3: Web3, account, name: str, *args) -> tuple[str, dict]:
     artifact = load_artifact(name)
     factory = w3.eth.contract(abi=artifact["abi"], bytecode=artifact["bytecode"])
     tx = factory.constructor(*args).build_transaction(
@@ -80,7 +81,7 @@ def deploy(w3: Web3, account, name: str, *args) -> str:
     if receipt["status"] != 1:
         sys.exit(f"{name} deployment reverted ({receipt['transactionHash'].hex()})")
     print(f"  {name:<22} {receipt['contractAddress']}")
-    return receipt["contractAddress"]
+    return receipt["contractAddress"], dict(receipt)
 
 
 def connect_local():
@@ -153,15 +154,62 @@ def deploy_all(w3: Web3, account, *, local: bool = False) -> dict:
         # Neither Circle's USDC nor the ERC-8004 registry exists on an
         # in-process chain, so both are stood up here. This is the only path
         # that is allowed to use the stand-in.
-        payment_token = deploy(w3, account, "MockERC20")
-        registry = deploy(w3, account, "MockIdentityRegistry")
+        payment_token, _ = deploy(w3, account, "MockERC20")
+        registry, _ = deploy(w3, account, "MockIdentityRegistry")
         registry_is_mock = True
     else:
         registry = registry or DEFAULT_IDENTITY_REGISTRY
         registry_is_mock = _verify_registry(w3, registry)
 
-    arbiter = os.environ.get("ARBITER_ADDRESS", account.address)
-    listings = deploy(w3, account, "ListingContract", payment_token, registry, arbiter)
+        token = w3.eth.contract(address=Web3.to_checksum_address(payment_token), abi=[
+            {"name": "symbol", "type": "function", "stateMutability": "view", "inputs": [], "outputs": [{"type": "string"}]},
+            {"name": "decimals", "type": "function", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint8"}]},
+        ])
+        if not w3.eth.get_code(payment_token):
+            sys.exit(f"PAYMENT_TOKEN_ADDRESS {payment_token} holds no code")
+        try:
+            symbol, decimals = token.functions.symbol().call(), token.functions.decimals().call()
+        except Exception as exc:
+            sys.exit(f"PAYMENT_TOKEN_ADDRESS {payment_token} is not ERC-20 compatible: {exc}")
+        if symbol != "USDC" or int(decimals) != 6:
+            sys.exit(f"payment token must be 6-decimal USDC, got {symbol}/{decimals}")
+        print(f"  payment token         {payment_token} ({symbol}, {decimals} decimals)")
+
+    evaluator_key = os.environ.get("SUCCESSION_EVALUATOR_KEY")
+    if local:
+        arbiter = os.environ.get("ARBITER_ADDRESS", account.address)
+    else:
+        if not evaluator_key:
+            sys.exit("SUCCESSION_EVALUATOR_KEY is required for a live deployment")
+        evaluator = Account.from_key(evaluator_key).address
+        arbiter = os.environ.get("ARBITER_ADDRESS", evaluator)
+        if arbiter.lower() != evaluator.lower():
+            sys.exit("ARBITER_ADDRESS does not match SUCCESSION_EVALUATOR_KEY")
+        known = {account.address.lower(), evaluator.lower()}
+        for name in ("SELLER_PRIVATE_KEY", "BUYER_PRIVATE_KEY"):
+            if os.environ.get(name):
+                known.add(Account.from_key(os.environ[name]).address.lower())
+        expected = 2 + sum(bool(os.environ.get(name)) for name in ("SELLER_PRIVATE_KEY", "BUYER_PRIVATE_KEY"))
+        if len(known) != expected:
+            sys.exit("deployer, seller, buyer and evaluator must use distinct wallets")
+
+    listings, deployment_receipt = deploy(
+        w3, account, "ListingContract", payment_token, registry, arbiter
+    )
+    # Public RPC nodes can briefly serve a receipt from one backend and stale
+    # account state from another. Do not persist the empty-code hash as the
+    # deployment fingerprint; wait until the runtime is readable and fail if
+    # the provider never converges.
+    deadline = time.monotonic() + 60
+    runtime_code = w3.eth.get_code(listings)
+    while not runtime_code and time.monotonic() < deadline:
+        time.sleep(1)
+        runtime_code = w3.eth.get_code(listings)
+    if not runtime_code:
+        sys.exit(f"deployment receipt succeeded but {listings} still has no runtime code")
+    tx_hash = deployment_receipt["transactionHash"].hex()
+    if not tx_hash.startswith("0x"):
+        tx_hash = "0x" + tx_hash
 
     return {
         "network": "local" if local else "base-sepolia",
@@ -172,6 +220,9 @@ def deploy_all(w3: Web3, account, *, local: bool = False) -> dict:
         "payment_token": payment_token,
         "arbiter": arbiter,
         "deployer": account.address,
+        "deployment_tx": tx_hash,
+        "deployment_block": int(deployment_receipt["blockNumber"]),
+        "runtime_code_hash": w3.keccak(runtime_code).hex(),
         # No explorer for an in-process chain: a Basescan link to an address
         # that only ever existed in memory is a link to nothing.
         "explorer": (

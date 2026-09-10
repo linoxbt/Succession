@@ -7,7 +7,8 @@ import copy
 import pytest
 from eth_utils import to_checksum_address
 
-from succession.demokeys import BUYER, SELLER
+from succession.demokeys import BUYER, SELLER, EVALUATOR
+from succession.evaluator import Evaluator
 from succession.envelope import EnvelopeError, open_envelope, seal_package
 from succession.seal import SealRegistry, TenantSealed, guard
 from succession.settlement import ListingState, LocalSettlement, SettlementError
@@ -19,7 +20,7 @@ PRICE = 420_000_000  # 420 USDC, 6 decimals
 
 @pytest.fixture
 def settlement(tmp_path):
-    return LocalSettlement(tmp_path / "settlement.db")
+    return LocalSettlement(tmp_path / "settlement.db", arbiter=EVALUATOR.address)
 
 
 @pytest.fixture
@@ -40,7 +41,8 @@ def listed(seller, settlement, agent_id):
     )
 
 
-def _run(listed, settlement, seals, seller, buyer, *, envelope=None):
+def _run(listed, settlement, seals, seller, buyer, tmp_path, *, envelope=None):
+    from succession.memory.sibyl import open_tenant
     return execute_transfer(
         listing_id=LISTING,
         settlement=settlement,
@@ -49,6 +51,8 @@ def _run(listed, settlement, seals, seller, buyer, *, envelope=None):
         content_key=listed.content_key,
         seller_tenant_id=seller.tenant_id,
         buyer_sink=buyer,
+        evaluator_sink=open_tenant(tmp_path / "evaluator.db", "evaluator"),
+        evaluator=Evaluator(EVALUATOR.private_key),
         buyer_identity=BUYER.agent_id,
         buyer_address=BUYER.address,
         expected_signer=SELLER.address,
@@ -58,9 +62,9 @@ def _run(listed, settlement, seals, seller, buyer, *, envelope=None):
 # -- the happy path -------------------------------------------------------
 
 
-def test_full_transfer(listed, settlement, seals, seller, buyer):
+def test_full_transfer(listed, settlement, seals, seller, buyer, tmp_path):
     settlement.buy(LISTING, buyer=BUYER.address, amount=PRICE)
-    outcome = _run(listed, settlement, seals, seller, buyer)
+    outcome = _run(listed, settlement, seals, seller, buyer, tmp_path)
 
     assert outcome.verified
     assert outcome.committed_root == outcome.delivered_root
@@ -75,9 +79,9 @@ def test_full_transfer(listed, settlement, seals, seller, buyer):
     assert listing.escrow_balance == 0
 
 
-def test_the_certificate_reports_what_actually_happened(listed, settlement, seals, seller, buyer):
+def test_the_certificate_reports_what_actually_happened(listed, settlement, seals, seller, buyer, tmp_path):
     settlement.buy(LISTING, buyer=BUYER.address, amount=PRICE)
-    outcome = _run(listed, settlement, seals, seller, buyer)
+    outcome = _run(listed, settlement, seals, seller, buyer, tmp_path)
     cert = outcome.certificate
 
     assert cert.status == "VERIFIED"
@@ -90,9 +94,9 @@ def test_the_certificate_reports_what_actually_happened(listed, settlement, seal
     assert cert.to_json()
 
 
-def test_the_seller_is_sealed_and_the_buyer_is_not(listed, settlement, seals, seller, buyer):
+def test_the_seller_is_sealed_and_the_buyer_is_not(listed, settlement, seals, seller, buyer, tmp_path):
     settlement.buy(LISTING, buyer=BUYER.address, amount=PRICE)
-    _run(listed, settlement, seals, seller, buyer)
+    _run(listed, settlement, seals, seller, buyer, tmp_path)
 
     sealed_seller = guard(seller, seals)
     with pytest.raises(TenantSealed):
@@ -102,9 +106,9 @@ def test_the_seller_is_sealed_and_the_buyer_is_not(listed, settlement, seals, se
     live_buyer.client.set_entity("commitment", "new-quote", {"rate": 1})
 
 
-def test_the_post_sale_record_lands_in_the_buyers_memory(listed, settlement, seals, seller, buyer):
+def test_the_post_sale_record_lands_in_the_buyers_memory(listed, settlement, seals, seller, buyer, tmp_path):
     settlement.buy(LISTING, buyer=BUYER.address, amount=PRICE)
-    outcome = _run(listed, settlement, seals, seller, buyer)
+    outcome = _run(listed, settlement, seals, seller, buyer, tmp_path)
 
     acquisition = buyer.client.get_entity("provenance", "acquisition")["body"]
     assert acquisition["acquired_from"] == listed.export.package.header["agent_identity"]
@@ -127,7 +131,7 @@ def test_a_resale_extends_the_provenance_chain(listed, settlement, seals, seller
     from succession.memory.sibyl import open_tenant
 
     settlement.buy(LISTING, buyer=BUYER.address, amount=PRICE)
-    _run(listed, settlement, seals, seller, buyer)
+    _run(listed, settlement, seals, seller, buyer, tmp_path)
 
     acquisition = buyer.client.get_entity("provenance", "acquisition")["body"]
     resale = export_tenant(
@@ -147,7 +151,7 @@ def test_a_resale_extends_the_provenance_chain(listed, settlement, seals, seller
 
 
 def test_a_tampered_envelope_refunds_and_leaves_nothing_behind(
-    listed, settlement, seals, seller, buyer
+    listed, settlement, seals, seller, buyer, tmp_path
 ):
     settlement.buy(LISTING, buyer=BUYER.address, amount=PRICE)
 
@@ -160,7 +164,7 @@ def test_a_tampered_envelope_refunds_and_leaves_nothing_behind(
         key=listed.content_key,
     )
 
-    outcome = _run(listed, settlement, seals, seller, buyer, envelope=bad_envelope)
+    outcome = _run(listed, settlement, seals, seller, buyer, tmp_path, envelope=bad_envelope)
 
     assert outcome.outcome == "refunded"
     assert outcome.receipt.outcome == "refunded"
@@ -171,7 +175,7 @@ def test_a_tampered_envelope_refunds_and_leaves_nothing_behind(
 
 
 def test_the_seller_keeps_operating_after_a_failed_sale(
-    listed, settlement, seals, seller, buyer
+    listed, settlement, seals, seller, buyer, tmp_path
 ):
     settlement.buy(LISTING, buyer=BUYER.address, amount=PRICE)
     tampered = copy.deepcopy(listed.export.package)
@@ -182,7 +186,7 @@ def test_the_seller_keeps_operating_after_a_failed_sale(
         hash_commitment=listed.committed_root,
         key=listed.content_key,
     )
-    _run(listed, settlement, seals, seller, buyer, envelope=bad_envelope)
+    _run(listed, settlement, seals, seller, buyer, tmp_path, envelope=bad_envelope)
 
     guard(seller, seals).client.set_entity("commitment", "still-trading", {"rate": 1})
 
@@ -190,10 +194,10 @@ def test_the_seller_keeps_operating_after_a_failed_sale(
 # -- escrow gating --------------------------------------------------------
 
 
-def test_the_content_key_is_useless_before_escrow(listed, settlement, seals, seller, buyer):
+def test_the_content_key_is_useless_before_escrow(listed, settlement, seals, seller, buyer, tmp_path):
     """No escrow, no delivery — the transfer refuses to run at all."""
     with pytest.raises(SettlementError, match="funded escrow"):
-        _run(listed, settlement, seals, seller, buyer)
+        _run(listed, settlement, seals, seller, buyer, tmp_path)
     assert buyer.is_empty()
 
 
@@ -268,13 +272,14 @@ def test_a_funded_listing_cannot_be_cancelled(listed, settlement):
         settlement.cancel(LISTING, seller=SELLER.address)
 
 
-def test_settlement_cannot_be_confirmed_twice(listed, settlement, seals, seller, buyer):
+def test_settlement_cannot_be_confirmed_twice(listed, settlement, seals, seller, buyer, tmp_path):
     settlement.buy(LISTING, buyer=BUYER.address, amount=PRICE)
-    _run(listed, settlement, seals, seller, buyer)
+    _run(listed, settlement, seals, seller, buyer, tmp_path)
 
     with pytest.raises(SettlementError, match="nothing is escrowed"):
         settlement.confirm_transfer(
-            LISTING, delivered_hash=listed.committed_root, buyer_identity=BUYER.agent_id
+            LISTING, delivered_hash=listed.committed_root, buyer_identity=BUYER.agent_id,
+            caller=EVALUATOR.address,
         )
 
 

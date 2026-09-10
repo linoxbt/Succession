@@ -50,7 +50,8 @@ def main() -> int:
         shutil.rmtree(work)
     work.mkdir(parents=True)
 
-    settlement = LocalSettlement(work / "settlement.db")
+    from succession.demokeys import EVALUATOR
+    settlement = LocalSettlement(work / "settlement.db", arbiter=EVALUATOR.address)
     seals = SealRegistry(work / "seals.db")
 
     seller = open_tenant(work / "seller.db", "tenant-seller")

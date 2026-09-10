@@ -1,254 +1,92 @@
-# Roadmap — what's left to be production-ready
+# Roadmap and release gates
 
-An honest inventory. Written against what is actually in the repository today,
-not against an idealised version of it.
+Updated 9 September 2026. [AUDIT_STATUS.md](AUDIT_STATUS.md) records verification;
+[OPERATIONS.md](OPERATIONS.md) describes supported behavior.
 
-**Legend** — `P0` blocks the hackathon submission · `P1` blocks a real pilot ·
-`P2` blocks general availability · `P3` is the protocol thesis
+## Release blockers
 
----
+- [x] **Delivery/refund policy:** mandatory independent evaluator verification
+  and settlement before buyer key release, implemented and verified locally.
+- [ ] **Live ACP acceptance:** establish seller/buyer registration and real
+  resolved job evidence. Integration code and synthetic fixtures do not prove it.
+- [x] **Live evaluator acceptance:** exercise independently derived verification
+  and authorized settlement with the selected policy.
+- [x] **New coordinated deployment:** deploy the changed contract, service and
+  frontend, verify runtime code and configuration, and update deployment records.
+- [x] **EOA wallet acceptance:** test funding, signing, claim and settlement through
+  supported providers. Contract-wallet authorization passes on a local EVM;
+  provider-specific acceptance is still outstanding.
+- [x] **Two-host rehearsal:** export/import across the local operator and hosted relay, interrupt
+  parties, recover the certificate, and verify seller retirement through existing
+  and reopened clients.
+- [x] **Independent review pass and finality policy:** Slither/manual review is
+  recorded; writes and recovered receipts require three confirmations. This is
+  not a third-party professional audit or deep L1 reorg reconciliation.
 
-## P0 — Blocks submission (deadline 10 September)
+## Implemented locally
 
-These need credentials and a network route, not code. The code paths are
-complete and tested; `./scripts/finish_integrations.sh` runs them with
-preflight checks.
+These are source capabilities with regression coverage, not deployment claims.
 
-- [ ] **Register both demo agents on the Virtuals ACP Service Registry.**
-      Through the ACP Tech Playbook — it issues the whitelisted wallet and
-      entity id. An unregistered agent cannot be discovered or hired, so this is
-      a prerequisite, not a detail. Do it first; it gates everything else.
-- [ ] **Sync real ACP job history** — `succession-acp sync`. Until this runs the
-      data room shows self-reported figures only, which is exactly the weakness
-      the integration exists to remove.
-- [ ] **Fund a Base Sepolia deployer key** (faucet: docs.base.org/get-started/get-funds).
-- [ ] **Deploy `ListingContract`** — `python scripts/deploy_base_sepolia.py`.
-- [ ] **Run 5 real transfers** — `python scripts/run_transfers.py --count 5`.
-      Each gets its own agent identity and tenant; one is corrupted on purpose,
-      because five successes say nothing about the refund path.
-- [x] **Point `IDENTITY_REGISTRY_ADDRESS` at a real ERC-8004 registry.** Done:
-      `0x7177a6867296406881E20d6647232314736Dd09A` on Base Sepolia, verified on
-      chain (ERC-721 by `supportsInterface`, live agents, every function
-      `ListingContract` calls present). It is the default; the ERC-721 stand-in
-      is now reachable only from `--local`, and the deploy script exits rather
-      than build on an address holding no code.
-- [ ] **Re-record the hosted artifact** — `python scripts/record_run.py` folds
-      the real ledger in, so the console's Transfers view shows actual
-      transactions.
-- [ ] **The two-machine rehearsal.** Seller and buyer on genuinely separate
-      hosts, twice, before recording. Not simulate-able with two browser tabs.
-- [ ] **Film the 2–5 minute demo.** Must include the fresh-session recall beat.
-      The beats are built and `python -m succession.demo` prints them in order.
-- [ ] **Deploy the site.** Netlify project `succession-memory` exists and
-      `netlify.toml` is complete; link the repo under Build & deploy.
-- [ ] **Two build-in-public posts** on X or Farcaster.
-- [ ] **Verify the contract on Basescan** so a judge can read the source at the
-      address.
+- [x] Buyer-authenticated key access and seller-authenticated publication/release,
+  with exact-body/deployment binding, expiry and durable replay protection.
+- [x] Disclosure/consent filtering across storage tiers, signed permissions
+  validation, and explicit unverified reputation labels.
+- [x] Transactional import/acquisition journal, retryable completion, certificates
+  and automatic acquisition history in subsequent same-identity exports.
+- [x] Seller vault preparation before broadcast, a consistent listing snapshot,
+  publish resumption and repeated key relay until settlement.
+- [x] Durable cooperative source-tenant retirement after observed confirmation.
+- [x] New-owner identity resale. Partial memory selection still transfers the
+  entire identity NFT and retires the source tenant.
+- [x] Evaluator-only confirmation, post-settlement buyer claim authorization,
+  cancel/refund/expiry controls, exact monetary units and safe shell arguments.
+- [x] Per-visitor walkthrough isolation, expiry, capacity limits and serialized actions.
+- [x] Remembered margin-floor/opening-premium calculations, citations and input
+  validation. The agent is deterministic retrieval, not an LLM.
+- [x] MCP coverage of every CLI command through isolated subprocesses, a mutation
+  gate and operator-managed signer environment.
+- [x] Durable bounded listing discovery, restart cursors, shallow reorg repair,
+  and distinct unavailable/incomplete results.
+- [x] Deferred console/wallet loading, browser regression CI, generated-reference
+  checks, and a clean-container build/smoke check.
 
-## P1 — Blocks a real pilot
+## Operational work before a real pilot
 
-### Security
+- [x] Define evaluator custody for this release: dedicated mode-600 EOA environment,
+  distinct from deployer/seller/buyer and funded only with minimal testnet gas.
+- [ ] Protect plaintext local memory and seller-vault backups; demonstrate restore
+  of memory and its seal/acquisition journals.
+- [ ] Add edge rate limits, request timeouts and measured concurrency budgets.
+  JSON size limits and bounded demo sessions do not establish sustained capacity.
+- [ ] Add structured operational logs, metrics and alerts for missed fulfilment,
+  expired escrow, RPC errors and failed local retirement.
+- [ ] Extend settlement reorg recovery and listing reindexing beyond the shallow
+  replay window, including finality and reconciliation rules.
+- [ ] Benchmark large stores and establish a supported ceiling. Export and
+  encryption still materialize the package in memory.
+- [ ] Use shared relay/session storage before enabling multiple service workers.
+  Metadata/ciphertext already persist; keys and demo sessions remain process-local.
+  The seller watcher must stay available to republish expired keys.
+- [ ] Exercise dispute handling and responsibility for post-settlement failures.
+- [ ] Extend browser tests to a complete connected-wallet transaction lifecycle.
 
-- [ ] **Third-party contract audit.** `ListingContract` has 27 py-evm tests, 28
-      Foundry tests and a fuzz case, which is not an audit. Custody code that has
-      not been audited should not hold anyone's money.
-- [ ] **Key management.** Signing keys are read from the environment. Production
-      needs a KMS or HSM, per-agent key isolation, and rotation without
-      invalidating historical provenance signatures.
-- [ ] **Replace `LocalSettlement` in every production path.** It exists for
-      tests and offline development; a config that silently falls back to it
-      would report settled sales that never touched a chain. Make the fallback
-      impossible rather than discouraged.
-- [x] **Authenticate the service.** Done, narrowly: every mutating route is
-      behind `require_write_access`. With `SUCCESSION_API_TOKEN` set it requires
-      a bearer token; unset, it serves writes to localhost only and refuses them
-      from anywhere else, so a deployed service cannot be written to by default.
-      Reads stay open by design.
-- [ ] **Rate-limit the service.** Still absent. The auth gate bounds *who* can
-      write, not how often, and `POST /api/demo/reset` is expensive.
-- [ ] **Real authentication and accounts.** The gate above is a shared secret,
-      not a user model — see Product below.
-- [ ] **Content-key custody.** The key currently lives in the listing process's
-      memory. It needs escrowing somewhere durable that still cannot release it
-      before escrow funds, and a defined recovery path when the seller's process
-      dies mid-sale.
-- [ ] **Encrypt memory at rest.** SQLite stores are plaintext on disk.
+## Product and protocol expansion
 
-### Correctness
+- [ ] Review disclosure flags and evidence of authority to transfer counterparty
+  data; publish applicable product terms and privacy documentation.
+- [ ] Seller preview/review UX beyond CLI inventory and data-room commands.
+- [ ] Funding/completion/expiry notifications and watchlists.
+- [ ] Independent reputation and demand-based pricing backed by verifiable evidence.
+  Heuristic valuation and self-reported lineage must retain their labels.
+- [ ] A second memory engine, format migrations and independent conformance vectors.
+- [ ] Lease, conditional handover, inheritance triggers, merge, split and revocation.
+  Percentage filtering alone implements none of their ownership/enforcement rules.
+- [ ] Cross-engine lineage, fractional ownership and lending remain exploratory.
 
-- [x] **An Evaluator agent for the arbiter role.** Built — `evaluator.py`. It
-      re-runs the export pipeline over the buyer's own store rather than
-      checking a number it was handed, signs a domain-separated verdict, and
-      settles as the contract's arbiter with its own root. Receipts record
-      `confirmed_by` so a buyer's self-report never reads as an independent
-      check. **Still open:** the buyer can deny the evaluator access to their
-      store, in which case the escrow expires back to them and nobody is paid —
-      correct, but it means the evaluator is opt-in rather than enforced. Making
-      access a condition of the key release is the next step.
-- [ ] **Dispute resolution.** What happens when buyer and seller disagree after
-      settlement. Currently: nothing.
-- [ ] **Idempotent settlement recovery.** If the process dies between
-      `confirmTransfer` landing and the off-chain seal, the seller is unsealed
-      against a completed sale. Needs a reconciler that replays from chain
-      events.
-- [ ] **Handle chain reorgs.** Settlement is treated as final on receipt.
-- [ ] **Gas and fee estimation**, with a ceiling and a retry policy.
-- [ ] **Large-store performance.** The pipeline holds the whole package in
-      memory and hashes it in one pass. Fine at 8 KB; unknown at 500 MB. Needs
-      streaming export, chunked hashing, and a measured ceiling.
-- [ ] **Concurrency.** Two exports of one tenant during a write are untested.
-      Needs a snapshot boundary.
+## Demonstration work
 
-### Product
-
-- [ ] **Real authentication and accounts.** There is no notion of a user. A
-      connected wallet is now an *address*, not an account — nothing is
-      authorised against it server-side.
-- [x] **Multi-listing marketplace.** Now genuinely multi-seller: every row is
-      read from `ListingContract` and joined with metadata its own seller
-      published. The six seeded exports are gone — an empty marketplace means
-      nobody has listed, which is the honest answer.
-- [ ] **Watchlists and search** across the marketplace.
-- [x] **Seller onboarding** — `succession list` exports a seller's own store,
-      commits its root on chain and vaults the key. A terminal flow rather than
-      a form because Sibyl 0.8.0 is local-only and no browser can read a store;
-      the *Sell* screen builds the exact command. Previewing what a buyer will
-      see before committing is still to do.
-- [ ] **A redaction review UI.** Flags are still set in code, but the listing
-      flow now *reads* them: the scope selector greys out and disables any
-      category with nothing sellable in it, from the data room's per-category
-      transferability report. Setting the flags is what remains.
-- [ ] **Notifications** — listing sold, escrow funded, transfer verified,
-      confirmation window expiring.
-- [ ] **Fiat on-ramp** or a clear statement that this is crypto-native only.
-
-### Operations
-
-- [ ] **Observability.** No metrics, traces or structured logs anywhere.
-- [ ] **Alerting** on failed settlements, expired escrows and seal failures.
-- [ ] **Backups** of seal registry and settlement state. Losing the seal
-      registry means sold agents become writable again.
-- [ ] **Runbook** for a stuck transfer, a failed seal, and a disputed sale.
-- [ ] **Staging environment** on Base Sepolia, separate from local.
-
-## P2 — Blocks general availability
-
-### Legal and compliance
-
-- [ ] **Counterparty data transfer.** The unresolved question: under what terms
-      can records describing real customers move with a sale? Needs an answer
-      grounded in the operator's own terms of service, and probably a consent
-      mechanism for the counterparties themselves. This is the single largest
-      non-technical risk in the project.
-- [ ] **GDPR/CCPA.** Right to erasure versus an immutable hash commitment is a
-      genuine conflict. Likely resolution: commit to salted hashes of erasable
-      records so deletion does not invalidate the tree.
-- [ ] **Terms of service, privacy policy, and a seller warranty** about what
-      they are entitled to sell.
-- [ ] **Tax treatment** of memory-asset sales.
-- [ ] **Sanctions screening** on both wallets.
-
-### The lifecycle primitives
-
-| Primitive | State | Work |
-|---|---|---|
-| Sell | Built | — |
-| Partial succession | Built | — |
-| Archive | Free | Sibyl's own semantics at tenant level |
-| **Lease** | Designed | A scheduled re-seal of the buyer's tenant, or an on-chain expiry a reader checks |
-| **Conditional** | Designed | An oracle-style condition gate before the key releases |
-| **Inherit** | Roadmap | The same pipeline, different trigger, no price discovery |
-| **Merge** | Roadmap | Two evolved memories and a conflict rule for colliding `(category, name)` keys. Its own project. |
-| **Split** | Roadmap | The inverse of merge; reuses the category filtering |
-| **Revoke** | Roadmap | Depends on lease existing first |
-
-### Protocol maturity
-
-- [ ] **A second memory engine implementing SMP.** The strongest possible proof
-      this is a protocol and not a Sibyl feature. Nothing above the adapter layer
-      needs to change; write a second `MemorySource`/`MemorySink`.
-- [ ] **Version and migrate the SMP format.** It is `1.0` with no migration path.
-- [ ] **Publish the format** for independent implementation.
-- [ ] **Reference test vectors** so another implementation can prove
-      conformance.
-- [ ] **Mainnet deployment** on Base, after audit.
-
-## P3 — The protocol thesis
-
-- [ ] **Memory reputation.** A memory asset developing its own reputation across
-      lineages — successful inheritances, post-hoc buyer satisfaction, integrity
-      record. Needs real transaction volume; faking it is exactly the pattern the
-      rubric penalises.
-- [ ] **Demand-based valuation.** The `buyer_demand`, `origin_reputation` and
-      `buyer_satisfaction` terms, once a marketplace exists to compute them from.
-- [ ] **Cross-engine lineage.** Provenance chains spanning different memory
-      engines.
-- [ ] **Fractional ownership** of a memory asset.
-- [ ] **Memory-collateralised lending.** The customer book as collateral is the
-      natural consequence of making it property.
-
----
-
-### Newly introduced, and worth stating
-
-- [ ] **Seller liveness.** The content key is released by the seller's own
-      `succession fulfil` watcher, after it reads `Escrowed` from the chain
-      itself. Nobody else holds the key — not this marketplace — so a buyer whose
-      seller is offline waits. That is a deliberate trade for not trusting the
-      service with the key, and it is bounded: `reclaimExpired` returns the
-      buyer's money after the confirmation window without the seller's
-      cooperation. A seller daemon with an uptime guarantee, or a threshold
-      escrow of the key, is the real fix.
-- [ ] **Listings are discoverable only if their metadata was published.** The
-      chain is authoritative for every listing, but the marketplace enumerates
-      what sellers have posted to `service/registry.py`. A listing made on chain
-      without posting metadata is real and invisible. Indexing `Listed` events
-      directly would close that.
-
-## Known technical debt
-
-Small, specific, and worth writing down before it is forgotten.
-
-- [ ] `service/app.py` holds the listing envelope and content key in process
-      memory, so a restart loses an *in-flight* sale. Needs durable storage —
-      with the constraint that the content key must still be unreleasable
-      before escrow funds, which is why it is not simply written next to the
-      ciphertext. A *settled* sale now survives a restart: the outcome and its
-      certificate are persisted under the workdir and served from
-      `GET /api/listing/outcome`.
-- [ ] The recorded-run artifact is regenerated manually. It should be a CI step,
-      so it cannot drift from the pipeline it claims to record.
-- [ ] `npm audit` reports three findings in `web` and two in `contracts`, all in
-      build tooling (vite, esbuild, postcss, solc). `npm audit --omit=dev` is
-      clean, so none of them reach a browser. Clearing them needs
-      `npm audit fix --force`, which is a major version bump of the build chain;
-      deliberately deferred rather than done days before a deadline, and worth
-      doing immediately after.
-- [ ] The service must run with a single worker: envelopes and content keys are
-      held in process memory by design, so a second worker serves 409s for a
-      listing it cannot see. Documented in `service/README.md`; the real fix is
-      the durable envelope storage above.
-- [ ] `contracts/compile.js` exists because Foundry could not be installed in the
-      build environment. Both toolchains now run green in CI, so one of the two
-      paths could go — but the py-evm suite is what executes where Foundry is
-      unavailable, and the Foundry suite reaches things only a cheatcode can, so
-      keeping both is a deliberate cost rather than an oversight.
-- [ ] The agent's stopword list is hand-maintained. It works for freight; another
-      domain would want a different one, or none.
-- [ ] `_prune_dangling_relations` is O(n) per record against a set built each
-      call. Fine at 49 records, not at 49,000.
-- [ ] The wallet stack is its own bundle chunk, but still ships on first load
-      because `WagmiProvider` wraps the whole app. Mounting it only in on-chain
-      mode would save ~85 KB gzipped for every visitor in recorded mode, at the
-      cost of remounting the tree when a deployment appears.
-- [ ] The web app's route handling is a single path check. A third destination
-      justifies a router.
-- [ ] No E2E test drives the browser against the live service — the Playwright
-      passes are manual. (The Part 9 rebuild was verified this way: list, fund,
-      deliver, settle, screenshot. It should be a CI job, not a habit.)
-- [ ] The frontend re-implements `listing_id_to_bytes32` in TypeScript because
-      it builds its own calldata. Shared vectors are pinned in
-      `test_listing_id_encoding_vectors`, but a shared fixture file would be
-      better than two implementations agreeing by test.
-- [ ] `demokeys.py` ships hardcoded keys. They are worthless and documented as
-      such, but a production build should not compile them in at all.
+- [x] Record a fresh demonstration from the changed deployment, including cold
+  recall and a deliberate failure/recovery path.
+- [ ] Distinguish sample memory, simulated walkthrough settlement, local EVM runs
+  and real testnet transactions in every artifact.
+- [ ] Confirm current submission requirements and dates before publishing materials.

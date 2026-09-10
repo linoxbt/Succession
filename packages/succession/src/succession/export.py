@@ -177,6 +177,20 @@ def export_tenant(
     ERC-8004 identity. That is what makes the signature mean "the agent being
     sold attested to this", rather than "some key attested to this".
     """
+    if provenance_chain is None:
+        # Completion writes this record into the successor's tenant. Carry it
+        # into resale without requiring callers to reconstruct it by hand.
+        # It remains seller-reported history, not independently verified proof.
+        for record in source.entities():
+            if record.get("category") != "provenance" or record.get("name") != "acquisition":
+                continue
+            body = record.get("body") or {}
+            if body.get("acquired_from") != agent_identity or not read_disclosure(body).may_transfer:
+                continue
+            provenance_chain = body.get("provenance_chain", [])
+            if not isinstance(provenance_chain, list) or not all(isinstance(link, dict) for link in provenance_chain):
+                raise ValueError("stored acquisition provenance must be a list of ownership records")
+            break
     package, report = build_package(
         source, categories=categories, category_map=category_map, scope=scope
     )

@@ -101,13 +101,13 @@ def test_opening_a_store_applies_them(tmp_path, monkeypatch):
     seen: dict = {}
     import sibyl_memory_client
 
-    original = sibyl_memory_client.MemoryClient.local
+    original = sibyl_memory_client.MemoryClient.__init__
 
-    def spy(cls_path, **kwargs):
+    def spy(self, storage, **kwargs):
         seen.update(kwargs)
-        return original(cls_path, **kwargs)
+        original(self, storage, **kwargs)
 
-    monkeypatch.setattr(sibyl_memory_client.MemoryClient, "local", spy)
+    monkeypatch.setattr(sibyl_memory_client.MemoryClient, "__init__", spy)
 
     from succession.memory.sibyl import open_tenant
 

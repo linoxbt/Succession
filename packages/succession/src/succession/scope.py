@@ -44,7 +44,7 @@ from typing import Any, Iterable, Sequence
 from eth_utils import keccak
 
 from .canonical import canonical_bytes
-from .redaction import read_disclosure
+from .redaction import record_disclosure
 from .smp import DATA_CATEGORIES, route
 
 __all__ = [
@@ -319,7 +319,7 @@ def take_inventory(
                 "stamps": [],
             },
         )
-        disclosure = read_disclosure(record.get("body"))
+        disclosure = record_disclosure(record)
         if disclosure.may_transfer:
             bucket["sellable"] += 1
             stamp = record_timestamp(record)

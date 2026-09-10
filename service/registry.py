@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS listing_metadata (
   posted_at       TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS listing_metadata_seller ON listing_metadata (seller);
+CREATE TABLE IF NOT EXISTS request_nonces (
+  address TEXT NOT NULL, nonce TEXT NOT NULL, expires INTEGER NOT NULL,
+  PRIMARY KEY(address, nonce)
+);
 """
 
 #: Columns added after the table first shipped. `CREATE TABLE IF NOT EXISTS`
@@ -61,6 +65,16 @@ class ListingMetadata(dict):
 
 
 class MetadataRegistry:
+    def consume_nonce(self, address: str, nonce: str, *, expires: int, now: int) -> bool:
+        """Atomic across processes and restarts; replay never authorizes a write."""
+        with self._conn() as conn:
+            conn.execute("DELETE FROM request_nonces WHERE expires < ?", (now,))
+            try:
+                conn.execute("INSERT INTO request_nonces VALUES (?,?,?)", (address.lower(), nonce, expires))
+            except sqlite3.IntegrityError:
+                return False
+        return True
+
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)

@@ -26,12 +26,14 @@ contract ListingContractTest is Test {
 
     uint256 internal sellerKey = 0xA11CE;
     address internal seller;
-    address internal buyer = address(0xB0B);
+    uint256 internal buyerKey = 0xB0B;
+    address internal buyer;
     address internal arbiter = address(0xA787);
     address internal stranger = address(0x5747);
 
     function setUp() public {
         seller = vm.addr(sellerKey);
+        buyer = vm.addr(buyerKey);
         token = new MockERC20();
         registry = new MockIdentityRegistry();
         listings = new ListingContract(
@@ -78,6 +80,27 @@ contract ListingContractTest is Test {
 
     // -- listing ----------------------------------------------------------
 
+    function test_constructorRejectsMissingEvaluator() public {
+        vm.expectRevert(ListingContract.ZeroArbiter.selector);
+        new ListingContract(
+            IERC20(address(token)), IIdentityRegistry(address(registry)), address(0)
+        );
+    }
+
+    function test_constructorRejectsInvalidDependencies() public {
+        vm.expectRevert(ListingContract.InvalidPaymentToken.selector);
+        new ListingContract(IERC20(address(0)), IIdentityRegistry(address(registry)), arbiter);
+
+        vm.expectRevert(ListingContract.InvalidIdentityRegistry.selector);
+        new ListingContract(IERC20(address(token)), IIdentityRegistry(address(0)), arbiter);
+
+        vm.expectRevert(ListingContract.InvalidPaymentToken.selector);
+        new ListingContract(IERC20(address(0x1234)), IIdentityRegistry(address(registry)), arbiter);
+
+        vm.expectRevert(ListingContract.InvalidIdentityRegistry.selector);
+        new ListingContract(IERC20(address(token)), IIdentityRegistry(address(0x1234)), arbiter);
+    }
+
     function test_listRecordsTheCommitment() public {
         _list();
         ListingContract.Listing memory listing = listings.getListing(LISTING_ID);
@@ -86,6 +109,15 @@ contract ListingContractTest is Test {
         assertEq(listing.hashCommitment, COMMITMENT);
         assertEq(listing.price, PRICE);
         assertEq(uint8(listing.state), uint8(ListingContract.State.Open));
+    }
+
+    function test_zeroListingIdCannotBypassActiveListing() public {
+        bytes memory attestation = _attest(bytes32(0), COMMITMENT, sellerKey);
+        vm.prank(seller);
+        vm.expectRevert(ListingContract.ZeroListingId.selector);
+        listings.list(bytes32(0), AGENT_ID, COMMITMENT, PRICE, attestation);
+        _list();
+        assertEq(listings.activeListing(AGENT_ID), LISTING_ID);
     }
 
     function test_listRejectsANonOwner() public {
@@ -283,7 +315,7 @@ contract ListingContractTest is Test {
 
         assertEq(token.balanceOf(address(listings)), PRICE * 2);
 
-        vm.prank(buyer);
+        vm.prank(arbiter);
         listings.confirmTransfer(LISTING_ID, COMMITMENT);
 
         // The other listing's escrow is still whole and still refundable.
@@ -301,7 +333,7 @@ contract ListingContractTest is Test {
         _escrow();
         uint256 sellerBefore = token.balanceOf(seller);
 
-        vm.prank(buyer);
+        vm.prank(arbiter);
         listings.confirmTransfer(LISTING_ID, COMMITMENT);
 
         assertEq(token.balanceOf(seller), sellerBefore + PRICE);
@@ -314,7 +346,7 @@ contract ListingContractTest is Test {
         _escrow();
         uint256 buyerBefore = token.balanceOf(buyer);
 
-        vm.prank(buyer);
+        vm.prank(arbiter);
         listings.confirmTransfer(LISTING_ID, WRONG);
 
         assertEq(token.balanceOf(buyer), buyerBefore + PRICE);
@@ -322,13 +354,17 @@ contract ListingContractTest is Test {
         assertFalse(listings.isSealed(AGENT_ID));
     }
 
-    function test_onlyTheBuyerOrArbiterMayConfirm() public {
+    function test_onlyTheEvaluatorMayConfirm() public {
         _escrow();
         vm.prank(stranger);
         vm.expectRevert(ListingContract.NotAuthorised.selector);
         listings.confirmTransfer(LISTING_ID, COMMITMENT);
 
         vm.prank(seller);
+        vm.expectRevert(ListingContract.NotAuthorised.selector);
+        listings.confirmTransfer(LISTING_ID, COMMITMENT);
+
+        vm.prank(buyer);
         vm.expectRevert(ListingContract.NotAuthorised.selector);
         listings.confirmTransfer(LISTING_ID, COMMITMENT);
     }
@@ -342,10 +378,10 @@ contract ListingContractTest is Test {
 
     function test_settlementCannotHappenTwice() public {
         _escrow();
-        vm.prank(buyer);
+        vm.prank(arbiter);
         listings.confirmTransfer(LISTING_ID, COMMITMENT);
 
-        vm.prank(buyer);
+        vm.prank(arbiter);
         vm.expectRevert(
             abi.encodeWithSelector(
                 ListingContract.WrongState.selector,
@@ -356,18 +392,26 @@ contract ListingContractTest is Test {
         listings.confirmTransfer(LISTING_ID, COMMITMENT);
     }
 
-    function test_aSealedAgentCannotBeRelisted() public {
+    function test_successorCanSellTheIdentityAgain() public {
         _escrow();
-        vm.prank(buyer);
+        vm.prank(arbiter);
         listings.confirmTransfer(LISTING_ID, COMMITMENT);
 
         vm.prank(buyer);
         registry.approve(address(listings), AGENT_ID);
         bytes32 second = bytes32("listing-second");
-        bytes memory attestation = _attest(second, COMMITMENT, sellerKey);
+        bytes memory attestation = _attest(second, COMMITMENT, buyerKey);
         vm.prank(buyer);
-        vm.expectRevert(ListingContract.AgentAlreadySealed.selector);
         listings.list(second, AGENT_ID, COMMITMENT, PRICE, attestation);
+        token.mint(stranger, PRICE);
+        vm.prank(stranger);
+        token.approve(address(listings), PRICE);
+        vm.prank(stranger);
+        listings.buy(second);
+        vm.prank(arbiter);
+        listings.confirmTransfer(second, COMMITMENT);
+        assertEq(registry.ownerOf(AGENT_ID), stranger);
+        assertEq(uint256(listings.getListing(second).state), uint256(ListingContract.State.Confirmed));
     }
 
     // -- refunds ----------------------------------------------------------
@@ -414,7 +458,7 @@ contract ListingContractTest is Test {
         _escrow();
         uint256 buyerBefore = token.balanceOf(buyer);
 
-        vm.prank(buyer);
+        vm.prank(arbiter);
         listings.confirmTransfer(LISTING_ID, delivered);
 
         assertEq(token.balanceOf(buyer), buyerBefore + PRICE);

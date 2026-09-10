@@ -3,17 +3,15 @@
 The hole this closes
 --------------------
 
-``confirmTransfer`` is normally called by the buyer, who asserts the hash they
-derived from what they received. ``ListingContract``'s own docstring states the
-consequence plainly: a dishonest buyer can submit a wrong hash, trigger the
-automatic refund, and keep the decrypted package. No on-chain logic can close
-that, because the chain cannot see the delivered bytes.
+If a buyer can receive plaintext and then choose the root submitted to
+``confirmTransfer``, they can submit a false mismatch, trigger a refund, and
+keep the decrypted package. No on-chain logic can inspect the delivered bytes.
 
 The designed answer — Part 4's "optional but strong for a technical judge", and
-the top correctness item on the roadmap — is a third party that re-derives the
-root *itself* and confirms on its own authority. The contract has always
-accepted an ``arbiter`` alongside the buyer; this module is the agent that
-occupies that role.
+the top correctness item on the roadmap — is a third party that receives the
+key first, re-derives the root *itself*, and confirms on its own authority. The
+contract accepts only this configured ``arbiter`` for settlement; the buyer
+receives the key only after that transaction.
 
 This is deliberately the same trust pattern Virtuals ACP already uses for job
 quality, pointed at delivery integrity instead: the counterparties do not have
@@ -23,16 +21,15 @@ the claim against the artifact.
 What "independent" has to mean to be worth anything
 ---------------------------------------------------
 
-An evaluator that accepts the buyer's number and signs it has added a signature
+An evaluator that accepts another party's number and signs it has added a signature
 and no information. So this one is not given a root to check. It is given the
-buyer's store, and it runs the *export pipeline* over it to produce a root of
-its own — the same code path the seller ran, against the destination rather
-than the source. Only then does it compare.
+isolated evaluator store, and it runs the *export pipeline* over it to produce
+a root of its own — the same code path the seller ran. Only then does it compare.
 
 Three findings come out of a full evaluation, and they answer different
 questions:
 
-* ``root`` — does the memory that actually landed in the buyer's tenant hash to
+* ``root`` — does the memory that landed in the evaluator tenant hash to
   what the seller committed to before a buyer existed?
 * ``signature`` — did the agent being sold attest to that content, or merely
   some key?
@@ -47,12 +44,11 @@ show a third party, which it would not be if the evaluator merely acted on it.
 What it still does not solve, stated rather than hidden
 -------------------------------------------------------
 
-The evaluator has to read the buyer's imported store to re-derive anything, so
-the buyer can refuse it access. That is not a hole in the mechanism so much as
-its boundary: a buyer who refuses the evaluator gets no arbiter confirmation,
-and the escrow sits until it expires and ``reclaimExpired`` returns their money.
-Which is the correct outcome — the seller is no worse off than before the sale,
-and nobody was paid for a delivery nobody was allowed to check.
+The evaluator can read the delivered memory and is therefore trusted with its
+confidentiality. If the evaluator is unavailable, escrow sits until it expires
+and ``reclaimExpired`` returns the buyer's money. Operators must isolate the
+evaluator tenant and protect its signing key because this role is both a data
+custodian and the sole settlement authority.
 """
 
 from __future__ import annotations
@@ -440,17 +436,26 @@ class Evaluator:
         against a number a disinterested party derived from the delivered
         memory, so a buyer's false claim of mismatch no longer reaches it.
 
-        A failed verdict is *not* silently turned into a refund here. The
-        contract refunds on a mismatched hash by itself, and submitting the
-        evaluator's mismatching root produces exactly that outcome through the
-        contract's own logic rather than through a second, parallel refund path
-        that could disagree with it.
+        The signed verdict is checked again at this trust boundary. A root
+        mismatch is submitted to the contract, which records the delivered
+        root and refunds atomically. Any other failed check (for example a bad
+        seller signature) is refunded explicitly by the evaluator.
         """
         if verdict.listing_id != getattr(
             settlement.get(verdict.listing_id), "listing_id", verdict.listing_id
         ):  # pragma: no cover - defensive; get() raises for an unknown listing
             raise SettlementError(f"no listing {verdict.listing_id!r}")
 
+        verify_verdict(verdict, expected_evaluator=self.address)
+        if not verdict.verified and verdict.evaluator_root.lower() == verdict.committed_root.lower():
+            detail = "; ".join(f"{f.check}: {f.detail or 'failed'}" for f in verdict.failures)
+            return settlement.refund(
+                verdict.listing_id,
+                reason=f"Evaluator rejected delivery — {detail}"[:200],
+                delivered_hash=verdict.evaluator_root,
+                caller=self.address,
+                confirmed_by="arbiter",
+            )
         return settlement.confirm_transfer(
             verdict.listing_id,
             delivered_hash=verdict.evaluator_root,

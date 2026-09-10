@@ -26,6 +26,9 @@ const all = JSON.parse(readFileSync(artifacts, "utf8"));
 const WANTED = new Set([
   "buy",
   "confirmTransfer",
+  "cancel",
+  "refund",
+  "reclaimExpired",
   "getListing",
   "isSealed",
   "arbiter",

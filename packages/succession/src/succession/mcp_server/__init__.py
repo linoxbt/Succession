@@ -5,8 +5,9 @@ agent should be able to drive it, not only a human at a terminal: inspect what
 it holds, see what is sellable and what consent withholds, price it, verify a
 package it was handed, and prove a transfer would carry every category intact.
 
-**On the three tools that are not read-only.** `list`, `fulfil` and `claim`
-spend money, release a decryption key, or permanently seal an agent. Sealing in
+**On the five tools that are not read-only.** `list_for_sale`, `fulfil`,
+`claim`, `buy` and `evaluate` spend money, release a decryption key, or
+permanently seal an agent. Sealing in
 particular has no undo — that is a deliberate property of the protocol, not an
 omission — so these refuse unless `SUCCESSION_MCP_ALLOW_WRITES=1` is set, and
 they say so rather than failing obscurely. One environment variable turns them
@@ -14,8 +15,8 @@ on for an operator who means it. The gate is not security: anyone who can set
 the variable could also run the CLI. It is there so an agent exploring its
 tools cannot seal its own memory by accident.
 
-Every tool returns structured data rather than the CLI's printed text, because
-the caller here is a program.
+Inspection tools return structured results. CLI-backed tools return captured
+output, errors and exit status from an isolated child process.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 __all__ = ["build_server", "main", "writes_allowed"]
 
@@ -60,8 +61,8 @@ WRITE_GATE = "SUCCESSION_MCP_ALLOW_WRITES"
 REFUSAL = (
     "This tool moves money, releases a decryption key, or permanently seals an "
     f"agent, and is disabled. Set {WRITE_GATE}=1 to enable it. Sealing has no "
-    "undo: once a succession settles, the origin agent's writes are closed for "
-    "good."
+    "undo in the supported runtime: the seller watcher retires the source "
+    "tenant after settlement. This does not revoke external credentials."
 )
 
 
@@ -75,13 +76,29 @@ def _open(db: str, tenant: str) -> Any:
     return open_tenant(Path(db).expanduser(), tenant)
 
 
+def _run_cli(argv: list[str]) -> dict[str, Any]:
+    """Isolate command output and exit handling; never mutate the server environment.
+
+    Signing keys are supplied only by the operator when starting the server.
+    Tool requests and their transcripts contain no private-key fields.
+    """
+    import subprocess
+    try:
+        result = subprocess.run([sys.executable, "-m", "succession.cli", *argv],
+                                capture_output=True, text=True, timeout=600)
+        return {"ok": result.returncode == 0, "exit_code": result.returncode,
+                "output": result.stdout, "error": result.stderr}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "Command timed out. Check chain and local journal state before retrying."}
+
+
 def build_server() -> "MCPServer":
     if MCPServer is None:
         raise RuntimeError(f"{MISSING_SDK}\n\n(import failed: {_MCP_IMPORT_ERROR})")
 
     server = MCPServer(
         name="succession",
-        version="0.2.0",
+        version="0.3.0",
         instructions=(
             "The property layer for agent memory. Inspect what an agent holds, "
             "what of it may be sold, what it is worth, and whether a transfer "
@@ -91,6 +108,25 @@ def build_server() -> "MCPServer":
             f"has set {WRITE_GATE}=1."
         ),
     )
+
+    @server.tool(description="Apply remembered margin-floor and opening-premium rules to explicit target and cost amounts. Returns quoted rates and record citations; sends no quote to a counterparty.")
+    def quote(db: str, tenant: str, counterparty: str, target: str, cost: str) -> dict[str, Any]:
+        from ..agent import Agent
+        try:
+            return Agent(_open(db, tenant)).quote(counterparty, target=target, cost=cost)
+        except ValueError as exc:
+            return {'ok': False, 'error': str(exc)}
+
+    @server.tool(description=("Access the complete Succession CLI surface using an argument array, without a shell. "
+        "Returns success, exit code, output and errors. Signing keys must be configured by the server operator. "
+        f"Commands that write files, publish, release keys or send transactions require {WRITE_GATE}=1."))
+    def run_command(command: Literal['export','inspect','verify','import','value','preview','list',
+            'publish','fulfil','claim','evaluate','inventory','prove','market','show','buy','confirm','status','audit','listings'],
+            arguments: list[str]) -> dict[str, Any]:
+        read_only = {'inspect','verify','value','preview','inventory','market','show','status','audit','listings'}
+        if command not in read_only and not writes_allowed():
+            return {'refused': REFUSAL}
+        return _run_cli([command, *arguments])
 
     # --- what an agent holds --------------------------------------------
 
@@ -118,7 +154,7 @@ def build_server() -> "MCPServer":
         description=(
             "The pre-purchase data room: aggregate counts, tenure, memory size "
             "and per-directory transferability. Never record bodies, which are "
-            "released only after purchase and hash verification."
+            "released to the authenticated buyer after escrow is funded."
         )
     )
     def preview(db: str, tenant: str, agent: str) -> dict[str, Any]:
@@ -150,12 +186,13 @@ def build_server() -> "MCPServer":
         )
     )
     def prove(
-        db: str, tenant: str, agent: str, private_key: str, scope: str | None = None
+        db: str, tenant: str, agent: str, scope: str | None = None
     ) -> dict[str, Any]:
         from ..export import export_tenant
         from ..importer import import_package
         from ..smp import DATA_CATEGORIES
         from eth_account import Account
+        private_key = Account.create().key.hex()
 
         parsed = None
         if scope:
@@ -280,37 +317,31 @@ def build_server() -> "MCPServer":
         description=(
             "Fund escrow for a listing. Sends an ERC-20 approval and then buy(). "
             "The money is held by the contract, not paid: it reaches the seller "
-            "only on a matching hash and returns to you otherwise. IRREVERSIBLE "
-            f"from the buyer's side. Disabled unless {WRITE_GATE}=1."
+            "only on a matching hash. Refund and escrow expiry recovery are "
+            f"available before settlement. Disabled unless {WRITE_GATE}=1."
         )
     )
-    def buy(listing: str, buyer_private_key: str) -> dict[str, Any]:
+    def buy(listing: str) -> dict[str, Any]:
         if not writes_allowed():
             return {"refused": REFUSAL}
-        from .. import cli
 
-        os.environ["SUCCESSION_BUYER_KEY"] = buyer_private_key
-        return {"exit_code": cli.main(["buy", "--listing", listing, "--yes"])}
+        return _run_cli(["buy", "--listing", listing, "--yes"])
 
     @server.tool(
         description=(
-            "Settle a funded listing on the root you re-derived from your own "
-            "store after importing. A root that does not match refunds you and "
-            "abandons the sale, so pass the one `claim` printed, never a guess. "
+            "As the configured evaluator, collect into an isolated store, "
+            "verify the seller signature, independently re-derive the root, "
+            "and settle on the signed verdict. "
             f"Disabled unless {WRITE_GATE}=1."
         )
     )
-    def confirm(listing: str, root: str, buyer_private_key: str) -> dict[str, Any]:
+    def evaluate(listing: str, db: str, tenant: str, marketplace: str) -> dict[str, Any]:
         if not writes_allowed():
             return {"refused": REFUSAL}
-        from .. import cli
 
-        os.environ["SUCCESSION_BUYER_KEY"] = buyer_private_key
-        return {
-            "exit_code": cli.main(
-                ["confirm", "--listing", listing, "--root", root, "--yes"]
-            )
-        }
+        return _run_cli(["evaluate", "--listing", listing,
+                         "--db", db, "--tenant", tenant,
+                         "--marketplace", marketplace, "--yes"])
 
     @server.tool(
         description=(
@@ -322,11 +353,10 @@ def build_server() -> "MCPServer":
     )
     def list_for_sale(
         db: str, tenant: str, agent: str, price: int,
-        private_key: str, marketplace: str, scope: str | None = None,
+        marketplace: str, scope: str | None = None,
     ) -> dict[str, Any]:
         if not writes_allowed():
             return {"refused": REFUSAL}
-        from .. import cli
 
         argv = [
             "list", "--db", db, "--tenant", tenant, "--agent", agent,
@@ -334,32 +364,29 @@ def build_server() -> "MCPServer":
         ]
         if scope:
             argv += ["--scope", scope]
-        os.environ["SUCCESSION_SIGNING_KEY"] = private_key
-        return {"exit_code": cli.main(argv)}
+        return _run_cli(argv)
 
     @server.tool(
         description=(
             "Release content keys for listings whose escrow has landed on chain. "
-            f"Hands a decryption key to a buyer. Disabled unless {WRITE_GATE}=1."
+            f"Hands a decryption key to the configured evaluator. Disabled unless {WRITE_GATE}=1."
         )
     )
     def fulfil(
-        private_key: str, marketplace: str, listing: str | None = None
+        marketplace: str, listing: str | None = None
     ) -> dict[str, Any]:
         if not writes_allowed():
             return {"refused": REFUSAL}
-        from .. import cli
 
         argv = ["fulfil", "--once", "--marketplace", marketplace]
         if listing:
             argv += ["--listing", listing]
-        os.environ["SUCCESSION_SIGNING_KEY"] = private_key
-        return {"exit_code": cli.main(argv)}
+        return _run_cli(argv)
 
     @server.tool(
         description=(
-            "Collect memory you funded escrow for, import it into your own "
-            "store, and re-derive the root from what landed. Writes into the "
+            "After evaluator settlement, collect memory you funded escrow for, "
+            "import it into your own store, and record the acquisition. Writes into the "
             f"destination tenant. Disabled unless {WRITE_GATE}=1."
         )
     )
@@ -368,14 +395,9 @@ def build_server() -> "MCPServer":
     ) -> dict[str, Any]:
         if not writes_allowed():
             return {"refused": REFUSAL}
-        from .. import cli
 
-        return {
-            "exit_code": cli.main([
-                "claim", "--db", db, "--tenant", tenant,
-                "--listing", listing, "--marketplace", marketplace,
-            ])
-        }
+        return _run_cli(["claim", "--db", db, "--tenant", tenant,
+                         "--listing", listing, "--marketplace", marketplace])
 
     return server
 

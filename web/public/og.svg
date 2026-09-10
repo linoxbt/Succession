@@ -1,32 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0A0A0B"/>
-      <stop offset="1" stop-color="#000000"/>
-    </linearGradient>
-    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
-      <path d="M48 0H0V48" fill="none" stroke="#16181C" stroke-width="1"/>
-    </pattern>
-  </defs>
-  <rect width="1200" height="630" fill="url(#g)"/>
-  <rect width="1200" height="630" fill="url(#grid)"/>
-  <g transform="translate(88 96) scale(2.4)" fill="none" stroke-linecap="round" stroke-width="3">
-    <path d="M23.5 10.5C23.5 5.5 8.5 5.5 8.5 12.5C8.5 19.5 23.5 12.5 23.5 19.5C23.5 26.5 8.5 26.5 8.5 21.5"
-          pathLength="100" stroke="#E7E9EA" stroke-dasharray="46 100"/>
-    <path d="M23.5 10.5C23.5 5.5 8.5 5.5 8.5 12.5C8.5 19.5 23.5 12.5 23.5 19.5C23.5 26.5 8.5 26.5 8.5 21.5"
-          pathLength="100" stroke="#1D9BF0" stroke-dasharray="46 100" stroke-dashoffset="-54"/>
-  </g>
-  <text x="88" y="330" fill="#E7E9EA" font-family="Inter, system-ui, sans-serif" font-size="76" font-weight="600" letter-spacing="-3">
-    The code is replaceable.
-  </text>
-  <text x="88" y="412" fill="#E7E9EA" font-family="Inter, system-ui, sans-serif" font-size="76" font-weight="600" letter-spacing="-3">
-    The memory is not.
-  </text>
-  <text x="88" y="492" fill="#8B949E" font-family="Inter, system-ui, sans-serif" font-size="27">
-    The property layer for agent memory — verified transfer, settled on Base.
-  </text>
-  <rect x="88" y="536" width="1024" height="1" fill="#22262B"/>
-  <text x="88" y="580" fill="#5A6169" font-family="Inter, system-ui, sans-serif" font-size="21" letter-spacing="2">
-    SIBYL MEMORY · BASE · VIRTUALS ACP
-  </text>
+  <defs><radialGradient id="p"><stop stop-color="#ea78ad" stop-opacity=".42"/><stop offset="1" stop-color="#f7efe2" stop-opacity="0"/></radialGradient><radialGradient id="g"><stop stop-color="#77cf92" stop-opacity=".4"/><stop offset="1" stop-color="#f7efe2" stop-opacity="0"/></radialGradient></defs><rect width="1200" height="630" fill="#f7efe2"/><circle cx="180" cy="100" r="390" fill="url(#p)"/><circle cx="1050" cy="160" r="380" fill="url(#g)"/>
+  <g transform="translate(76 62) scale(2.125)"><rect width="32" height="32" rx="8" fill="#011B33"/><g transform="translate(3.2 3.2) scale(.8)" fill="none" stroke-linecap="round" stroke-width="3.6"><path d="M23.5 10.5C23.5 5.5 8.5 5.5 8.5 12.5C8.5 19.5 23.5 12.5 23.5 19.5C23.5 26.5 8.5 26.5 8.5 21.5" pathLength="100" stroke="#fff" stroke-dasharray="46 100"/><path d="M23.5 10.5C23.5 5.5 8.5 5.5 8.5 12.5C8.5 19.5 23.5 12.5 23.5 19.5C23.5 26.5 8.5 26.5 8.5 21.5" pathLength="100" stroke="#00C3F7" stroke-dasharray="46 100" stroke-dashoffset="-54"/></g></g><text x="166" y="111" fill="#493326" font-family="Inter, sans-serif" font-size="38" font-weight="900">Succession</text>
+  <text x="76" y="286" fill="#493326" font-family="Inter, sans-serif" font-size="72" font-weight="800">Transfer memory with</text><text x="76" y="371" fill="#493326" font-family="Inter, sans-serif" font-size="72" font-weight="800">verifiable ownership.</text><text x="76" y="449" fill="#796b61" font-family="Inter, sans-serif" font-size="26">Signed packages · independent evaluation · atomic Base settlement</text><rect x="76" y="510" width="244" height="58" rx="9" fill="#ea78ad"/><text x="113" y="548" fill="#493326" font-family="Inter, sans-serif" font-size="20" font-weight="800">OPEN DASHBOARD</text>
 </svg>

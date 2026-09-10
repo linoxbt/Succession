@@ -33,7 +33,7 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # Dependencies first, so a change to service code does not reinstall the world.
-COPY packages/succession/pyproject.toml packages/succession/README.md ./packages/succession/
+COPY packages/succession/pyproject.toml packages/succession/README.md packages/succession/hatch_build.py ./packages/succession/
 COPY packages/succession/src ./packages/succession/src
 RUN pip install --no-cache-dir -e "./packages/succession[service,chain]"
 
@@ -48,7 +48,7 @@ COPY deployments ./deployments
 
 EXPOSE 8000
 
-# Railway assigns $PORT. Single worker on purpose: envelopes and content keys
-# live in process memory by design, so a second worker would serve 409s for a
-# listing it cannot see. See service/README.md.
+# The hosting platform assigns $PORT. Single worker: relay keys and walkthrough
+# sessions are process-local; ciphertext and metadata persist in SQLite.
+# See service/README.md.
 CMD ["sh", "-c", "uvicorn service.app:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]

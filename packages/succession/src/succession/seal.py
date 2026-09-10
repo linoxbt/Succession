@@ -1,23 +1,14 @@
-"""Sealing the seller's copy.
+"""Cooperative retirement of a seller's local memory tenant.
 
-The sharpest question a judge asks about this product is: what stops the seller
-from keeping a copy and carrying on as though nothing happened? The honest
-answer has two layers, and the spec requires both.
+The default Succession Sibyl adapter checks a seal in the same database and
+inside every SDK write transaction. Existing handles and reopened clients are
+covered, with writer/seal serialization provided by SQLite. Optional external
+registries support applications that manage their own memory adapters.
 
-**Contract-level.** ``confirmTransfer`` flips a ``sealed`` flag against the
-``agentId``, readable by the ACP registry or any future buyer-facing check. That
-lives in ``contracts/ListingContract.sol``.
-
-**Memory-service-level.** This module. The seller's credentials for that tenant
-are revoked the instant the package is delivered, and every write path in the
-service checks the seal first and rejects unconditionally.
-
-What sealing does *not* claim: the seller's SQLite file still physically exists
-on their disk, and nothing here reaches onto their machine to delete it. Anyone
-who says otherwise is overselling. What sealing guarantees is narrower and
-actually enforceable — that copy can no longer authenticate, sync, or be
-represented anywhere in the system as the live agent. The asset being sold was
-never the bytes; it was the right to *be* that agent, and that is what moves.
+A local seal is not remote credential revocation or file destruction. The file
+owner can bypass application checks, copy the data, or use another SDK. The
+contract transfers the registered identity; it cannot enforce exclusive
+knowledge. ``credential_revoked`` stays false until actual revocation exists.
 """
 
 from __future__ import annotations
@@ -116,7 +107,7 @@ class SealRegistry:
         agent_identity: str | None = None,
         transfer_id: str | None = None,
     ) -> SealRecord:
-        """Seal a tenant and revoke its credentials. Idempotent.
+        """Retire a local tenant. Idempotent; remote credentials are unchanged.
 
         Re-sealing an already-sealed tenant returns the original record rather
         than overwriting it — the first seal is the one that carries the true
@@ -132,13 +123,13 @@ class SealRegistry:
             transfer_id=transfer_id,
             reason=reason,
             sealed_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            credential_revoked=True,
+            credential_revoked=False,
         )
         with self._conn() as conn:
             conn.execute(
-                "INSERT INTO sealed_tenants "
+                "INSERT OR IGNORE INTO sealed_tenants "
                 "(tenant_id, agent_identity, transfer_id, reason, sealed_at, credential_revoked) "
-                "VALUES (?, ?, ?, ?, ?, 1)",
+                "VALUES (?, ?, ?, ?, ?, 0)",
                 (
                     record.tenant_id,
                     record.agent_identity,
@@ -147,7 +138,7 @@ class SealRegistry:
                     record.sealed_at,
                 ),
             )
-        return record
+        return self.get(tenant_id)
 
     def get(self, tenant_id: str) -> SealRecord | None:
         with self._conn() as conn:
@@ -222,7 +213,7 @@ class _GuardedClient:
         if name in self._BLOCKED:
 
             def blocked(*args: Any, **kwargs: Any) -> Any:
-                self._registry.assert_writable(self._tenant_id)
+                self._registry.assert_writable(self._client.get_tenant())
                 return attr(*args, **kwargs)
 
             return blocked

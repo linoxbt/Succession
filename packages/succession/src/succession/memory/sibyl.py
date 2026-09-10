@@ -24,10 +24,13 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import contextmanager
+from uuid import uuid4
 from pathlib import Path
 from typing import Any, Iterable
 
 from sibyl_memory_client import MemoryClient
+from sibyl_memory_client.storage import Storage
 
 from .base import (
     archived_record,
@@ -47,15 +50,69 @@ def _loads(raw: str | None) -> Any:
     return None if raw is None else json.loads(raw)
 
 
+class AtomicStorage(Storage):
+    """SDK writes use savepoints inside an application-owned transaction.
+
+    Connections are SDK thread-local; unrelated threads never join this
+    transaction. The outer BEGIN IMMEDIATE serializes competing writers.
+    """
+    tenant_provider = None
+
+    def _assert_writable(self, conn):
+        if self.tenant_provider is None:
+            return
+        from ..seal import TenantSealed
+        tenant = self.tenant_provider()
+        row = conn.execute(
+            "SELECT sealed_at, reason FROM sealed_tenants WHERE tenant_id = ?", (tenant,)
+        ).fetchone()
+        if row is not None:
+            raise TenantSealed(tenant, row["sealed_at"], row["reason"])
+
+    @contextmanager
+    def transaction(self):
+        with self.connection() as conn:
+            if not conn.in_transaction:
+                with super().transaction() as active:
+                    self._assert_writable(active)
+                    yield active
+                return
+            name = "succession_" + uuid4().hex
+            conn.execute(f"SAVEPOINT {name}")
+            try:
+                self._assert_writable(conn)
+                yield conn
+            except BaseException:
+                conn.execute(f"ROLLBACK TO {name}")
+                conn.execute(f"RELEASE {name}")
+                raise
+            else:
+                conn.execute(f"RELEASE {name}")
+
+
 class SibylMemory:
     """Adapts a ``MemoryClient`` bound to one tenant."""
 
     def __init__(self, client: MemoryClient) -> None:
         self._client = client
 
+    @contextmanager
+    def atomic_import(self):
+        if not isinstance(self._client.storage, AtomicStorage):
+            raise RuntimeError("atomic imports require a tenant opened through succession.open_tenant")
+        with self._client.storage.transaction():
+            yield
+
     @property
     def client(self) -> MemoryClient:
         return self._client
+
+    def seal(self, *, reason: str, agent_identity=None, transfer_id=None):
+        """Retire this local tenant. This does not revoke remote SDK credentials."""
+        from ..seal import SealRegistry
+        return SealRegistry(self._client.storage.db_path).seal(
+            self.tenant_id, reason=reason, agent_identity=agent_identity, transfer_id=transfer_id
+        )
 
     @property
     def tenant_id(self) -> str:
@@ -447,5 +504,11 @@ def open_tenant(
     if tier != "free":
         options["tier"] = tier
 
-    client = MemoryClient.local(db_path, tenant_id=tenant_id, **options)
+    from ..seal import SealRegistry
+
+    path = Path(db_path).expanduser()
+    SealRegistry(path)
+    storage = AtomicStorage(path)
+    client = MemoryClient(storage, tenant_id=tenant_id, **options)
+    storage.tenant_provider = client.get_tenant
     return SibylMemory(client)

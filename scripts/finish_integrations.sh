@@ -21,7 +21,7 @@ step() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 
 step "Preflight"
 
-for var in BASE_SEPOLIA_RPC_URL DEPLOYER_PRIVATE_KEY SELLER_PRIVATE_KEY BUYER_PRIVATE_KEY; do
+for var in BASE_SEPOLIA_RPC_URL DEPLOYER_PRIVATE_KEY SELLER_PRIVATE_KEY BUYER_PRIVATE_KEY SUCCESSION_EVALUATOR_KEY; do
   [ -n "${!var:-}" ] || fail "$var is not set. See the README's 'Finishing the integrations'."
 done
 
@@ -37,12 +37,21 @@ if not w3.is_connected():
     sys.exit(1)
 print(f"  chain id {w3.eth.chain_id}")
 from eth_account import Account
-for name in ("DEPLOYER_PRIVATE_KEY", "SELLER_PRIVATE_KEY", "BUYER_PRIVATE_KEY"):
+addresses = {}
+for name in ("DEPLOYER_PRIVATE_KEY", "SELLER_PRIVATE_KEY", "BUYER_PRIVATE_KEY", "SUCCESSION_EVALUATOR_KEY"):
     a = Account.from_key(os.environ[name])
+    addresses[name] = a.address.lower()
     bal = w3.from_wei(w3.eth.get_balance(a.address), "ether")
     flag = "" if bal > 0 else "   <-- UNFUNDED"
     print(f"  {name:<22} {a.address}  {bal} ETH{flag}")
+assert len(set(addresses.values())) == len(addresses), "deployer, seller, buyer and evaluator must be distinct"
+configured = os.environ.get("ARBITER_ADDRESS")
+if configured:
+    assert configured.lower() == addresses["SUCCESSION_EVALUATOR_KEY"], "ARBITER_ADDRESS does not match evaluator key"
 PYCHECK
+
+step "Evaluator custody"
+"$PY" scripts/provision_evaluator.py
 
 step "Contracts"
 ( cd contracts && npm install --silent && npm run build --silent )

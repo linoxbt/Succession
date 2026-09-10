@@ -1,79 +1,35 @@
 # Succession service
 
-A thin HTTP layer over the `succession` package, backing the marketplace UI.
+The service joins on-chain listing state with seller-authenticated metadata.
+It persists metadata, ciphertext, replay nonces and a listing discovery index.
+Content keys are authenticated, short-lived relay data held in RAM.
+
+Run from the repository root:
 
 ```bash
-pip install -e "../packages/succession[test,service]"
-uvicorn service.app:app --reload --port 8000
+pip install -e 'packages/succession[service,chain]'
+uvicorn service.app:app --host 127.0.0.1 --port 8000 --workers 1
 ```
 
-Then `POST /api/demo/reset` to seed the seller and post the listing.
+Configure the RPC and deployment record and persist `SUCCESSION_WORKDIR`.
+Python commands do not load `.env` automatically.
 
-Every route delegates to the library — none of them reimplements a rule. The
-preview route in particular returns exactly what `build_preview` produces, so
-there is no second, more talkative code path for the UI to leak through.
+See [current operations](../docs/OPERATIONS.md) for authentication, recovery,
+worker constraints and demo isolation, and [audit status](../docs/AUDIT_STATUS.md)
+for release blockers. `/api/walkthrough/reset` starts a per-visitor synthetic
+walkthrough; it never creates a marketplace listing.
 
-## Run it with one worker
-
-**`--workers` above 1 will not work, and the failure is not subtle.** Encrypted
-envelopes and content keys live in process memory, deliberately: writing a
-content key next to its ciphertext would defeat escrowing it in the first place.
-So the listing state a request needs exists only in the worker that ran
-`/api/demo/reset`, and a request routed elsewhere gets
-
-```
-409  no listing in this process; POST /api/demo/reset
-```
-
-which is confusing rather than wrong. Run a single worker, or scale by giving
-each instance its own `SUCCESSION_WORKDIR` and pinning clients to one. Durable
-envelope storage is on the roadmap; until it exists this is a real constraint,
-not a tuning preference.
-
-## Writes are gated, reads are not
-
-| | |
+| Route | Access and effect |
 |---|---|
-| `SUCCESSION_API_TOKEN` **set** | Every mutating route needs `Authorization: Bearer <token>`, from anywhere including localhost. |
-| **unset**, request from loopback | Allowed, so a local run needs no configuration. |
-| **unset**, request from elsewhere | Refused with a 403 that names the fix. |
+| GET /api/marketplace | Public chain listings and seller previews; discovery completeness included |
+| GET /api/listing/{id} | Public listing detail; RPC failures are distinct from absence |
+| POST /api/listings | Seller-signed metadata and ciphertext publication |
+| GET /api/listing/{id}/envelope | Public encrypted package |
+| POST /api/listing/{id}/key | Seller-signed key release against funded escrow |
+| GET /api/listing/{id}/key/evaluator | Evaluator-signed key collection while escrow is funded; no-store |
+| GET /api/listing/{id}/key | Buyer-signed key collection after evaluator settlement and finality; no-store |
+| GET /api/chain | Verified connectivity, unavailable, or unconfigured |
+| /api/walkthrough/* | Per-visitor isolated simulation, not live settlement |
 
-The default is the safe one on purpose: a service deployed without a token
-cannot be written to at all, rather than being writable by everyone. Reads — the
-data room, the marketplace, the chain status — stay open, because a buyer is
-meant to be able to inspect a listing before paying for it.
-
-Generate a token with `openssl rand -hex 32`.
-
-Set `SUCCESSION_ALLOWED_ORIGINS` to the deployed frontend's origin if it calls
-this service cross-origin. If it is proxied through the same origin instead (see
-the `/api` block in `netlify.toml`), leave it alone — same-origin needs no CORS
-grant, and that is the better arrangement.
-
-## Routes
-
-Reads are public; writes authenticate as the **seller of a specific listing**,
-by signature, checked against what the contract records rather than against
-anything stored here.
-
-| | |
-|---|---|
-| `GET /api/marketplace` | Every listing: the contract for truth, the registry for counts and valuation |
-| `GET /api/listing/{id}` | One listing, same join |
-| `POST /api/listings` | A seller publishes metadata + ciphertext. Signature must recover to the on-chain seller |
-| `GET /api/listing/{id}/envelope` | The ciphertext. Public — AES-256-GCM and inert without the key |
-| `POST /api/listing/{id}/key` | The seller releases the key. Refused unless the chain says `Escrowed` |
-| `GET /api/listing/{id}/key` | The buyer collects it. Escrow re-checked on the way out |
-| `GET /api/chain` | Which contract is being read, if any |
-
-`/api/walkthrough/*` is the scripted sample-agent sale. Separate module,
-separate prefix, `LocalSettlement`, and every response carries
-`simulated: true`. Nothing in the marketplace reads its state.
-
-## On-chain mode
-
-`GET /api/chain` reports `none` until `deployments/base-sepolia.json` exists.
-A deployment file is the only thing that switches it, and there is deliberately
-no flag that does — a flag is something that can be set wrongly, and reporting
-`LocalSettlement` as a real settlement is the one dishonest thing this codebase
-could do.
+Signatures bind method, path, raw body, deployment, expiry and a replay nonce.
+`SUCCESSION_API_TOKEN` applies only to administrative routes, not to all writes.
