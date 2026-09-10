@@ -24,6 +24,10 @@ test("original Succession mark is restored and video navigation is removed", asy
   await expect(page.getByRole("button", { name: "Video Script" })).toHaveCount(0);
   await expect(page.getByText("Video Script", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Docs" })).toBeVisible();
+  await expect(page.getByText("Powered by Sibyl Memory · settled on Base")).toBeVisible();
+  await expect(page.getByText("Features", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Workflow", { exact: true })).toHaveCount(0);
+  expect(await page.locator("html").evaluate(element => getComputedStyle(element).fontSize)).toBe("15px");
 });
 
 test("dashboard contains only the requested operational summary", async ({ page }) => {
@@ -36,6 +40,20 @@ test("dashboard contains only the requested operational summary", async ({ page 
   await expect(page.getByText("Base Sepolia contracts")).toHaveCount(0);
   await expect(page.getByText("Three parties, one atomic handover")).toHaveCount(0);
   await expect(page.getByText("What the live release proves")).toHaveCount(0);
+  await expect(page.getByText("Base Sepolia · Operator guide")).toHaveCount(0);
+  await expect(page.getByText("Evaluator custody")).toHaveCount(0);
+});
+
+test("dashboard lists expandable verified Sibyl provenance sales", async ({ page }) => {
+  await page.goto("/app");
+  await expect(page.getByRole("heading", { name: "Verified memory sales" })).toBeVisible();
+  await expect(page.getByText("5 verified sales")).toBeVisible();
+  await expect(page.getByText("erc8004:84532:0692", { exact: true })).toBeVisible();
+  await expect(page.getByText("Transferred Sibyl categories")).toBeVisible();
+  await expect(page.getByText("Learned behaviors", { exact: true })).toBeVisible();
+  await expect(page.locator('[title="0x2463d651040c6c25af83e836f6d7bcaa00ab640b3c75a1baa8c7c5ececde27b4"]')).toBeVisible();
+  await page.getByRole("button", { name: /erc8004:84532:0690/ }).click();
+  await expect(page.getByText("listing-690", { exact: true })).toBeVisible();
 });
 
 test("guide covers installation, help, first transfer, and recovery", async ({ page }) => {

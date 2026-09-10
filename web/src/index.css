@@ -29,7 +29,7 @@
 }
 
 * { border-color: var(--border); }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; font-size: 15px; }
 html, body, #root { min-height: 100%; }
 body {
   min-height: 100vh;
